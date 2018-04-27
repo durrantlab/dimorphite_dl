@@ -1,7 +1,7 @@
 """
 This script identifies and enumerates the possible protonation sites of SMILES strings.
 """
-import copy
+import os
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -171,7 +171,9 @@ def load_protonation_substructs(min_ph=6.4, max_ph=8.4, pka_std_range=1):
     pKa bins.
     """
     subs = []
-    with open("site_substructures.smarts", 'r') as substruct:
+
+    cur_dir = os.path.dirname(os.path.abspath(__file__))
+    with open(cur_dir + "/site_substructures.smarts", 'r') as substruct:
         for line in substruct:
             line = line.strip()
             sub = {}
