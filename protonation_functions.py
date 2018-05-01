@@ -442,3 +442,4 @@ def convert_smiles_str_to_mol(smiles_str):
 
     else:
         return mol
+
