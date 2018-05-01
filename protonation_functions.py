@@ -1,8 +1,10 @@
 """
 This script identifies and enumerates the possible protonation sites of SMILES strings.
 """
+import copy
 import os
 
+import rdkit
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
@@ -58,19 +60,42 @@ def clean_args(args):
         raise Exception("Error: No SMILES in params.")
 
     #print("START")
-    mols = [neutralize_mol(Chem.MolFromSmiles(x, sanitize=False))[0] \
-                      for x in args["smiles"]]
-    args["smiles"] = [Chem.MolToSmiles(Chem.RemoveHs(x)) for x in mols]
+    mol_str_list = []
+    for smiles_str in args["smiles"]:
+        
+        # Convert from SMILES string to RDKIT Mol
+        # Filter if failed.
+        mol = convert_smiles_str_to_mol(smiles_str)
+        if mol is None:
+            continue
+                
+        # Handle nuetralizing the molecules
+        # Filter if failed.
+        mol = neutralize_mol(mol)
+        if mol is None:
+            continue
+        
+        try:
+            mol = Chem.RemoveHs(mol)
+        except:
+            continue
+
+        if mol is None:
+            continue
+
+        new_mol_string = Chem.MolToSmiles(mol)
+        mol_str_list.append(new_mol_string)
+
+
+    args["smiles"] = [x for x in mol_str_list]
 
     return args
 
 def neutralize_mol(mol):
     """
     All molecules need to be neuralized to the extent possible. The user should not be
-    allowed to specify the valience of the atoms in most cases.
+    allowed to specify the valence of the atoms in most cases.
     """
-
-    msg = ""  # For debugging
 
     # Initialize some variables
     # To handle O- bonded to only one atom (add hydrogen).
@@ -143,10 +168,17 @@ def neutralize_mol(mol):
             mol = rxn.RunReactants((mol,))[0][0]
             mol.UpdatePropertyCache(strict=False)  # Update valences
 
+    # The mols have been altered from the reactions described above, we need to resanitize them.
     # Make sure aromatic rings are shown as such
-    Chem.SanitizeMol(mol)
-
-    return mol, msg
+    # This catches all RDKit Errors. without the catchError and sanitizeOps
+    # the Chem.SanitizeMol can crash the program.
+    sanitize_string =  Chem.SanitizeMol(mol, sanitizeOps = rdkit.Chem.rdmolops.SanitizeFlags.SANITIZE_ALL, catchErrors = True)
+    if sanitize_string.name == "SANITIZE_NONE": 
+        
+        return mol
+    else:
+        # Some Sanitation error occured.
+        return None
 
 def load_files(smile_file):
     """
@@ -171,9 +203,9 @@ def load_protonation_substructs(min_ph=6.4, max_ph=8.4, pka_std_range=1):
     pKa bins.
     """
     subs = []
-
-    cur_dir = os.path.dirname(os.path.abspath(__file__))
-    with open(cur_dir + "/site_substructures.smarts", 'r') as substruct:
+    pwd = os.path.dirname(__file__)
+    site_structures_file = "{}/{}".format(pwd,"site_substructures.smarts")
+    with open(site_structures_file, 'r') as substruct:
         for line in substruct:
             line = line.strip()
             sub = {}
@@ -285,10 +317,23 @@ def get_protonation_sites(smi, subs):
     later items.
     Returns a list of protonation sites and their pKa bin. ('Acid', 'Neutral', or 'Base')
     """
-    #print(smi)
+    # Convert the Smiles string (smi) to an RDKit Mol Obj
+    mol = convert_smiles_str_to_mol(smi)
+
+    # Check Conversion worked
+    if mol is None:
+        print("ERROR:   ",smi)
+        return []
+        
+    # Try to Add hydrogens. if failed return []
     try:
-        mol = Chem.AddHs(Chem.MolFromSmiles(smi))
+        mol =  Chem.AddHs(mol)
     except:
+        print("ERROR:   ",smi)
+        return []
+
+    # Check adding Hs worked
+    if mol is None:
         print("ERROR:   ",smi)
         return []
 
@@ -344,7 +389,14 @@ def set_protonation_charge(smis, idx, charges):
         nitro_charge = charge + 1
 
         for smi in smis:
-            mol = Chem.MolFromSmiles(smi)
+            
+            # Convert smilesstring (smi) into a RDKit Mol
+            mol = convert_smiles_str_to_mol(smi)
+             
+            # Check that the conversion worked, skip if it fails
+            if mol is None:
+                continue    
+                            
             atom = mol.GetAtomWithIdx(idx)
 
             # Assign the protonation charge, with special care for Nitrogens
@@ -355,7 +407,38 @@ def set_protonation_charge(smis, idx, charges):
                 atom.SetFormalCharge(charge)
 
             # Convert back to SMILE and add to output
-            out_smile = Chem.MolToSmiles(mol)
+            out_smile = Chem.MolToSmiles(mol, isomericSmiles=True,canonical=True)
             output.append(out_smile)
 
     return output
+
+def convert_smiles_str_to_mol(smiles_str):
+    """
+    Given a SMILES string check that it is actually a string and not a None
+    then try to convert it to an RDKit Mol Object.
+    Return None if it is the wrong type or if it fails to convert to a Mol Obj
+    Return the mol object if it converts.
+    """
+
+    if smiles_str is None or smiles_str is not str:
+        return None
+
+    # Check that there are no type errors, ie Nones or non-string
+    # A non-string type will cause RDKit to hard crash
+    try:
+        mol = Chem.MolFromSmiles(smiles_str)
+    except:
+        return None
+
+    # Check that there are None type errors
+    # Chem.MolFromSmiles has sanitize on which means if there is
+    #   even a small error in the SMILES (kekulize, nitrogen charge...) then mol=None. 
+    #       ie. Chem.MolFromSmiles("C[N]=[N]=[N]") = None
+    #           this is an example of an nitrogen charge error.
+    #   It is cased in a try statement to be overly cautious.
+     
+    if mol is None:
+        return None
+
+    else:
+        return mol
