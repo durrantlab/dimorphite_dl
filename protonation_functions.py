@@ -13,19 +13,16 @@ def protonate(args):
     Protonates a set of molecules as given by the user inputs.
     """
     args = clean_args(args)
-
     subs = load_protonation_substructs(args["min_ph"], args["max_ph"], args["st_dev"])
     smiles = args["smiles"]
     data = args["data"]
 
-    #print(smiles)
     output = []
     for i, smi in enumerate(smiles):
         tag = " ".join(data[i])
         sites = get_protonation_sites(smi, subs)
         new_smis = [smi]
         for site in sites:
-            #print(site)
             new_smis = protonate_site(new_smis, site)
         new_lines = [x + '\t' + tag for x in new_smis]
         output.extend(new_lines)
@@ -58,6 +55,7 @@ def clean_args(args):
         args["smiles"], args["data"] = load_files(args["smiles_file"])
     else:
         raise Exception("Error: No SMILES in params.")
+
 
     #print("START")
     mol_str_list = []
@@ -128,35 +126,30 @@ def neutralize_mol(mol):
 
         # Negative oxygen atom bonded to only one atom? Add hydrogen.
         if mol.HasSubstructMatch(deprot_oxy):
-            msg = msg + "1"
             if prot_oxy_rxn is None:
                 prot_oxy_rxn = AllChem.ReactionFromSmarts('[Ov1-1:1]>>[Ov2+0:1]-[H]')
             rxn = prot_oxy_rxn
 
         # Positive, protonated nitrogen should be deprotonated
         elif mol.HasSubstructMatch(prot_nitrogen):
-            msg = msg + "2"
             if deprot_nitrogen_rxn is None:
                 deprot_nitrogen_rxn = AllChem.ReactionFromSmarts('[#7v4+1:1]-[H]>>[#7v3+0:1]')
             rxn = deprot_nitrogen_rxn
 
         # Oxygen bonded to two atoms shouldn't be negative. I'm not so sure this could ever happen.
         elif mol.HasSubstructMatch(wrong_prot_oxy):
-            msg = msg + "3"
             if wrong_prot_oxy_rxn is None:
                 wrong_prot_oxy_rxn = AllChem.ReactionFromSmarts('[Ov2-:1]>>[Ov2+0:1]')
             rxn = wrong_prot_oxy_rxn
 
         # Nitrogen bonded to three atoms shouldn't be pvesitie
         elif mol.HasSubstructMatch(wrong_prot_nitrogen):
-            msg = msg + "4"
             if wrong_prot_nitrogen_rxn is None:
                 wrong_prot_nitrogen_rxn = AllChem.ReactionFromSmarts('[#7v3+1:1]>>[#7v3+0:1]')
             rxn = wrong_prot_nitrogen_rxn
 
         # Nitrogen bonded to two atoms shouldn't be negative. Need to add hydrogen.
         elif mol.HasSubstructMatch(wrong_prot_nitrogen2):
-            msg = msg + "5"
             if wrong_prot_nitrogen_rxn2 is None:
                 wrong_prot_nitrogen_rxn2 = AllChem.ReactionFromSmarts('[#7v2-1:1]>>[#7+0:1]-[H]')
             rxn = wrong_prot_nitrogen_rxn2
@@ -190,11 +183,8 @@ def load_files(smile_file):
         for line in smis:
             splits = line.split()
             if len(splits) != 0:
-                #print(splits)
                 smiles.append(splits[0])
                 data.append(splits[1:])
-    #print(smiles)
-    #print(data)
     return smiles, data
 
 def load_protonation_substructs(min_ph=6.4, max_ph=8.4, pka_std_range=1):
@@ -348,7 +338,6 @@ def get_protonation_sites(smi, subs):
             for match in matches:
                 # We want to move the site from being relative to the
                 # substructure, to the index on the main molecule.
-                #print(match)
                 for site in prot:
                     proton = int(site[0])
                     category = site[1]
@@ -419,8 +408,8 @@ def convert_smiles_str_to_mol(smiles_str):
     Return None if it is the wrong type or if it fails to convert to a Mol Obj
     Return the mol object if it converts.
     """
-
-    if smiles_str is None or smiles_str is not str:
+   
+    if smiles_str is None or type(smiles_str) is not str:
         return None
 
     # Check that there are no type errors, ie Nones or non-string
@@ -438,6 +427,7 @@ def convert_smiles_str_to_mol(smiles_str):
     #   It is cased in a try statement to be overly cautious.
      
     if mol is None:
+
         return None
 
     else:
