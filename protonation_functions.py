@@ -12,17 +12,30 @@ def protonate(args):
     """
     Protonates a set of molecules as given by the user inputs.
     """
+
     args = clean_args(args)
     subs = load_protonation_substructs(args["min_ph"], args["max_ph"], args["st_dev"])
     smiles = args["smiles"]
-    data = args["data"]
+    
+    # Note that args["data"] includes everything on SMILES line but the SMILES
+    # string itself (e.g., the molecule name). It is set in clean_args().
+    data = args["data"]  
 
     output = []
     for i, smi in enumerate(smiles):
+        # Collect the data associated with this smiels (e.g., the molecule
+        # name).
         tag = " ".join(data[i])
-        sites = get_protonation_sites(smi, subs)
+        
+        # sites is a list of (atom index, "PROTONATED|DEPROTONATED|BOTH").
+        # Note that the second entry indicates what state the site SHOULD be
+        # in (not the one it IS in per the SMILES string). It's calculated
+        # based on the probablistic distributions obtained during training.
+        sites = get_prot_sites_and_target_states(smi, subs)
+
         new_smis = [smi]
         for site in sites:
+            # Make a new smiles with the correct protonation state.
             new_smis = protonate_site(new_smis, site)
         new_lines = [x + '\t' + tag for x in new_smis]
         output.extend(new_lines)
@@ -33,6 +46,7 @@ def clean_args(args):
     """
     Cleans and normalizes input parameters
     """
+
     defaults = {'min_ph' : 6.4,
                 'max_ph' : 8.4,
                 'st_dev' : 1.0}
@@ -177,6 +191,7 @@ def load_files(smile_file):
     """
     Loads smiles from file.
     """
+
     smiles = []
     data = []
     with open(smile_file, 'r') as smis:
@@ -192,6 +207,7 @@ def load_protonation_substructs(min_ph=6.4, max_ph=8.4, pka_std_range=1):
     A pre-calculated list of R-groups with protonation sites, with their likely
     pKa bins.
     """
+
     subs = []
     pwd = os.path.dirname(__file__)
     site_structures_file = "{}/{}".format(pwd,"site_substructures.smarts")
@@ -228,6 +244,7 @@ def define_protonation_state(mean, std, min_ph, max_ph):
     pH range. The size of the pKa range is also based on the number of standard deviations to be
     considered by the user param.
     """
+
     min_pka = mean - std
     max_pka = mean + std
 
@@ -257,6 +274,7 @@ def unprotect_molecule(mol):
     Sets the protected property on all atoms to 0. This also creates the property
     for new molecules.
     """
+
     for atom in mol.GetAtoms():
         atom.SetProp('_protected', '0')
 
@@ -265,6 +283,7 @@ def protect_molecule(mol, match):
     Given a 'match', a list of molecules idx's, we set the protected status of each
     atom to 1. This will prevent any matches using that atom in the future.
     """
+
     for idx in match:
         atom = mol.GetAtomWithIdx(idx)
         atom.SetProp('_protected', '1')
@@ -274,6 +293,7 @@ def get_unprotected_matches(mol, substruct):
     Finds substructure matches with atoms that have not been protected.
     Returns list of matches, each match a list of atom idxs.
     """
+
     matches = mol.GetSubstructMatches(substruct)
     unprotected_matches = []
     for match in matches:
@@ -286,6 +306,7 @@ def is_match_unprotected(mol, match):
     Checks a molecule to see if the substructure match
     contains any protected atoms.
     """
+
     for idx in match:
         atom = mol.GetAtomWithIdx(idx)
         protected = atom.GetProp("_protected")
@@ -297,34 +318,36 @@ def neutralize_molecule(mol):
     """
     Neutralize things. Maybe?
     """
+
     for atom in mol.GetAtoms():
         atom.SetFormalCharge(0)
 
-def get_protonation_sites(smi, subs):
+def get_prot_sites_and_target_states(smi, subs):
     """
     For a single molecule, find all possible matches in the protonation R-group list,
     subs. Items that are higher on the list will be matched first, to the exclusion of
     later items.
     Returns a list of protonation sites and their pKa bin. ('Acid', 'Neutral', or 'Base')
     """
+
     # Convert the Smiles string (smi) to an RDKit Mol Obj
     mol = convert_smiles_str_to_mol(smi)
 
     # Check Conversion worked
     if mol is None:
-        print("ERROR:   ",smi)
+        print("ERROR:   ", smi)
         return []
         
     # Try to Add hydrogens. if failed return []
     try:
         mol =  Chem.AddHs(mol)
     except:
-        print("ERROR:   ",smi)
+        print("ERROR:   ", smi)
         return []
 
     # Check adding Hs worked
     if mol is None:
-        print("ERROR:   ",smi)
+        print("ERROR:   ", smi)
         return []
 
     unprotect_molecule(mol)
@@ -350,18 +373,20 @@ def protonate_site(smis, site):
     """
     Given a list of smis, we protonate the site.
     """
-    # Decouple the atom index and its charge from the site tuple
-    idx, charge = site
+
+    # Decouple the atom index and its target protonation state from the site tuple
+    idx, target_prot_state = site
 
     # Initialize the output list
     output_smis = []
 
-    charge_dict = {"DEPROTONATED": [-1],
-                   "PROTONATED": [0],
-                   "BOTH": [-1, 0]}
+    state_to_charge = {"DEPROTONATED": [-1],
+                       "PROTONATED": [0],
+                       "BOTH": [-1, 0]}
 
-    charges = charge_dict[charge]
+    charges = state_to_charge[target_prot_state]
 
+    # Now make the actual smiles match the target protonation state.
     output_smis = set_protonation_charge(smis, idx, charges)
 
     return output_smis
@@ -370,6 +395,7 @@ def set_protonation_charge(smis, idx, charges):
     """
     Sets the atomic charge on a particular site for a set of SMILES.
     """
+
     # Sets up the output list and the Nitrogen charge
     output = []
 
