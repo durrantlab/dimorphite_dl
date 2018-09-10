@@ -32,10 +32,12 @@ def protonate(args):
         # in (not the one it IS in per the SMILES string). It's calculated
         # based on the probablistic distributions obtained during training.
         sites = get_prot_sites_and_target_states(smi, subs)
-
+        
         new_smis = [smi]
         for site in sites:
-            # Make a new smiles with the correct protonation state.
+            # Make a new smiles with the correct protonation state. Note that
+            # new_smis is a growing list. This is how multiple protonation
+            # sites are handled.
             new_smis = protonate_site(new_smis, site)
         new_lines = [x + '\t' + tag for x in new_smis]
         output.extend(new_lines)
@@ -327,7 +329,9 @@ def get_prot_sites_and_target_states(smi, subs):
     For a single molecule, find all possible matches in the protonation R-group list,
     subs. Items that are higher on the list will be matched first, to the exclusion of
     later items.
-    Returns a list of protonation sites and their pKa bin. ('Acid', 'Neutral', or 'Base')
+    
+    Returns a list of protonation sites and their pKa bin. ('PROTONATED', 'BOTH', or 
+    'DEPROTONATED')
     """
 
     # Convert the Smiles string (smi) to an RDKit Mol Obj
@@ -364,7 +368,7 @@ def get_prot_sites_and_target_states(smi, subs):
                 for site in prot:
                     proton = int(site[0])
                     category = site[1]
-                    new_site = (match[proton], category)
+                    new_site = (match[proton], category, item["name"])
                     protonation_sites.append(new_site)
                 protect_molecule(mol, match)
     return protonation_sites
@@ -374,8 +378,9 @@ def protonate_site(smis, site):
     Given a list of smis, we protonate the site.
     """
 
-    # Decouple the atom index and its target protonation state from the site tuple
-    idx, target_prot_state = site
+    # Decouple the atom index and its target protonation state from the site
+    # tuple
+    idx, target_prot_state, prot_site_name = site
 
     # Initialize the output list
     output_smis = []
@@ -387,11 +392,11 @@ def protonate_site(smis, site):
     charges = state_to_charge[target_prot_state]
 
     # Now make the actual smiles match the target protonation state.
-    output_smis = set_protonation_charge(smis, idx, charges)
+    output_smis = set_protonation_charge(smis, idx, charges, prot_site_name)
 
     return output_smis
 
-def set_protonation_charge(smis, idx, charges):
+def set_protonation_charge(smis, idx, charges, prot_site_name):
     """
     Sets the atomic charge on a particular site for a set of SMILES.
     """
@@ -400,8 +405,17 @@ def set_protonation_charge(smis, idx, charges):
     output = []
 
     for charge in charges:
-        # The charge for Nitrogens is 1 higher than others
+        # The charge for Nitrogens is 1 higher than others (i.e., protonated state
+        # is positively charged).
         nitro_charge = charge + 1
+
+        # But there are a few nitrogen moieties where the acidic group is the
+        # neural one. Amides are a good example. I gave some thought re. how
+        # to best flag these. I decided that those nitrogen-containing
+        # moieties where the acidic group is neutral (rather than positively
+        # charged) will have "*" in the name.
+        if "*" in prot_site_name:
+            nitro_charge = nitro_charge - 1  # Undo what was done previously.
 
         for smi in smis:
             
