@@ -500,11 +500,9 @@ def convert_smiles_str_to_mol(smiles_str):
     None. Then try to convert it to an RDKit Mol Object.
     
     :param string smiles_str: The SMILES string.
-    :return: A rdkit.Chem.rdchem.Mol object, or None if the SMILES is invalid.
+    :return: A rdkit.Chem.rdchem.Mol object, or None if it is the wrong type or
+        if it fails to convert to a Mol Obj
     """
-
-    Return None if it is the wrong type or if it fails to convert to a Mol Obj
-    Return the mol object if it converts.
     
     if smiles_str is None or type(smiles_str) is not str:
         return None

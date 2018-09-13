@@ -28,8 +28,7 @@ if __name__ == "__main__":
 
     if 'output_file' in args:
         with open(args['output_file'], 'w') as file:
-            for out in output:
-                file.write("\t".join(out))
+            file.write("\n".join(output))
     else:
         for out in output:
             print(out)
