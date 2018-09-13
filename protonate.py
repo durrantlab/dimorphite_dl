@@ -1,6 +1,7 @@
 """
-Main entry script for running protonation
+Main entry script for running protonation.
 """
+
 import argparse
 
 import protonation_functions as pf

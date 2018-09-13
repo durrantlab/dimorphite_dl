@@ -1,6 +1,8 @@
 """
-This script identifies and enumerates the possible protonation sites of SMILES strings.
+This script identifies and enumerates the possible protonation sites of SMILES
+strings.
 """
+
 import copy
 import os
 
@@ -9,8 +11,10 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 
 def protonate(args):
-    """
-    Protonates a set of molecules as given by the user inputs.
+    """Protonates a set of molecules as given by the user inputs.
+    
+    :param dict args: A dictionary containing the arguments.
+    :return: A list of the protonated smiles strings.
     """
 
     args = clean_args(args)
@@ -45,9 +49,13 @@ def protonate(args):
     return output
 
 def clean_args(args):
+    """Cleans and normalizes input parameters
+    
+    :param dict args: A dictionary containing the arguments.
+    :raises Exception: No SMILES in params.
+    :return: A dict of the arguments, now fixed.
     """
-    Cleans and normalizes input parameters
-    """
+
 
     defaults = {'min_ph' : 6.4,
                 'max_ph' : 8.4,
@@ -106,10 +114,13 @@ def clean_args(args):
     return args
 
 def neutralize_mol(mol):
+    """All molecules need to be neuralized to the extent possible. The user
+    should not be allowed to specify the valence of the atoms in most cases.
+    
+    :param rdkit.Chem.rdchem.Mol mol: The rdkit Mol objet to be neutralized.
+    :return: The neutralized Mol object.
     """
-    All molecules need to be neuralized to the extent possible. The user should not be
-    allowed to specify the valence of the atoms in most cases.
-    """
+
 
     # Initialize some variables
     # To handle O- bonded to only one atom (add hydrogen).
@@ -190,8 +201,11 @@ def neutralize_mol(mol):
         return None
 
 def load_files(smile_file):
-    """
-    Loads smiles from file.
+    """Loads smiles from file.
+    
+    :param string smile_file: The smiles file name.
+    :return: (list, list), the smiles strings and associated data, 
+             respectively.
     """
 
     smiles = []
@@ -205,10 +219,17 @@ def load_files(smile_file):
     return smiles, data
 
 def load_protonation_substructs(min_ph=6.4, max_ph=8.4, pka_std_range=1):
+    """A pre-calculated list of R-groups with protonation sites, with their 
+    likely pKa bins.
+    
+    :param float min_ph:  The lower bound on the pH range, defaults to 6.4.
+    :param float max_ph:  The upper bound on the pH range, defaults to 8.4.
+    :param pka_std_range: Basically the precision (stdev from predicted pKa to
+                          consider), defaults to 1.
+    :return: A dict of the protonation substructions for the specified pH
+            range.
     """
-    A pre-calculated list of R-groups with protonation sites, with their likely
-    pKa bins.
-    """
+
 
     subs = []
     pwd = os.path.dirname(__file__)
@@ -241,10 +262,16 @@ def load_protonation_substructs(min_ph=6.4, max_ph=8.4, pka_std_range=1):
     return subs
 
 def define_protonation_state(mean, std, min_ph, max_ph):
-    """
-    Updates the substructure definitions to include the protonation state based on the user-given
-    pH range. The size of the pKa range is also based on the number of standard deviations to be
-    considered by the user param.
+    """Updates the substructure definitions to include the protonation state
+    based on the user-given pH range. The size of the pKa range is also based
+    on the number of standard deviations to be considered by the user param.
+    
+    :param float mean:   The mean pKa.
+    :param float std:    The precision (stdev).
+    :param float min_ph: The min pH of the range.
+    :param float max_ph: The max pH of the range.
+    :raises Exception:   HORRIBLE NONSENSE HAS OCCURED.
+    :return: A string describing the protonation state.
     """
 
     min_pka = mean - std
@@ -272,18 +299,23 @@ def define_protonation_state(mean, std, min_ph, max_ph):
 ###
 
 def unprotect_molecule(mol):
-    """
-    Sets the protected property on all atoms to 0. This also creates the property
-    for new molecules.
+    """Sets the protected property on all atoms to 0. This also creates the
+    property for new molecules.
+    
+    :param rdkit.Chem.rdchem.Mol mol: The rdkit Mol object.
+    :type mol: The rdkit Mol object with atoms unprotected.
     """
 
     for atom in mol.GetAtoms():
         atom.SetProp('_protected', '0')
 
 def protect_molecule(mol, match):
-    """
-    Given a 'match', a list of molecules idx's, we set the protected status of each
-    atom to 1. This will prevent any matches using that atom in the future.
+    """Given a 'match', a list of molecules idx's, we set the protected status
+    of each atom to 1. This will prevent any matches using that atom in the
+    future.
+    
+    :param rdkit.Chem.rdchem.Mol mol: The rdkit Mol object to protect.
+    :param list match: A list of molecule idx's.
     """
 
     for idx in match:
@@ -291,10 +323,14 @@ def protect_molecule(mol, match):
         atom.SetProp('_protected', '1')
 
 def get_unprotected_matches(mol, substruct):
-    """
-    Finds substructure matches with atoms that have not been protected.
+    """Finds substructure matches with atoms that have not been protected.
     Returns list of matches, each match a list of atom idxs.
+    
+    :param rdkit.Chem.rdchem.Mol mol: The Mol object to consider.
+    :param string substruct: The SMARTS string of the substructure ot match.
+    :return: A list of the matches. Each match is itself a list of atom idxs.
     """
+
 
     matches = mol.GetSubstructMatches(substruct)
     unprotected_matches = []
@@ -304,10 +340,14 @@ def get_unprotected_matches(mol, substruct):
     return unprotected_matches
 
 def is_match_unprotected(mol, match):
+    """Checks a molecule to see if the substructure match contains any
+    protected atoms.
+    
+    :param rdkit.Chem.rdchem.Mol mol: The Mol object to check.
+    :param list match: The match to check.
+    :return: A boolean, whether the match is present or not.
     """
-    Checks a molecule to see if the substructure match
-    contains any protected atoms.
-    """
+
 
     for idx in match:
         atom = mol.GetAtomWithIdx(idx)
@@ -317,21 +357,24 @@ def is_match_unprotected(mol, match):
     return True
 
 def neutralize_molecule(mol):
+    """Neutralize things. Maybe?
+    
+    :param rdkit.Chem.rdchem.Mol mol: The Mol object to conside.r
     """
-    Neutralize things. Maybe?
-    """
+
 
     for atom in mol.GetAtoms():
         atom.SetFormalCharge(0)
 
 def get_prot_sites_and_target_states(smi, subs):
-    """
-    For a single molecule, find all possible matches in the protonation R-group list,
-    subs. Items that are higher on the list will be matched first, to the exclusion of
-    later items.
+    """For a single molecule, find all possible matches in the protonation
+    R-group list, subs. Items that are higher on the list will be matched
+    first, to the exclusion of later items.
     
-    Returns a list of protonation sites and their pKa bin. ('PROTONATED', 'BOTH', or 
-    'DEPROTONATED')
+    :param string smi: A SMILES string.
+    :param list subs: Substructure information.
+    :return: A list of protonation sites and their pKa bin. ('PROTONATED',
+        'BOTH', or  'DEPROTONATED')
     """
 
     # Convert the Smiles string (smi) to an RDKit Mol Obj
@@ -374,9 +417,14 @@ def get_prot_sites_and_target_states(smi, subs):
     return protonation_sites
 
 def protonate_site(smis, site):
+    """Given a list of SMILES strings, we protonate the site.
+    
+    :param list smis:  The list of SMILES strings.
+    :param tuple site: Information about the protonation site. 
+                       (idx, target_prot_state, prot_site_name)
+    :return: A list of the appropriately protonated SMILES.
     """
-    Given a list of smis, we protonate the site.
-    """
+
 
     # Decouple the atom index and its target protonation state from the site
     # tuple
@@ -397,8 +445,14 @@ def protonate_site(smis, site):
     return output_smis
 
 def set_protonation_charge(smis, idx, charges, prot_site_name):
-    """
-    Sets the atomic charge on a particular site for a set of SMILES.
+    """Sets the atomic charge on a particular site for a set of SMILES.
+    
+    :param list smis:             A list of the SMILES strings.
+    :param int idx:               The index of the atom to consider.
+    :param list charges:          A list of the charges (ints) to assign at
+                                  this site.
+    :param string prot_site_name: The name of the protonation site.
+    :return: A list of the processed SMILES strings.
     """
 
     # Sets up the output list and the Nitrogen charge
@@ -442,13 +496,16 @@ def set_protonation_charge(smis, idx, charges, prot_site_name):
     return output
 
 def convert_smiles_str_to_mol(smiles_str):
+    """Given a SMILES string, check that it is actually a string and not a 
+    None. Then try to convert it to an RDKit Mol Object.
+    
+    :param string smiles_str: The SMILES string.
+    :return: A rdkit.Chem.rdchem.Mol object, or None if the SMILES is invalid.
     """
-    Given a SMILES string check that it is actually a string and not a None
-    then try to convert it to an RDKit Mol Object.
+
     Return None if it is the wrong type or if it fails to convert to a Mol Obj
     Return the mol object if it converts.
-    """
-   
+    
     if smiles_str is None or type(smiles_str) is not str:
         return None
 
