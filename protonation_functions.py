@@ -94,8 +94,6 @@ def clean_args(args):
     else:
         raise Exception("Error: No SMILES in params.")
 
-
-    #print("START")
     mol_str_list = []
     for smiles_str in args["smiles"]:
         
