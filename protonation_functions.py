@@ -42,7 +42,7 @@ def protonate(args):
     output = []
     for i, smi in enumerate(smiles):
         if smi.startswith("NONE|"):
-            print "ERROR: Skipping poorly formed SMILES string: " + smi[5:] + "\t" + " ".join(data[i])
+            print("ERROR: Skipping poorly formed SMILES string: " + smi[5:] + "\t" + " ".join(data[i]))
             continue
 
         # Collect the data associated with this smiels (e.g., the molecule
