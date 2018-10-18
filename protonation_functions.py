@@ -34,13 +34,17 @@ def protonate(args):
     args = clean_args(args)
     subs = load_protonation_substructs(args["min_ph"], args["max_ph"], args["st_dev"])
     smiles = args["smiles"]
-    
+
     # Note that args["data"] includes everything on SMILES line but the SMILES
     # string itself (e.g., the molecule name). It is set in clean_args().
     data = args["data"]  
 
     output = []
     for i, smi in enumerate(smiles):
+        if smi.startswith("NONE|"):
+            print "ERROR: Skipping poorly formed SMILES string: " + smi[5:] + "\t" + " ".join(data[i])
+            continue
+
         # Collect the data associated with this smiels (e.g., the molecule
         # name).
         tag = " ".join(data[i])
@@ -94,27 +98,33 @@ def clean_args(args):
         raise Exception("Error: No SMILES in params.")
 
     mol_str_list = []
-    for smiles_str in args["smiles"]:
+    for i, smiles_str in enumerate(args["smiles"]):
         
         # Convert from SMILES string to RDKIT Mol
         # Filter if failed.
+
         mol = convert_smiles_str_to_mol(smiles_str)
         if mol is None:
+            mol_str_list.append("NONE|" + smiles_str)
             continue
-                
+
         # Handle nuetralizing the molecules
         # Filter if failed.
         mol = neutralize_mol(mol)
         if mol is None:
+            mol_str_list.append("NONE|" + smiles_str)
             continue
-        
+
         try:
             mol = Chem.RemoveHs(mol)
         except:
+            mol_str_list.append("NONE|" + smiles_str)
             continue
 
         if mol is None:
+            mol_str_list.append("NONE|" + smiles_str)
             continue
+
 
         new_mol_string = Chem.MolToSmiles(mol)
         mol_str_list.append(new_mol_string)
@@ -131,88 +141,39 @@ def neutralize_mol(mol):
     :return: The neutralized Mol object.
     """
 
-    # Initialize some variables
-    # To handle O- bonded to only one atom (add hydrogen).
-    deprot_oxy = Chem.MolFromSmarts('[Ov1-1:1]')
-    prot_oxy_rxn = None
+    # Get the reaction data
+    rxn_data = [
+        ['[Ov1-1:1]', '[Ov2+0:1]-[H]'],  # To handle O- bonded to only one atom (add hydrogen).
+        ['[#7v4+1:1]-[H]', '[#7v3+0:1]'],  # To handle N+ bonded to a hydrogen (remove hydrogen).
+        ['[Ov2-:1]', '[Ov2+0:1]'],  # To handle O- bonded to two atoms. Should not be Negative.
+        ['[#7v3+1:1]', '[#7v3+0:1]'],  # To handle N+ bonded to three atoms. Should not be positive.
+        ['[#7v2-1:1]', '[#7+0:1]-[H]'],  # To handle N- Bonded to two atoms. Add hydrogen.
+        # ['[N:1]=[N+0:2]=[N:3]-[H]', '[N:1]=[N+1:2]=[N+0:3]-[H]'],  # To handle bad azide. Must be protonated. (Now handled elsewhere, before SMILES converted to Mol object.)
+        ['[H]-[N:1]-[N:2]#[N:3]', '[N:1]=[N+1:2]=[N:3]-[H]']  # To handle bad azide. R-N-N#N should be R-N=[N+]=N
+    ]
 
-    # To handle N+ bonded to a hydrogen (remove hydrogen).
-    prot_nitrogen = Chem.MolFromSmarts('[#7v4+1:1]-[H]')
-    deprot_nitrogen_rxn = None
-
-    # To handle O- bonded to two atoms. Should not be Negative.
-    wrong_prot_oxy = Chem.MolFromSmarts('[Ov2-:1]')
-    wrong_prot_oxy_rxn = None
-
-    # To handle N+ bonded to three atoms. Should not be positive.
-    wrong_prot_nitrogen = Chem.MolFromSmarts('[#7v3+1:1]')
-    wrong_prot_nitrogen_rxn = None
-
-    # To handle N- Bonded to two atoms. Add hydrogen.
-    wrong_prot_nitrogen2 = Chem.MolFromSmarts('[#7v2-1:1]')
-    wrong_prot_nitrogen_rxn2 = None
-
-    # To handle bad azide. Must be protonated.
-    wrong_azide1 = Chem.MolFromSmarts('[N:1]=[N:2]=[N:3]-[H]')
-    wrong_azide_rxn1 = None
-
-    # To handle bad azide. R-N-N#N should be R-N=[N+]=N
-    wrong_azide2 = Chem.MolFromSmarts('[H]-[N:1]-[N:2]#[N:3]')
-    wrong_azide_rxn2 = None        
+    # Add substructures and reactions (initially none)
+    for i, rxn_datum in enumerate(rxn_data):
+        rxn_data[i].append(Chem.MolFromSmarts(rxn_datum[0]))
+        rxn_data[i].append(None)
 
     # Add hydrogens (respects valence, so incomplete).
-    #Chem.calcImplicitValence(mol)
+    # Chem.calcImplicitValence(mol)
     mol.UpdatePropertyCache(strict=False)
     mol = Chem.AddHs(mol)
 
     while True:  # Keep going until all these issues have been resolved.
         rxn = None  # The reaction to perform.
+        rxn_str = None
 
-        # Negative oxygen atom bonded to only one atom? Add hydrogen.
-        if mol.HasSubstructMatch(deprot_oxy):
-            if prot_oxy_rxn is None:
-                prot_oxy_rxn = AllChem.ReactionFromSmarts('[Ov1-1:1]>>[Ov2+0:1]-[H]')
-            rxn = prot_oxy_rxn
-
-        # Positive, protonated nitrogen should be deprotonated
-        elif mol.HasSubstructMatch(prot_nitrogen):
-            if deprot_nitrogen_rxn is None:
-                deprot_nitrogen_rxn = AllChem.ReactionFromSmarts('[#7v4+1:1]-[H]>>[#7v3+0:1]')
-            rxn = deprot_nitrogen_rxn
-
-        # Oxygen bonded to two atoms shouldn't be negative. I'm not so sure
-        # this could ever happen.
-        elif mol.HasSubstructMatch(wrong_prot_oxy):
-            if wrong_prot_oxy_rxn is None:
-                wrong_prot_oxy_rxn = AllChem.ReactionFromSmarts('[Ov2-:1]>>[Ov2+0:1]')
-            rxn = wrong_prot_oxy_rxn
-
-        # Nitrogen bonded to three atoms shouldn't be pvesitie
-        elif mol.HasSubstructMatch(wrong_prot_nitrogen):
-            if wrong_prot_nitrogen_rxn is None:
-                wrong_prot_nitrogen_rxn = AllChem.ReactionFromSmarts('[#7v3+1:1]>>[#7v3+0:1]')
-            rxn = wrong_prot_nitrogen_rxn
-
-        # Nitrogen bonded to two atoms shouldn't be negative. Need to add
-        # hydrogen.
-        elif mol.HasSubstructMatch(wrong_prot_nitrogen2):
-            if wrong_prot_nitrogen_rxn2 is None:
-                wrong_prot_nitrogen_rxn2 = AllChem.ReactionFromSmarts('[#7v2-1:1]>>[#7+0:1]-[H]')
-            rxn = wrong_prot_nitrogen_rxn2
-
-        # To handle bad azide. Must be protonated.
-        elif mol.HasSubstructMatch(wrong_azide1):
-            if wrong_azide_rxn1 is None:
-                wrong_azide_rxn1 = AllChem.ReactionFromSmarts('[N:1]=[N:2]=[N:3]-[H]>>[N:1]=[N+1:2]=[N+0:3]-[H]')
-            rxn = wrong_azide_rxn1
-
-        # To handle bad azide. R-N-N#N should be R-N=[N+]=N
-        elif mol.HasSubstructMatch(wrong_azide2):
-            if wrong_azide_rxn2 is None:
-                # import pdb; pdb.set_trace()
-
-                wrong_azide_rxn2 = AllChem.ReactionFromSmarts('[H]-[N:1]-[N:2]#[N:3]>>[#7:1]=[#7+1:2]=[#7:3]-[H]')
-            rxn = wrong_azide_rxn2
+        for i, rxn_datum in enumerate(rxn_data):
+            reactant_smarts, product_smarts, substruct_match_mol, rxn2 = rxn_datum
+            if mol.HasSubstructMatch(substruct_match_mol):
+                if rxn2 is None:
+                    rxn_str = reactant_smarts + '>>' + product_smarts
+                    rxn = AllChem.ReactionFromSmarts(rxn_str)
+                    rxn_data[i][3] = rxn
+                break
 
         # Perform the reaction if necessary
         if rxn is None:  # No reaction left, so break out of while loop.
@@ -221,9 +182,6 @@ def neutralize_mol(mol):
             mol = rxn.RunReactants((mol,))[0][0]
             mol.UpdatePropertyCache(strict=False)  # Update valences
 
-    # print "======="
-    # print "1"
-    print Chem.MolToSmiles(mol)
     # The mols have been altered from the reactions described above, we need to resanitize them.
     # Make sure aromatic rings are shown as such
     # This catches all RDKit Errors. without the catchError and sanitizeOps
@@ -233,7 +191,7 @@ def neutralize_mol(mol):
         sanitizeOps=rdkit.Chem.rdmolops.SanitizeFlags.SANITIZE_ALL, 
         catchErrors = True
     )
-    # print "2"
+
     return mol if sanitize_string.name == "SANITIZE_NONE" else None
 
 def load_files(smile_file):
@@ -265,7 +223,6 @@ def load_protonation_substructs(min_ph=6.4, max_ph=8.4, pka_std_range=1):
     :return: A dict of the protonation substructions for the specified pH
             range.
     """
-
 
     subs = []
     pwd = os.path.dirname(__file__)
@@ -313,7 +270,8 @@ def define_protonation_state(mean, std, min_ph, max_ph):
     min_pka = mean - std
     max_pka = mean + std
 
-    # This needs to be reassigned, and 'ERROR' should never make it past the next set of checks.
+    # This needs to be reassigned, and 'ERROR' should never make it past the
+    # next set of checks.
     protonation_state = 'ERROR'
 
     if min_pka <= max_ph and min_ph <= max_pka:
@@ -367,7 +325,6 @@ def get_unprotected_matches(mol, substruct):
     :return: A list of the matches. Each match is itself a list of atom idxs.
     """
 
-
     matches = mol.GetSubstructMatches(substruct)
     unprotected_matches = []
     for match in matches:
@@ -384,7 +341,6 @@ def is_match_unprotected(mol, match):
     :return: A boolean, whether the match is present or not.
     """
 
-
     for idx in match:
         atom = mol.GetAtomWithIdx(idx)
         protected = atom.GetProp("_protected")
@@ -397,7 +353,6 @@ def neutralize_molecule(mol):
     
     :param rdkit.Chem.rdchem.Mol mol: The Mol object to conside.r
     """
-
 
     for atom in mol.GetAtoms():
         atom.SetFormalCharge(0)
@@ -460,7 +415,6 @@ def protonate_site(smis, site):
                        (idx, target_prot_state, prot_site_name)
     :return: A list of the appropriately protonated SMILES.
     """
-
 
     # Decouple the atom index and its target protonation state from the site
     # tuple
@@ -539,23 +493,27 @@ def convert_smiles_str_to_mol(smiles_str):
     :return: A rdkit.Chem.rdchem.Mol object, or None if it is the wrong type or
         if it fails to convert to a Mol Obj
     """
-    
+
     if smiles_str is None or type(smiles_str) is not str:
         return None
 
     # Check that there are no type errors, ie Nones or non-string
     # A non-string type will cause RDKit to hard crash
     try:
+        # Try to fix azides here. They are just tricky to deal with.
+        smiles_str = smiles_str.replace("N=N=N", "N=[N+]=N")
+        smiles_str = smiles_str.replace("NN#N", "N=[N+]=N")
+
         mol = Chem.MolFromSmiles(smiles_str)
     except:
         return None
 
-    # Check that there are None type errors
-    # Chem.MolFromSmiles has sanitize on which means if there is
-    #   even a small error in the SMILES (kekulize, nitrogen charge...) then mol=None. 
-    #       ie. Chem.MolFromSmiles("C[N]=[N]=[N]") = None
-    #           this is an example of an nitrogen charge error.
-    #   It is cased in a try statement to be overly cautious.
+    # Check that there are None type errors Chem.MolFromSmiles has sanitize on
+    # which means if there is even a small error in the SMILES (kekulize,
+    # nitrogen charge...) then mol=None. ie.
+    # Chem.MolFromSmiles("C[N]=[N]=[N]") = None this is an example of an
+    # nitrogen charge error. It is cased in a try statement to be overly
+    # cautious.
      
     return None if mol is None else mol
 
