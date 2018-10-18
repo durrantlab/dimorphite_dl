@@ -76,7 +76,7 @@ def clean_args(args):
 
     defaults = {'min_ph' : 6.4,
                 'max_ph' : 8.4,
-                'st_dev' : 1.0}
+                'st_dev' : 1.5}
 
     for key in defaults:
         if key not in args:
