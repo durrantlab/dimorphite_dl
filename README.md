@@ -21,9 +21,9 @@ Usage
 ```
 usage: protonate.py [-h] [--min_ph MIN] [--max_ph MAX] [--st_dev STD]
                     [--smiles SMILES] [--smiles_file SMILES_FILE]
-                    [--output_file OUTPUT_FILE]
+                    [--output_file OUTPUT_FILE] [--label_states]
 
-Protonates small moleucles.
+Protonates small molecules.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -35,6 +35,8 @@ optional arguments:
                         File which contains SMILES strings to protonate.
   --output_file OUTPUT_FILE
                         File to write protonated SMILES. (Optional)
+  --label_states        Label protonated SMILES with target state 
+                        ("DEPROTONATED", "PROTONATED", or "BOTH").
 ```
 
 The default pH range is 6.4 to 8.4, considered biologically relevant pH.
@@ -52,6 +54,10 @@ python protonate.py --smiles "CCC(=O)O" --min_ph -3 --max_ph -2
 
 ```
 python protonate.py --smiles "CCCN" --min_ph -3 --max_ph -2 --output_file output.smi
+```
+
+```
+python protonate.py --smiles_file sample_molecules.smi --st_dev 2.0 --label_states
 ```
 
 Authors and Contacts

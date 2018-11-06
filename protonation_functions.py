@@ -54,14 +54,16 @@ def protonate(args):
         # in (not the one it IS in per the SMILES string). It's calculated
         # based on the probablistic distributions obtained during training.
         sites = get_prot_sites_and_target_states(smi, subs)
-        states = '\t'.join([x[1] for x in sites])
         new_smis = [smi]
         for site in sites:
             # Make a new smiles with the correct protonation state. Note that
             # new_smis is a growing list. This is how multiple protonation
             # sites are handled.
             new_smis = protonate_site(new_smis, site)
+        # If the user wants to see the target states, add those
+        # to the ends of each line.
         if args["label_states"]:
+            states = '\t'.join([x[1] for x in sites])
             new_lines = [x + "\t" + tag + "\t" + states for x in new_smis]
         else:
             new_lines = [x + "\t" + tag for x in new_smis]
