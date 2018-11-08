@@ -32,7 +32,7 @@ def protonate(args):
     """
 
     args = clean_args(args)
-    subs = load_protonation_substructs(args["min_ph"], args["max_ph"], args["st_dev"])
+    subs = load_protonation_substructs_calc_state_for_ph(args["min_ph"], args["max_ph"], args["st_dev"])
     smiles = args["smiles"]
 
     # Note that args["data"] includes everything on SMILES line but the SMILES
@@ -60,9 +60,17 @@ def protonate(args):
             # Make a new smiles with the correct protonation state. Note that
             # new_smis is a growing list. This is how multiple protonation
             # sites are handled.
-            new_smis = protonate_site(new_smis, site)
+            new_smis_to_perhaps_add = protonate_site(new_smis, site)
+
+            # Only add new smiles if not already in the list.
+            for s in new_smis_to_perhaps_add:
+                if not s in new_smis:
+                    new_smis.append(s)
+
         new_lines = [x + '\t' + tag for x in new_smis]
         output.extend(new_lines)
+
+    #******
 
     return output
 
@@ -124,7 +132,6 @@ def clean_args(args):
         if mol is None:
             mol_str_list.append("NONE|" + smiles_str)
             continue
-
 
         new_mol_string = Chem.MolToSmiles(mol)
         mol_str_list.append(new_mol_string)
@@ -214,7 +221,7 @@ def load_files(smile_file):
                 data.append(splits[1:])
     return smiles, data
 
-def load_protonation_substructs(min_ph=6.4, max_ph=8.4, pka_std_range=1):
+def load_protonation_substructs_calc_state_for_ph(min_ph=6.4, max_ph=8.4, pka_std_range=1):
     """A pre-calculated list of R-groups with protonation sites, with their
     likely pKa bins.
 
@@ -252,7 +259,7 @@ def load_protonation_substructs(min_ph=6.4, max_ph=8.4, pka_std_range=1):
 
                     prot.append([site, protonation_state])
 
-                sub["prot"] = prot
+                sub["prot_states_for_pH"] = prot
                 subs.append(sub)
     return subs
 
@@ -394,10 +401,10 @@ def get_prot_sites_and_target_states(smi, subs):
     protonation_sites = []
 
     for item in subs:
-        smart = item['mol']
+        smart = item["mol"]
         if mol.HasSubstructMatch(smart):
             matches = get_unprotected_matches(mol, smart)
-            prot = item['prot']
+            prot = item["prot_states_for_pH"]
             for match in matches:
                 # We want to move the site from being relative to the
                 # substructure, to the index on the main molecule.
@@ -405,8 +412,13 @@ def get_prot_sites_and_target_states(smi, subs):
                     proton = int(site[0])
                     category = site[1]
                     new_site = (match[proton], category, item["name"])
-                    protonation_sites.append(new_site)
+
+                    if not new_site in protonation_sites:
+                        # Because sites must be unique.
+                        protonation_sites.append(new_site)
+
                 protect_molecule(mol, match)
+
     return protonation_sites
 
 def protonate_site(smis, site):
