@@ -594,7 +594,7 @@ def convert_smiles_str_to_mol(smiles_str):
 def test():
     """Tests all the 38 groups."""
 
-    # The testing data
+    # The testing data. Note that pka never gets used.
     smis = [
         # [input smiles, pka, protonated, deprotonated, category]
         ["C#CCO",                 13.25,  "C#CCO",                     "C#CC[O-]",                 "Alcohol"],
@@ -636,8 +636,15 @@ def test():
         # Missing phosphonates and phosphates
     ]
 
+    # Note that the two pka values never get used.
+    smis_phos = [
+        ["O=P(O)(O)OCCCC",  1.62,  6.72,  "CCCCOP(=O)(O)O",            "CCCCOP(=O)([O-])O",        "CCCCOP(=O)([O-])[O-]",       "Phosphate"],
+        ["CC(P(O)(O)=O)C",  2.66,  8.44,  "CC(C)P(=O)(O)O",            "CC(C)P(=O)([O-])O",        "CC(C)P(=O)([O-])[O-]",       "Phosphonate"]
+    ]
+
     # Load the average pKa values.
-    average_pkas = {l.split()[0].replace("*", ""):float(l.split()[3]) for l in open("site_substructures.smarts")}
+    average_pkas = {l.split()[0].replace("*", ""):float(l.split()[3]) for l in open("site_substructures.smarts") if l.split()[0] not in ["Phosphate", "Phosphonate"]}
+    average_pkas_phos = {l.split()[0].replace("*", ""):[float(l.split()[3]), float(l.split()[6])] for l in open("site_substructures.smarts") if l.split()[0] in ["Phosphate", "Phosphonate"]}
 
     print("")
     print("Running Tests")
@@ -658,7 +665,11 @@ def test():
 
     for smi, pka, protonated, deprotonated, category in smis:
         args["smiles"] = smi
-        _test_check_monoprotic(args, [protonated], "PROTONATED")
+        _test_check(args, [protonated], ["PROTONATED"])
+
+    for smi, pka1, pka2, protonated, mix, deprotonated, category in smis_phos:
+        args["smiles"] = smi
+        _test_check(args, [protonated], ["PROTONATED"])
 
     args["min_ph"] = 10000000
     args["max_ph"] = 10000000
@@ -670,7 +681,11 @@ def test():
 
     for smi, pka, protonated, deprotonated, category in smis:
         args["smiles"] = smi
-        _test_check_monoprotic(args, [deprotonated], "DEPROTONATED")
+        _test_check(args, [deprotonated], ["DEPROTONATED"])
+
+    for smi, pka1, pka2, protonated, mix, deprotonated, category in smis_phos:
+        args["smiles"] = smi
+        _test_check(args, [deprotonated], ["DEPROTONATED"])
 
     print("")
     print("pH is Category pKa")
@@ -684,17 +699,49 @@ def test():
         args["min_ph"] = avg_pka
         args["max_ph"] = avg_pka
 
-        _test_check_monoprotic(args, [protonated, deprotonated], "BOTH")
+        _test_check(args, [protonated, deprotonated], ["BOTH"])
 
-def _test_check_monoprotic(args, expected_output, label):
+    for smi, pka1, pka2, protonated, mix, deprotonated, category in smis_phos:
+        args["smiles"] = smi
+
+        avg_pka = average_pkas_phos[category][0]
+        args["min_ph"] = avg_pka
+        args["max_ph"] = avg_pka
+
+        _test_check(args, [mix, protonated], ["BOTH"])
+
+        avg_pka = average_pkas_phos[category][1]
+        args["min_ph"] = avg_pka
+        args["max_ph"] = avg_pka
+
+        _test_check(args, [mix, deprotonated], ["DEPROTONATED", "DEPROTONATED"])
+
+        avg_pka = 0.5 * (average_pkas_phos[category][0] + average_pkas_phos[category][1])
+        args["min_ph"] = avg_pka
+        args["max_ph"] = avg_pka
+        args["st_dev"] = 5  # Should give all three
+
+        _test_check(args, [mix, deprotonated, protonated], ["BOTH", "BOTH"])
+
+    print("")
+    print("Testing Phosphates and Phosphonates")
+    print("-----------------------------------")
+    print("")
+
+    # args["smiles"] = "O=P(O)(O)OCCCC"
+    # args["min_ph"] = -10000
+    # args["max_ph"] = avg_pka
+
+def _test_check(args, expected_output, labels):
     """Tests most ionizable groups. The ones that can only loose or gain a single proton.
 
     :param args: The arguments to pass to protonate()
     :param expected_output: A list of the expected SMILES-strings output.
-    :param label: The label. BOTH, PROTONATED, DEPROTONATED.
+    :param labels: The labels. A list containing combo of BOTH, PROTONATED,
+                   DEPROTONATED.
     :raises Exception: Wrong number of states produced.
     :raises Exception: Unexpected output SMILES.
-    :raises Exception: Wrong label.
+    :raises Exception: Wrong labels.
     """
 
     output = protonate(args)
@@ -710,15 +757,17 @@ def _test_check_monoprotic(args, expected_output, label):
 
     if (len(set([l[0] for l in output]) - set(expected_output)) != 0):
         raise Exception(
-            args["smiles"][0] + " is not " + " AND ".join(expected_output) + "; it is " + " AND ".join([l[0] for l in output])
+            args["smiles"][0] + " is not " + " AND ".join(expected_output) + " at pH " + str(args["min_ph"]) + " - " + str(args["max_ph"]) + "; it is " + " AND ".join([l[0] for l in output])
         )
 
-    if (list(set([l[1] for l in output]))[0] != label):
+    if (len(set([l[1] for l in output]) - set(labels)) != 0):
         raise Exception(
-            args["smiles"][0] + " not labeled as " + label
+            args["smiles"][0] + " not labeled as " + " AND ".join(labels) + "; it is " + " AND ".join([l[1] for l in output])
         )
 
-    print("(CORRECT) " + args["smiles"][0] + " => " + " AND ".join([l[0] for l in output]))
+    ph_range = sorted(list(set([args["min_ph"], args["max_ph"]])))
+    ph_range_str = "(" + " - ".join("{0:.2f}".format(n) for n in ph_range) + ")"
+    print("(CORRECT) " + ph_range_str.ljust(10) + " " + args["smiles"][0] + " => " + " AND ".join([l[0] for l in output]))
 
 if __name__ == "__main__":
     main()
