@@ -599,52 +599,49 @@ def convert_smiles_str_to_mol(smiles_str):
 def test():
     """Tests all the 38 groups."""
 
-    # The testing data. Note that pka never gets used.
     smis = [
         # [input smiles, pka, protonated, deprotonated, category]
-        ["C#CCO",                 13.25,  "C#CCO",                     "C#CC[O-]",                 "Alcohol"],
-        ["C(=O)N",                18.5,   "NC=O",                      "[NH-]C=O",                 "Amide"],
-        ["CC(=O)NOC(C)=O",         6.81,  "CC(=O)NOC(C)=O",            "CC(=O)[N-]OC(C)=O",        "Amide_electroneg_off_N"],
-        ["COC(=N)N",               9.72,  "COC(N)=[NH2+]",             "COC(=N)N",                 "Amidines"],
-        ["Brc1ccc(C2NCCS2)cc1",    5.05,  "Brc1ccc(C2[NH2+]CCS2)cc1",  "Brc1ccc(C2NCCS2)cc1",      "Amines_primary_secondary_tertiary"],
-        ["CC(=O)[n+]1ccc(N)cc1",   9.15,  "CC(=O)[n+]1ccc([NH3+])cc1", "CC(=O)[n+]1ccc(N)cc1",     "Anilines_primary"],
-        ["CCNc1ccccc1",            5.37,  "CC[NH2+]c1ccccc1",          "CCNc1ccccc1",              "Anilines_secondary"],
-        ["Cc1ccccc1N(C)C",         5.985, "Cc1ccccc1[NH+](C)C",        "Cc1ccccc1N(C)C",           "Anilines_tertiary"],
-        ["BrC1=CC2=C(C=C1)NC=C2", 16.13,  "Brc1ccc2[nH+]ccc2c1",       "Brc1ccc2[nH]ccc2c1",       "Aromatic_protonated_nitrogen"],
-        ["C-N=[N+]=[N@H]",         4.7,   "CN=[N+]=N",                 "CN=[N+]=[N-]",             "Azide"],
-        ["BrC(C(O)=O)CBr",         2.33,  "O=C(O)C(Br)CBr",            "O=C([O-])C(Br)CBr",        "Carboxyl"],
-        ["NC(NN=O)=N",            11.7,   "NC(=[NH2+])NN=O",           "N=C(N)NN=O",               "Guanidino"],
-        ["C(F)(F)(F)C(=O)NC(=O)C", 2.1,   "CC(=O)NC(=O)C(F)(F)F",      "CC(=O)[N-]C(=O)C(F)(F)F",  "Imide"],
-        ["O=C(C)NC(C)=O",         12.9,   "CC(=O)NC(C)=O",             "CC(=O)[N-]C(C)=O",         "Imide2"],
-        ["CC(C)(C)C(N(C)O)=O",     9.94,  "CN(O)C(=O)C(C)(C)C",        "CN([O-])C(=O)C(C)(C)C",    "N-hydroxyamide"],
-        ["C[N+](O)=O",         -1000.0,   "C[N+](=O)O",                "C[N+](=O)[O-]",            "Nitro"],
-        ["O=C1C=C(O)CC1",          5.23,  "O=C1C=C(O)CC1",             "O=C1C=C([O-])CC1",         "O=C-C=C-OH"],
-        ["C1CC1OO",               11.2,   "OOC1CC1",                   "[O-]OC1CC1",               "Peroxide"],
-        ["C(=O)OO",                7.1,   "O=COO",                     "O=CO[O-]",                 "Peroxide1"],
-        ["Brc1cc(O)cc(Br)c1",      8.06,  "Oc1cc(Br)cc(Br)c1",         "[O-]c1cc(Br)cc(Br)c1",     "Phenol"],
-        ["CC(=O)c1ccc(S)cc1",      5.33,  "CC(=O)c1ccc(S)cc1",         "CC(=O)c1ccc([S-])cc1",     "Phenyl_Thiol"],
-        ["C=CCOc1ccc(C(=O)O)cc1",  4.45,  "C=CCOc1ccc(C(=O)O)cc1",     "C=CCOc1ccc(C(=O)[O-])cc1", "Phenyl_carboxyl"],
-        ["COP(=O)(O)OC",           0.47,  "COP(=O)(O)OC",              "COP(=O)([O-])OC",          "Phosphate_diester"],
-        ["CP(C)(=O)O",             3.08,  "CP(C)(=O)O",                "CP(C)(=O)[O-]",            "Phosphinic_acid"],
-        ["CC(C)OP(C)(=O)O",        2.0,   "CC(C)OP(C)(=O)O",           "CC(C)OP(C)(=O)[O-]",       "Phosphonate_ester"],
-        ["CC1(C)OC(=O)NC1=O",      6.2,   "CC1(C)OC(=O)NC1=O",         "CC1(C)OC(=O)[N-]C1=O",     "Ringed_imide1"],
-        ["O=C(N1)C=CC1=O",         4.4,   "O=C1C=CC(=O)N1",            "O=C1C=CC(=O)[N-]1",        "Ringed_imide2"],
-        ["O=S(OC)(O)=O",          -3.4,   "COS(=O)(=O)O",              "COS(=O)(=O)[O-]",          "Sulfate"],
-        ["COc1ccc(S(=O)O)cc1",     1.7,   "COc1ccc(S(=O)O)cc1",        "COc1ccc(S(=O)[O-])cc1",    "Sulfinic_acid"],
-        ["CS(N)(=O)=O",           10.8,   "CS(N)(=O)=O",               "CS([NH-])(=O)=O",          "Sulfonamide"],
-        ["CC(=O)CSCCS(O)(=O)=O",  -1.0,   "CC(=O)CSCCS(=O)(=O)O",      "CC(=O)CSCCS(=O)(=O)[O-]",  "Sulfonate"],
-        ["CC(=O)S",               -0.57,  "CC(=O)S",                   "CC(=O)[S-]",               "Thioic_acid"],
-        ["C(C)(C)(C)(S)",         11.14,  "CC(C)(C)S",                 "CC(C)(C)[S-]",             "Thiol"],
-        ["Brc1cc[nH+]cc1",         3.71,  "Brc1cc[nH+]cc1",            "Brc1ccncc1",               "Unprotonated_aromatic_nitrogen"],
-        ["C=C(O)c1c(C)cc(C)cc1C", 10.69,  "C=C(O)c1c(C)cc(C)cc1C",     "C=C([O-])c1c(C)cc(C)cc1C", "Vynl_alcohol"],
-        ["CC(=O)ON",               2.15,  "CC(=O)O[NH3+]",             "CC(=O)ON",                 "primary_hydroxyl_amine_2"]
-        # Missing phosphonates and phosphates
+        ["C#CCO",                  "C#CCO",                     "C#CC[O-]",                 "Alcohol"],
+        ["C(=O)N",                 "NC=O",                      "[NH-]C=O",                 "Amide"],
+        ["CC(=O)NOC(C)=O",         "CC(=O)NOC(C)=O",            "CC(=O)[N-]OC(C)=O",        "Amide_electroneg_off_N"],
+        ["COC(=N)N",               "COC(N)=[NH2+]",             "COC(=N)N",                 "Amidines"],
+        ["Brc1ccc(C2NCCS2)cc1",    "Brc1ccc(C2[NH2+]CCS2)cc1",  "Brc1ccc(C2NCCS2)cc1",      "Amines_primary_secondary_tertiary"],
+        ["CC(=O)[n+]1ccc(N)cc1",   "CC(=O)[n+]1ccc([NH3+])cc1", "CC(=O)[n+]1ccc(N)cc1",     "Anilines_primary"],
+        ["CCNc1ccccc1",            "CC[NH2+]c1ccccc1",          "CCNc1ccccc1",              "Anilines_secondary"],
+        ["Cc1ccccc1N(C)C",         "Cc1ccccc1[NH+](C)C",        "Cc1ccccc1N(C)C",           "Anilines_tertiary"],
+        ["BrC1=CC2=C(C=C1)NC=C2",  "Brc1ccc2[nH+]ccc2c1",       "Brc1ccc2[nH]ccc2c1",       "Aromatic_protonated_nitrogen"],
+        ["C-N=[N+]=[N@H]",         "CN=[N+]=N",                 "CN=[N+]=[N-]",             "Azide"],
+        ["BrC(C(O)=O)CBr",         "O=C(O)C(Br)CBr",            "O=C([O-])C(Br)CBr",        "Carboxyl"],
+        ["NC(NN=O)=N",             "NC(=[NH2+])NN=O",           "N=C(N)NN=O",               "Guanidino"],
+        ["C(F)(F)(F)C(=O)NC(=O)C", "CC(=O)NC(=O)C(F)(F)F",      "CC(=O)[N-]C(=O)C(F)(F)F",  "Imide"],
+        ["O=C(C)NC(C)=O",          "CC(=O)NC(C)=O",             "CC(=O)[N-]C(C)=O",         "Imide2"],
+        ["CC(C)(C)C(N(C)O)=O",     "CN(O)C(=O)C(C)(C)C",        "CN([O-])C(=O)C(C)(C)C",    "N-hydroxyamide"],
+        ["C[N+](O)=O",             "C[N+](=O)O",                "C[N+](=O)[O-]",            "Nitro"],
+        ["O=C1C=C(O)CC1",          "O=C1C=C(O)CC1",             "O=C1C=C([O-])CC1",         "O=C-C=C-OH"],
+        ["C1CC1OO",                "OOC1CC1",                   "[O-]OC1CC1",               "Peroxide"],
+        ["C(=O)OO",                "O=COO",                     "O=CO[O-]",                 "Peroxide1"],
+        ["Brc1cc(O)cc(Br)c1",      "Oc1cc(Br)cc(Br)c1",         "[O-]c1cc(Br)cc(Br)c1",     "Phenol"],
+        ["CC(=O)c1ccc(S)cc1",      "CC(=O)c1ccc(S)cc1",         "CC(=O)c1ccc([S-])cc1",     "Phenyl_Thiol"],
+        ["C=CCOc1ccc(C(=O)O)cc1",  "C=CCOc1ccc(C(=O)O)cc1",     "C=CCOc1ccc(C(=O)[O-])cc1", "Phenyl_carboxyl"],
+        ["COP(=O)(O)OC",           "COP(=O)(O)OC",              "COP(=O)([O-])OC",          "Phosphate_diester"],
+        ["CP(C)(=O)O",             "CP(C)(=O)O",                "CP(C)(=O)[O-]",            "Phosphinic_acid"],
+        ["CC(C)OP(C)(=O)O",        "CC(C)OP(C)(=O)O",           "CC(C)OP(C)(=O)[O-]",       "Phosphonate_ester"],
+        ["CC1(C)OC(=O)NC1=O",      "CC1(C)OC(=O)NC1=O",         "CC1(C)OC(=O)[N-]C1=O",     "Ringed_imide1"],
+        ["O=C(N1)C=CC1=O",         "O=C1C=CC(=O)N1",            "O=C1C=CC(=O)[N-]1",        "Ringed_imide2"],
+        ["O=S(OC)(O)=O",           "COS(=O)(=O)O",              "COS(=O)(=O)[O-]",          "Sulfate"],
+        ["COc1ccc(S(=O)O)cc1",     "COc1ccc(S(=O)O)cc1",        "COc1ccc(S(=O)[O-])cc1",    "Sulfinic_acid"],
+        ["CS(N)(=O)=O",            "CS(N)(=O)=O",               "CS([NH-])(=O)=O",          "Sulfonamide"],
+        ["CC(=O)CSCCS(O)(=O)=O",   "CC(=O)CSCCS(=O)(=O)O",      "CC(=O)CSCCS(=O)(=O)[O-]",  "Sulfonate"],
+        ["CC(=O)S",                "CC(=O)S",                   "CC(=O)[S-]",               "Thioic_acid"],
+        ["C(C)(C)(C)(S)",          "CC(C)(C)S",                 "CC(C)(C)[S-]",             "Thiol"],
+        ["Brc1cc[nH+]cc1",         "Brc1cc[nH+]cc1",            "Brc1ccncc1",               "Unprotonated_aromatic_nitrogen"],
+        ["C=C(O)c1c(C)cc(C)cc1C",  "C=C(O)c1c(C)cc(C)cc1C",     "C=C([O-])c1c(C)cc(C)cc1C", "Vynl_alcohol"],
+        ["CC(=O)ON",               "CC(=O)O[NH3+]",             "CC(=O)ON",                 "primary_hydroxyl_amine_2"]
     ]
 
-    # Note that the two pka values never get used.
     smis_phos = [
-        ["O=P(O)(O)OCCCC",  1.62,  6.72,  "CCCCOP(=O)(O)O",            "CCCCOP(=O)([O-])O",        "CCCCOP(=O)([O-])[O-]",       "Phosphate"],
-        ["CC(P(O)(O)=O)C",  2.66,  8.44,  "CC(C)P(=O)(O)O",            "CC(C)P(=O)([O-])O",        "CC(C)P(=O)([O-])[O-]",       "Phosphonate"]
+        ["O=P(O)(O)OCCCC", "CCCCOP(=O)(O)O", "CCCCOP(=O)([O-])O", "CCCCOP(=O)([O-])[O-]", "Phosphate"],
+        ["CC(P(O)(O)=O)C", "CC(C)P(=O)(O)O", "CC(C)P(=O)([O-])O", "CC(C)P(=O)([O-])[O-]", "Phosphonate"]
     ]
 
     # Load the average pKa values.
@@ -668,11 +665,11 @@ def test():
         "label_states": True
     }
 
-    for smi, pka, protonated, deprotonated, category in smis:
+    for smi, protonated, deprotonated, category in smis:
         args["smiles"] = smi
         _test_check(args, [protonated], ["PROTONATED"])
 
-    for smi, pka1, pka2, protonated, mix, deprotonated, category in smis_phos:
+    for smi, protonated, mix, deprotonated, category in smis_phos:
         args["smiles"] = smi
         _test_check(args, [protonated], ["PROTONATED"])
 
@@ -684,11 +681,11 @@ def test():
     print("------------------------")
     print("")
 
-    for smi, pka, protonated, deprotonated, category in smis:
+    for smi, protonated, deprotonated, category in smis:
         args["smiles"] = smi
         _test_check(args, [deprotonated], ["DEPROTONATED"])
 
-    for smi, pka1, pka2, protonated, mix, deprotonated, category in smis_phos:
+    for smi, protonated, mix, deprotonated, category in smis_phos:
         args["smiles"] = smi
         _test_check(args, [deprotonated], ["DEPROTONATED"])
 
@@ -697,7 +694,7 @@ def test():
     print("------------------")
     print("")
 
-    for smi, pka, protonated, deprotonated, category in smis:
+    for smi, protonated, deprotonated, category in smis:
         avg_pka = average_pkas[category]
 
         args["smiles"] = smi
@@ -706,7 +703,7 @@ def test():
 
         _test_check(args, [protonated, deprotonated], ["BOTH"])
 
-    for smi, pka1, pka2, protonated, mix, deprotonated, category in smis_phos:
+    for smi, protonated, mix, deprotonated, category in smis_phos:
         args["smiles"] = smi
 
         avg_pka = average_pkas_phos[category][0]
