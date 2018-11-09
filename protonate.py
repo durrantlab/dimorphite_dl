@@ -19,7 +19,6 @@ strings.
 
 import copy
 import os
-
 import rdkit
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -29,17 +28,21 @@ def main():
     """The main definition run when you call the script from the commandline."""
 
     parser = get_args()
-
     args = vars(parser.parse_args())
 
-    output = protonate(args)
-
-    if 'output_file' in args:
-        with open(args['output_file'], 'w') as file:
-            file.write("\n".join(output))
+    if args["test"]:
+        # Run tests.
+        test()
     else:
-        for out in output:
-            print(out)
+        # Run protonation
+        output = protonate(args)
+
+        if 'output_file' in args:
+            with open(args['output_file'], 'w') as file:
+                file.write("\n".join(output))
+        else:
+            for out in output:
+                print(out)
 
 def get_args():
     """Gets the arguments from the command line.
@@ -49,20 +52,22 @@ def get_args():
 
     parser = argparse.ArgumentParser(description="Protonates small moleucles.")
     parser.add_argument('--min_ph', metavar='MIN', type=float, default=6.4,
-                        help='Minimum pH to consider.')
+                        help='minimum pH to consider')
     parser.add_argument('--max_ph', metavar='MAX', type=float, default=8.4,
-                        help='Maximum pH to consider.')
+                        help='maximum pH to consider')
     parser.add_argument('--st_dev', metavar='STD', type=float, default=1.0,
-                        help='Standard devation range (number of standard devs).')
+                        help='pKa precision factor (number of standard devations)')
     parser.add_argument('--smiles', type=str,
-                        help='SMILE string to protonate.')
+                        help='SMILES string to protonate')
     parser.add_argument('--smiles_file', type=str,
-                        help='File which contains SMILES strings to protonate.')
+                        help='file that contains SMILES strings to protonate')
     parser.add_argument('--output_file', type=str,
-                        help='File to write protonated SMILES (Optional).')
+                        help='output file to write protonated SMILES (optional)')
     parser.add_argument('--label_states', action="store_true",
-                        help=('Label protonated SMILES with target state',
-                            '("DEPROTONATED", "PROTONATED", or "BOTH").'))
+                        help='label protonated SMILES with target state ' + \
+                             '("DEPROTONATED", "PROTONATED", or "BOTH").')
+    parser.add_argument('--test', action="store_true",
+                        help='run unit tests (for debugging)')
 
     return parser
 
@@ -74,7 +79,9 @@ def protonate(args):
     """
 
     args = clean_args(args)
-    subs = load_protonation_substructs_calc_state_for_ph(args["min_ph"], args["max_ph"], args["st_dev"])
+    subs = load_protonation_substructs_calc_state_for_ph(
+        args["min_ph"], args["max_ph"], args["st_dev"]
+    )
     smiles = args["smiles"]
 
     # Note that args["data"] includes everything on SMILES line but the SMILES
@@ -103,12 +110,14 @@ def protonate(args):
             # new_smis is a growing list. This is how multiple protonation
             # sites are handled.
 
-            new_smis_to_perhaps_add = protonate_site(new_smis, site)
+            # new_smis_to_perhaps_add = protonate_site(new_smis, site)
+            # *******
+            new_smis = protonate_site(new_smis, site)
 
             # Only add new smiles if not already in the list.
-            for s in new_smis_to_perhaps_add:
-                if not s in new_smis:
-                    new_smis.append(s)
+            # for s in new_smis_to_perhaps_add:
+                # if not s in new_smis:
+                    # new_smis.append(s)
 
         # If the user wants to see the target states, add those
         # to the ends of each line.
@@ -239,10 +248,10 @@ def neutralize_mol(mol):
             mol = current_rxn.RunReactants((mol,))[0][0]
             mol.UpdatePropertyCache(strict=False)  # Update valences
 
-    # The mols have been altered from the reactions described above, we need to resanitize them.
-    # Make sure aromatic rings are shown as such
-    # This catches all RDKit Errors. without the catchError and sanitizeOps
-    # the Chem.SanitizeMol can crash the program.
+    # The mols have been altered from the reactions described above, we need
+    # to resanitize them. Make sure aromatic rings are shown as such This
+    # catches all RDKit Errors. without the catchError and sanitizeOps the
+    # Chem.SanitizeMol can crash the program.
     sanitize_string =  Chem.SanitizeMol(
         mol,
         sanitizeOps=rdkit.Chem.rdmolops.SanitizeFlags.SANITIZE_ALL,
@@ -303,8 +312,9 @@ def load_protonation_substructs_calc_state_for_ph(min_ph=6.4, max_ph=8.4, pka_st
                     site = pka_range[0]
                     std = float(pka_range[2]) * pka_std_range
                     mean = float(pka_range[1])
-                    protonation_state = define_protonation_state(mean, std, min_ph, \
-                        max_ph)
+                    protonation_state = define_protonation_state(
+                        mean, std, min_ph, max_ph
+                    )
 
                     prot.append([site, protonation_state])
 
@@ -347,7 +357,8 @@ def define_protonation_state(mean, std, min_ph, max_ph):
 
 
 ###
-# We need to identify and mark groups that have been matched with a substructure.
+# We need to identify and mark groups that have been matched with a
+# substructure.
 ###
 
 def unprotect_molecule(mol):
@@ -512,8 +523,8 @@ def set_protonation_charge(smis, idx, charges, prot_site_name):
     output = []
 
     for charge in charges:
-        # The charge for Nitrogens is 1 higher than others (i.e., protonated state
-        # is positively charged).
+        # The charge for Nitrogens is 1 higher than others (i.e., protonated
+        # state is positively charged).
         nitro_charge = charge + 1
 
         # But there are a few nitrogen moieties where the acidic group is the
@@ -579,6 +590,135 @@ def convert_smiles_str_to_mol(smiles_str):
     # cautious.
 
     return None if mol is None else mol
+
+def test():
+    """Tests all the 38 groups."""
+
+    # The testing data
+    smis = [
+        # [input smiles, pka, protonated, deprotonated, category]
+        ["C#CCO",                 13.25,  "C#CCO",                     "C#CC[O-]",                 "Alcohol"],
+        ["C(=O)N",                18.5,   "NC=O",                      "[NH-]C=O",                 "Amide"],
+        ["CC(=O)NOC(C)=O",         6.81,  "CC(=O)NOC(C)=O",            "CC(=O)[N-]OC(C)=O",        "Amide_electroneg_off_N"],
+        ["COC(=N)N",               9.72,  "COC(N)=[NH2+]",             "COC(=N)N",                 "Amidines"],
+        ["Brc1ccc(C2NCCS2)cc1",    5.05,  "Brc1ccc(C2[NH2+]CCS2)cc1",  "Brc1ccc(C2NCCS2)cc1",      "Amines_primary_secondary_tertiary"],
+        ["CC(=O)[n+]1ccc(N)cc1",   9.15,  "CC(=O)[n+]1ccc([NH3+])cc1", "CC(=O)[n+]1ccc(N)cc1",     "Anilines_primary"],
+        ["CCNc1ccccc1",            5.37,  "CC[NH2+]c1ccccc1",          "CCNc1ccccc1",              "Anilines_secondary"],
+        ["Cc1ccccc1N(C)C",         5.985, "Cc1ccccc1[NH+](C)C",        "Cc1ccccc1N(C)C",           "Anilines_tertiary"],
+        ["BrC1=CC2=C(C=C1)NC=C2", 16.13,  "Brc1ccc2[nH+]ccc2c1",       "Brc1ccc2[nH]ccc2c1",       "Aromatic_protonated_nitrogen"],
+        ["C-N=[N+]=[N@H]",         4.7,   "CN=[N+]=N",                 "CN=[N+]=[N-]",             "Azide"],
+        ["BrC(C(O)=O)CBr",         2.33,  "O=C(O)C(Br)CBr",            "O=C([O-])C(Br)CBr",        "Carboxyl"],
+        ["NC(NN=O)=N",            11.7,   "NC(=[NH2+])NN=O",           "N=C(N)NN=O",               "Guanidino"],
+        ["C(F)(F)(F)C(=O)NC(=O)C", 2.1,   "CC(=O)NC(=O)C(F)(F)F",      "CC(=O)[N-]C(=O)C(F)(F)F",  "Imide"],
+        ["O=C(C)NC(C)=O",         12.9,   "CC(=O)NC(C)=O",             "CC(=O)[N-]C(C)=O",         "Imide2"],
+        ["CC(C)(C)C(N(C)O)=O",     9.94,  "CN(O)C(=O)C(C)(C)C",        "CN([O-])C(=O)C(C)(C)C",    "N-hydroxyamide"],
+        ["C[N+](O)=O",         -1000.0,   "C[N+](=O)O",                "C[N+](=O)[O-]",            "Nitro"],
+        ["O=C1C=C(O)CC1",          5.23,  "O=C1C=C(O)CC1",             "O=C1C=C([O-])CC1",         "O=C-C=C-OH"],
+        ["C1CC1OO",               11.2,   "OOC1CC1",                   "[O-]OC1CC1",               "Peroxide"],
+        ["C(=O)OO",                7.1,   "O=COO",                     "O=CO[O-]",                 "Peroxide1"],
+        ["Brc1cc(O)cc(Br)c1",      8.06,  "Oc1cc(Br)cc(Br)c1",         "[O-]c1cc(Br)cc(Br)c1",     "Phenol"],
+        ["CC(=O)c1ccc(S)cc1",      5.33,  "CC(=O)c1ccc(S)cc1",         "CC(=O)c1ccc([S-])cc1",     "Phenyl_Thiol"],
+        ["C=CCOc1ccc(C(=O)O)cc1",  4.45,  "C=CCOc1ccc(C(=O)O)cc1",     "C=CCOc1ccc(C(=O)[O-])cc1", "Phenyl_carboxyl"],
+        ["COP(=O)(O)OC",           0.47,  "COP(=O)(O)OC",              "COP(=O)([O-])OC",          "Phosphate_diester"],
+        ["CP(C)(=O)O",             3.08,  "CP(C)(=O)O",                "CP(C)(=O)[O-]",            "Phosphinic_acid"],
+        ["CC(C)OP(C)(=O)O",        2.0,   "CC(C)OP(C)(=O)O",           "CC(C)OP(C)(=O)[O-]",       "Phosphonate_ester"],
+        ["CC1(C)OC(=O)NC1=O",      6.2,   "CC1(C)OC(=O)NC1=O",         "CC1(C)OC(=O)[N-]C1=O",     "Ringed_imide1"],
+        ["O=C(N1)C=CC1=O",         4.4,   "O=C1C=CC(=O)N1",            "O=C1C=CC(=O)[N-]1",        "Ringed_imide2"],
+        ["O=S(OC)(O)=O",          -3.4,   "COS(=O)(=O)O",              "COS(=O)(=O)[O-]",          "Sulfate"],
+        ["COc1ccc(S(=O)O)cc1",     1.7,   "COc1ccc(S(=O)O)cc1",        "COc1ccc(S(=O)[O-])cc1",    "Sulfinic_acid"],
+        ["CS(N)(=O)=O",           10.8,   "CS(N)(=O)=O",               "CS([NH-])(=O)=O",          "Sulfonamide"],
+        ["CC(=O)CSCCS(O)(=O)=O",  -1.0,   "CC(=O)CSCCS(=O)(=O)O",      "CC(=O)CSCCS(=O)(=O)[O-]",  "Sulfonate"],
+        ["CC(=O)S",               -0.57,  "CC(=O)S",                   "CC(=O)[S-]",               "Thioic_acid"],
+        ["C(C)(C)(C)(S)",         11.14,  "CC(C)(C)S",                 "CC(C)(C)[S-]",             "Thiol"],
+        ["Brc1cc[nH+]cc1",         3.71,  "Brc1cc[nH+]cc1",            "Brc1ccncc1",               "Unprotonated_aromatic_nitrogen"],
+        ["C=C(O)c1c(C)cc(C)cc1C", 10.69,  "C=C(O)c1c(C)cc(C)cc1C",     "C=C([O-])c1c(C)cc(C)cc1C", "Vynl_alcohol"],
+        ["CC(=O)ON",               2.15,  "CC(=O)O[NH3+]",             "CC(=O)ON",                 "primary_hydroxyl_amine_2"]
+        # Missing phosphonates and phosphates
+    ]
+
+    # Load the average pKa values.
+    average_pkas = {l.split()[0].replace("*", ""):float(l.split()[3]) for l in open("site_substructures.smarts")}
+
+    print("")
+    print("Running Tests")
+    print("=============")
+    print("")
+
+    print("Very Acidic (pH -10000000)")
+    print("--------------------------")
+    print("")
+
+    args = {
+        "min_ph": -10000000,
+        "max_ph": -10000000,
+        "st_dev": 0.5,
+        "smiles": "",
+        "label_states": True
+    }
+
+    for smi, pka, protonated, deprotonated, category in smis:
+        args["smiles"] = smi
+        _test_check_monoprotic(args, [protonated], "PROTONATED")
+
+    args["min_ph"] = 10000000
+    args["max_ph"] = 10000000
+
+    print("")
+    print("Very Basic (pH 10000000)")
+    print("------------------------")
+    print("")
+
+    for smi, pka, protonated, deprotonated, category in smis:
+        args["smiles"] = smi
+        _test_check_monoprotic(args, [deprotonated], "DEPROTONATED")
+
+    print("")
+    print("pH is Category pKa")
+    print("------------------")
+    print("")
+
+    for smi, pka, protonated, deprotonated, category in smis:
+        avg_pka = average_pkas[category]
+
+        args["smiles"] = smi
+        args["min_ph"] = avg_pka
+        args["max_ph"] = avg_pka
+
+        _test_check_monoprotic(args, [protonated, deprotonated], "BOTH")
+
+def _test_check_monoprotic(args, expected_output, label):
+    """Tests most ionizable groups. The ones that can only loose or gain a single proton.
+
+    :param args: The arguments to pass to protonate()
+    :param expected_output: A list of the expected SMILES-strings output.
+    :param label: The label. BOTH, PROTONATED, DEPROTONATED.
+    :raises Exception: Wrong number of states produced.
+    :raises Exception: Unexpected output SMILES.
+    :raises Exception: Wrong label.
+    """
+
+    output = protonate(args)
+    output = [o.split() for o in output]
+
+    num_states = len(expected_output)
+
+    if (len(output) != num_states):
+        raise Exception(
+            args["smiles"][0] + " should have " + str(num_states) + " states at at pH " + str(args["min_ph"]) + ": " + \
+            str(output)
+        )
+
+    if (len(set([l[0] for l in output]) - set(expected_output)) != 0):
+        raise Exception(
+            args["smiles"][0] + " is not " + " AND ".join(expected_output) + "; it is " + " AND ".join([l[0] for l in output])
+        )
+
+    if (list(set([l[1] for l in output]))[0] != label):
+        raise Exception(
+            args["smiles"][0] + " not labeled as " + label
+        )
+
+    print("(CORRECT) " + args["smiles"][0] + " => " + " AND ".join([l[0] for l in output]))
 
 if __name__ == "__main__":
     main()
