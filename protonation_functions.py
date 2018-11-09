@@ -45,7 +45,7 @@ def protonate(args):
             print("ERROR: Skipping poorly formed SMILES string: " + smi[5:] + "\t" + " ".join(data[i]))
             continue
 
-        # Collect the data associated with this smiels (e.g., the molecule
+        # Collect the data associated with this smiles (e.g., the molecule
         # name).
         tag = " ".join(data[i])
 
@@ -60,6 +60,7 @@ def protonate(args):
             # Make a new smiles with the correct protonation state. Note that
             # new_smis is a growing list. This is how multiple protonation
             # sites are handled.
+
             new_smis_to_perhaps_add = protonate_site(new_smis, site)
 
             # Only add new smiles if not already in the list.
@@ -67,10 +68,15 @@ def protonate(args):
                 if not s in new_smis:
                     new_smis.append(s)
 
-        new_lines = [x + '\t' + tag for x in new_smis]
-        output.extend(new_lines)
+        # If the user wants to see the target states, add those
+        # to the ends of each line.
+        if args["label_states"]:
+            states = '\t'.join([x[1] for x in sites])
+            new_lines = [x + "\t" + tag + "\t" + states for x in new_smis]
+        else:
+            new_lines = [x + "\t" + tag for x in new_smis]
 
-    #******
+        output.extend(new_lines)
 
     return output
 
@@ -468,7 +474,7 @@ def set_protonation_charge(smis, idx, charges, prot_site_name):
         nitro_charge = charge + 1
 
         # But there are a few nitrogen moieties where the acidic group is the
-        # neural one. Amides are a good example. I gave some thought re. how
+        # neutral one. Amides are a good example. I gave some thought re. how
         # to best flag these. I decided that those nitrogen-containing
         # moieties where the acidic group is neutral (rather than positively
         # charged) will have "*" in the name.

@@ -32,7 +32,10 @@ parser.add_argument('--smiles', type=str,
 parser.add_argument('--smiles_file', type=str,
                     help='File which contains SMILES strings to protonate.')
 parser.add_argument('--output_file', type=str,
-                    help='File to write protonated SMILES. (Optional)')
+                    help='File to write protonated SMILES (Optional).')
+parser.add_argument('--label_states', action="store_true",
+                    help=('Label protonated SMILES with target state',
+                         '("DEPROTONATED", "PROTONATED", or "BOTH").'))
 
 
 if __name__ == "__main__":
