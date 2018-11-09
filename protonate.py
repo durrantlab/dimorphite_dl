@@ -55,7 +55,7 @@ def get_args():
                         help='minimum pH to consider')
     parser.add_argument('--max_ph', metavar='MAX', type=float, default=8.4,
                         help='maximum pH to consider')
-    parser.add_argument('--st_dev', metavar='STD', type=float, default=1.0,
+    parser.add_argument('--pka_precision', metavar='PRE', type=float, default=1.0,
                         help='pKa precision factor (number of standard devations)')
     parser.add_argument('--smiles', type=str,
                         help='SMILES string to protonate')
@@ -80,7 +80,7 @@ def protonate(args):
 
     args = clean_args(args)
     subs = load_protonation_substructs_calc_state_for_ph(
-        args["min_ph"], args["max_ph"], args["st_dev"]
+        args["min_ph"], args["max_ph"], args["pka_precision"]
     )
     smiles = args["smiles"]
 
@@ -146,7 +146,7 @@ def clean_args(args):
 
     defaults = {'min_ph' : 6.4,
                 'max_ph' : 8.4,
-                'st_dev' : 1.5}
+                'pka_precision' : 1.5}
 
     for key in defaults:
         if key not in args:
@@ -660,7 +660,7 @@ def test():
     args = {
         "min_ph": -10000000,
         "max_ph": -10000000,
-        "st_dev": 0.5,
+        "pka_precision": 0.5,
         "smiles": "",
         "label_states": True
     }
@@ -721,7 +721,7 @@ def test():
         avg_pka = 0.5 * (average_pkas_phos[category][0] + average_pkas_phos[category][1])
         args["min_ph"] = avg_pka
         args["max_ph"] = avg_pka
-        args["st_dev"] = 5  # Should give all three
+        args["pka_precision"] = 5  # Should give all three
 
         _test_check(args, [mix, deprotonated, protonated], ["BOTH", "BOTH"])
 
