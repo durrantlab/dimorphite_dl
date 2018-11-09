@@ -111,13 +111,18 @@ def protonate(args):
             # sites are handled.
 
             # new_smis_to_perhaps_add = protonate_site(new_smis, site)
-            # *******
             new_smis = protonate_site(new_smis, site)
 
             # Only add new smiles if not already in the list.
             # for s in new_smis_to_perhaps_add:
                 # if not s in new_smis:
                     # new_smis.append(s)
+
+        # In some cases, the script might generate redundant molecules.
+        # Phosphonates, when the pH is between the two pKa values and the
+        # stdev value is big enough, for example, will generate two identical
+        # BOTH states. Let's remove this redundancy.
+        new_smis = list(set(new_smis))
 
         # If the user wants to see the target states, add those
         # to the ends of each line.
@@ -722,15 +727,6 @@ def test():
         args["st_dev"] = 5  # Should give all three
 
         _test_check(args, [mix, deprotonated, protonated], ["BOTH", "BOTH"])
-
-    print("")
-    print("Testing Phosphates and Phosphonates")
-    print("-----------------------------------")
-    print("")
-
-    # args["smiles"] = "O=P(O)(O)OCCCC"
-    # args["min_ph"] = -10000
-    # args["max_ph"] = avg_pka
 
 def _test_check(args, expected_output, labels):
     """Tests most ionizable groups. The ones that can only loose or gain a single proton.
