@@ -146,7 +146,9 @@ def clean_args(args):
 
     defaults = {'min_ph' : 6.4,
                 'max_ph' : 8.4,
-                'pka_precision' : 1.5}
+                'pka_precision' : 1.5,
+                'label_states' : False,
+                'test' : False}
 
     for key in defaults:
         if key not in args:
