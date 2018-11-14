@@ -1,10 +1,10 @@
-Protonation 1.0
-===============
+Dimorphite-DL 1.0
+=================
 
 What is it?
 -----------
 
-Protonation 1.0 adds hydrogen atoms to molecular representations, as
+Dimorphite-DL 1.0 adds hydrogen atoms to molecular representations, as
 appropriate for a user-specified pH range.
 
 Users can provide SMILES strings from the command line or via an .smi file.
@@ -12,31 +12,32 @@ Users can provide SMILES strings from the command line or via an .smi file.
 Licensing
 ---------
 
-Protonation is released under the Apache 2.0 license. See LICENCE.txt for 
+Protonation is released under the Apache 2.0 license. See LICENCE.txt for
 details.
 
 Usage
 -----
 
 ```
-usage: protonate.py [-h] [--min_ph MIN] [--max_ph MAX] [--st_dev STD]
-                    [--smiles SMILES] [--smiles_file SMILES_FILE]
-                    [--output_file OUTPUT_FILE] [--label_states]
+usage: dimorphite-dl.py [-h] [--min_ph MIN] [--max_ph MAX]
+                        [--pka_precision PRE] [--smiles SMI]
+                        [--smiles_file FILE] [--output_file FILE]
+                        [--label_states] [--test]
 
-Protonates small molecules.
+Protonates small moleucles.
 
 optional arguments:
-  -h, --help            show this help message and exit
-  --min_ph MIN          Minimum pH to consider.
-  --max_ph MAX          Maximum pH to consider.
-  --st_dev STD          Standard devation range (number of standard devs).
-  --smiles SMILES       SMILE string to protonate.
-  --smiles_file SMILES_FILE
-                        File which contains SMILES strings to protonate.
-  --output_file OUTPUT_FILE
-                        File to write protonated SMILES. (Optional)
-  --label_states        Label protonated SMILES with target state 
-                        ("DEPROTONATED", "PROTONATED", or "BOTH").
+  -h, --help           show this help message and exit
+  --min_ph MIN         minimum pH to consider (default: 6.4)
+  --max_ph MAX         maximum pH to consider (default: 8.4)
+  --pka_precision PRE  pKa precision factor (number of standard devations,
+                       default: 1.0)
+  --smiles SMI         SMILES string to protonate
+  --smiles_file FILE   file that contains SMILES strings to protonate
+  --output_file FILE   output file to write protonated SMILES (optional)
+  --label_states       label protonated SMILES with target state (i.e.,
+                       "DEPROTONATED", "PROTONATED", or "BOTH").
+  --test               run unit tests (for debugging)
 ```
 
 The default pH range is 6.4 to 8.4, considered biologically relevant pH.
@@ -45,19 +46,11 @@ Examples
 --------
 
 ```
-python protonate.py --smiles_file sample_molecules.smi
-```
-
-```
-python protonate.py --smiles "CCC(=O)O" --min_ph -3 --max_ph -2
-```
-
-```
-python protonate.py --smiles "CCCN" --min_ph -3 --max_ph -2 --output_file output.smi
-```
-
-```
-python protonate.py --smiles_file sample_molecules.smi --st_dev 2.0 --label_states
+python dimorphite-dl.py --smiles_file sample_molecules.smi
+python dimorphite-dl.py --smiles "CCC(=O)O" --min_ph -3.0 --max_ph -2.0
+python dimorphite-dl.py --smiles "CCCN" --min_ph -3.0 --max_ph -2.0 --output_file output.smi
+python dimorphite-dl.py --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states
+python dimorphite-dl.py --test
 ```
 
 Authors and Contacts

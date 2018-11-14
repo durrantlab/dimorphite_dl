@@ -1,7 +1,8 @@
 CONTRIBUTORS
 ============
 
-Patrick Ropp
 Jacob Durrant
-Jacob Spiegel
 Jesse Kaminsky
+Patrick Ropp
+Jacob Spiegel
+Sara Yablonski
