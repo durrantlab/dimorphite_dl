@@ -42,6 +42,7 @@ def main():
         print("\nPARAMETERS:\n")
         for k in sorted(args.keys()):
             print(k.rjust(13) + ": " + str(args[k]))
+        print("")
 
     if args["test"]:
         # Run tests.
@@ -82,13 +83,13 @@ class MyParser(argparse.ArgumentParser):
         if file is None:
             file = sys.stdout
         self._print_message(self.format_help(), file)
-        print """
+        print("""
 examples:
-  python dimorphite-dl.py --smiles_file sample_molecules.smi
-  python dimorphite-dl.py --smiles "CCC(=O)O" --min_ph -3.0 --max_ph -2.0
-  python dimorphite-dl.py --smiles "CCCN" --min_ph -3.0 --max_ph -2.0 --output_file output.smi
-  python dimorphite-dl.py --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states
-  python dimorphite-dl.py --test"""
+  python dimorphite_dl.py --smiles_file sample_molecules.smi
+  python dimorphite_dl.py --smiles "CCC(=O)O" --min_ph -3.0 --max_ph -2.0
+  python dimorphite_dl.py --smiles "CCCN" --min_ph -3.0 --max_ph -2.0 --output_file output.smi
+  python dimorphite_dl.py --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states
+  python dimorphite_dl.py --test""")
         print("")
 
 def get_args():
@@ -703,7 +704,6 @@ def test():
     average_pkas = {l.split()[0].replace("*", ""):float(l.split()[3]) for l in open("site_substructures.smarts") if l.split()[0] not in ["Phosphate", "Phosphonate"]}
     average_pkas_phos = {l.split()[0].replace("*", ""):[float(l.split()[3]), float(l.split()[6])] for l in open("site_substructures.smarts") if l.split()[0] in ["Phosphate", "Phosphonate"]}
 
-    print("")
     print("Running Tests")
     print("=============")
     print("")
