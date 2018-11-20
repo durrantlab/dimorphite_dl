@@ -4,8 +4,9 @@ Dimorphite-DL 1.0
 What is it?
 -----------
 
-Dimorphite-DL 1.0 adds hydrogen atoms to molecular representations, as
-appropriate for a user-specified pH range.
+Dimorphite-DL adds hydrogen atoms to molecular representations, as appropriate
+for a user-specified pH range. It is a fast, accurate, accessible, and modular
+open-source program for enumerating small-molecule ionization states.
 
 Users can provide SMILES strings from the command line or via an .smi file.
 
