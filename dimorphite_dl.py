@@ -257,7 +257,7 @@ def clean_args(args):
     return args
 
 def neutralize_mol(mol):
-    """All molecules need to be neuralized to the extent possible. The user
+    """All molecules should be neuralized to the extent possible. The user
     should not be allowed to specify the valence of the atoms in most cases.
 
     :param rdkit.Chem.rdchem.Mol mol: The rdkit Mol objet to be neutralized.
