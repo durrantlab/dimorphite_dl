@@ -249,7 +249,7 @@ def clean_args(args):
             mol_str_list.append("NONE|" + smiles_str)
             continue
 
-        new_mol_string = Chem.MolToSmiles(mol)
+        new_mol_string = Chem.MolToSmiles(mol, isomericSmiles=True)
         mol_str_list.append(new_mol_string)
 
     args["smiles"] = [x for x in mol_str_list]
