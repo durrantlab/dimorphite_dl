@@ -98,9 +98,10 @@ def get_args():
     :return: A parser object.
     """
 
-    parser = MyParser(description="Creates models of appropriately protonated " +
-                                  "small moleucles. Apache 2.0 License. " +
-                                  "Copyright 2018 Jacob D. Durrant")
+    parser = MyParser(description="Dimorphite 1.0.0: Creates models of " +
+                                  "appropriately protonated small moleucles. " +
+                                  "Apache 2.0 License. Copyright 2018 Jacob D. " +
+                                  "Durrant.")
     parser.add_argument('--min_ph', metavar='MIN', type=float, default=6.4,
                         help='minimum pH to consider (default: 6.4)')
     parser.add_argument('--max_ph', metavar='MAX', type=float, default=8.4,
@@ -390,7 +391,6 @@ def define_protonation_state(mean, std, min_ph, max_ph):
     :param float std:    The precision (stdev).
     :param float min_ph: The min pH of the range.
     :param float max_ph: The max pH of the range.
-    :raises Exception:   HORRIBLE NONSENSE HAS OCCURED.
     :return: A string describing the protonation state.
     """
 
@@ -399,20 +399,12 @@ def define_protonation_state(mean, std, min_ph, max_ph):
 
     # This needs to be reassigned, and 'ERROR' should never make it past the
     # next set of checks.
-    protonation_state = 'ERROR'
-
     if min_pka <= max_ph and min_ph <= max_pka:
         protonation_state = 'BOTH'
     elif mean > max_ph:
         protonation_state = 'PROTONATED'
-    elif mean < min_ph:
+    else:
         protonation_state = 'DEPROTONATED'
-
-    # We are error handling here
-    if protonation_state == 'ERROR':
-        msg = "HORRIBLE NONSENSE HAS OCCURED."
-        print(msg)
-        raise Exception(msg)
 
     return protonation_state
 
