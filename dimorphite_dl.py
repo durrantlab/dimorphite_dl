@@ -17,6 +17,7 @@ This script identifies and enumerates the possible protonation sites of SMILES
 strings.
 """
 
+from __future__ import print_function
 import copy
 import os
 import argparse
@@ -60,6 +61,12 @@ def main():
         else:
             for out in output:
                 print(out)
+
+def eprint(*args, **kwargs):
+    """Error messages should be printed to STDERR. See
+    https://stackoverflow.com/questions/5574702/how-to-print-to-stderr-in-python"""
+
+    print(*args, file=sys.stderr, **kwargs)
 
 class MyParser(argparse.ArgumentParser):
     """Overwrite default parse so it displays help file on error. See
@@ -145,7 +152,7 @@ def protonate(args):
     output = []
     for i, smi in enumerate(smiles):
         if smi.startswith("NONE|"):
-            print("ERROR: Skipping poorly formed SMILES string: " + smi[5:] + "\t" + " ".join(data[i]))
+            eprint("WARNING: Skipping poorly formed SMILES string: " + smi[5:] + "\t" + " ".join(data[i]))
             continue
 
         # Collect the data associated with this smiles (e.g., the molecule
@@ -498,19 +505,19 @@ def get_prot_sites_and_target_states(smi, subs):
 
     # Check Conversion worked
     if mol is None:
-        print("ERROR:   ", smi)
+        eprint("ERROR:   ", smi)
         return []
 
     # Try to Add hydrogens. if failed return []
     try:
         mol =  Chem.AddHs(mol)
     except:
-        print("ERROR:   ", smi)
+        eprint("ERROR:   ", smi)
         return []
 
     # Check adding Hs worked
     if mol is None:
-        print("ERROR:   ", smi)
+        eprint("ERROR:   ", smi)
         return []
 
     unprotect_molecule(mol)
