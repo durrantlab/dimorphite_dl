@@ -22,6 +22,9 @@ import os
 import argparse
 import sys
 
+# Always let the user know a help file is available.
+print("\nFor help, use: python dimorphite_dl.py --help")
+
 try:
     import rdkit
     from rdkit import Chem
