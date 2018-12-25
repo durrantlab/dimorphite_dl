@@ -79,8 +79,9 @@ class MyParser(argparse.ArgumentParser):
         """
 
         self.print_help()
-        sys.stderr.write('error: %s\n\n' % message)
-        sys.exit(2)
+        msg = "ERROR: %s\n\n" % message
+        print(msg)
+        raise Exception(msg)
 
     def print_help(self, file=None):
         """Overwrite the default print_help function
