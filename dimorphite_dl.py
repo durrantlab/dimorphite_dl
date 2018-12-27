@@ -23,6 +23,13 @@ import os
 import argparse
 import sys
 
+try:
+    # Python2
+    from StringIO import StringIO
+except ImportError:
+    # Python3
+    from io import StringIO
+
 # Always let the user know a help file is available.
 print("\nFor help, use: python dimorphite_dl.py --help")
 
@@ -144,21 +151,18 @@ def protonate(args):
     subs = load_protonation_substructs_calc_state_for_ph(
         args["min_ph"], args["max_ph"], args["pka_precision"]
     )
-    smiles = args["smiles"]
-
-    # Note that args["data"] includes everything on SMILES line but the SMILES
-    # string itself (e.g., the molecule name). It is set in clean_args().
-    data = args["data"]
+    smiles_and_data = args["smiles_and_data"]
 
     output = []
-    for i, smi in enumerate(smiles):
-        if smi.startswith("NONE|"):
-            eprint("WARNING: Skipping poorly formed SMILES string: " + smi[5:] + "\t" + " ".join(data[i]))
-            continue
+    for i, smile_and_datum in enumerate(smiles_and_data):
+        smi = smile_and_datum["smiles"]
+        data = smile_and_datum["data"]  # Everything on SMILES line but the
+                                        # SMILES string itself (e.g., the
+                                        # molecule name).
 
         # Collect the data associated with this smiles (e.g., the molecule
         # name).
-        tag = " ".join(data[i])
+        tag = " ".join(data)
 
         # sites is a list of (atom index, "PROTONATED|DEPROTONATED|BOTH").
         # Note that the second entry indicates what state the site SHOULD be
@@ -221,50 +225,18 @@ def clean_args(args):
         if args[key] is None:
             del args[key]
 
-    if "smiles" in args:
-        if isinstance(args["smiles"], str):
-            splits = args["smiles"].strip().split()
-            args["smiles"] = [splits[0]]
-            args["data"] = [splits[1:]]
-    elif "smiles_file" in args:
-        args["smiles"], args["data"] = load_files(args["smiles_file"])
-    else:
+    if not "smiles" in args and not "smiles_file" in args:
         msg = "Error: No SMILES in params. Use the -h parameter for help."
         print(msg)
         raise Exception(msg)
 
-    mol_str_list = []
-    for i, smiles_str in enumerate(args["smiles"]):
+    # If the user provides a smiles string, turn it into a file-like StringIO
+    # object.
+    if "smiles" in args:
+        if isinstance(args["smiles"], str):
+            args["smiles_file"]  = StringIO(args["smiles"])
 
-        # Convert from SMILES string to RDKIT Mol
-        # Filter if failed.
-
-        mol = convert_smiles_str_to_mol(smiles_str)
-        if mol is None:
-            mol_str_list.append("NONE|" + smiles_str)
-            continue
-
-        # Handle nuetralizing the molecules
-        # Filter if failed.
-        mol = neutralize_mol(mol)
-        if mol is None:
-            mol_str_list.append("NONE|" + smiles_str)
-            continue
-
-        try:
-            mol = Chem.RemoveHs(mol)
-        except:
-            mol_str_list.append("NONE|" + smiles_str)
-            continue
-
-        if mol is None:
-            mol_str_list.append("NONE|" + smiles_str)
-            continue
-
-        new_mol_string = Chem.MolToSmiles(mol, isomericSmiles=True)
-        mol_str_list.append(new_mol_string)
-
-    args["smiles"] = [x for x in mol_str_list]
+    args["smiles_and_data"] = LoadSMIFile(args["smiles_file"])
 
     return args
 
@@ -283,7 +255,9 @@ def neutralize_mol(mol):
         ['[Ov2-:1]', '[Ov2+0:1]'],  # To handle O- bonded to two atoms. Should not be Negative.
         ['[#7v3+1:1]', '[#7v3+0:1]'],  # To handle N+ bonded to three atoms. Should not be positive.
         ['[#7v2-1:1]', '[#7+0:1]-[H]'],  # To handle N- Bonded to two atoms. Add hydrogen.
-        # ['[N:1]=[N+0:2]=[N:3]-[H]', '[N:1]=[N+1:2]=[N+0:3]-[H]'],  # To handle bad azide. Must be protonated. (Now handled elsewhere, before SMILES converted to Mol object.)
+        # ['[N:1]=[N+0:2]=[N:3]-[H]', '[N:1]=[N+1:2]=[N+0:3]-[H]'],  # To
+        # handle bad azide. Must be protonated. (Now handled elsewhere, before
+        # SMILES converted to Mol object.)
         ['[H]-[N:1]-[N:2]#[N:3]', '[N:1]=[N+1:2]=[N:3]-[H]']  # To handle bad azide. R-N-N#N should be R-N=[N+]=N
     ]
 
@@ -348,6 +322,104 @@ def load_files(smile_file):
                 smiles.append(splits[0])
                 data.append(splits[1:])
     return smiles, data
+
+class LoadSMIFile(object):
+    """A generator class for loading in the SMILES strings from a file, one at
+    a time."""
+
+    def __init__(self, filename):
+        """Initializes this class.
+
+        :param filename: The filename or file object (i.e., StringIO).
+        :type filename: str or StringIO
+        """
+
+        if type(filename) is str:
+            # It's a filename
+            self.f = open(filename, "r")
+        else:
+            # It's a file object (i.e., StringIO)
+            self.f = filename
+
+    def __iter__(self):
+        """Returns this generator object.
+
+        :return: This generator object.
+        :rtype: LoadSMIFile
+        """
+
+        return self
+
+    def __next__(self):
+        """Ensure Python3 compatibility.
+
+        :return: A dict, where the "smiles" key contains the canonical SMILES
+                 string and the "data" key contains the remaining information
+                 (e.g., the molecule name).
+        :rtype: dict
+        """
+
+        return self.next()
+
+    def next(self):
+        """Get the data associated with the next line.
+
+        :raises StopIteration: If there are no more lines left iin the file.
+        :return: A dict, where the "smiles" key contains the canonical SMILES
+                 string and the "data" key contains the remaining information
+                 (e.g., the molecule name).
+        :rtype: dict
+        """
+
+        line = self.f.readline()
+
+        if line == "":
+            # EOF
+            self.f.close()
+            raise StopIteration()
+            return
+
+        # Divide line into smi and data
+        splits = line.split()
+        if len(splits) != 0:
+            # Generate mol object
+            smiles_str = splits[0]
+
+            # Convert from SMILES string to RDKIT Mol. This series of tests is
+            # to make sure the SMILES string is properly formed and to get it
+            # into a canonical form. Filter if failed.
+            mol = convert_smiles_str_to_mol(smiles_str)
+            if mol is None:
+                eprint("WARNING: Skipping poorly formed SMILES string: " + line)
+                return self.next()
+
+            # Handle nuetralizing the molecules. Filter if failed.
+            mol = neutralize_mol(mol)
+            if mol is None:
+                eprint("WARNING: Skipping poorly formed SMILES string: " + line)
+                return self.next()
+
+            # Remove the hydrogens.
+            try:
+                mol = Chem.RemoveHs(mol)
+            except:
+                eprint("WARNING: Skipping poorly formed SMILES string: " + line)
+                return self.next()
+
+            if mol is None:
+                eprint("WARNING: Skipping poorly formed SMILES string: " + line)
+                return self.next()
+
+            # Regenerate the smiles string (to standardize).
+            new_mol_string = Chem.MolToSmiles(mol, isomericSmiles=True)
+
+            return {
+                "smiles": new_mol_string,
+                "data": splits[1:]
+            }
+        else:
+            # Blank line? Go to next one.
+            return self.next()
 
 def load_protonation_substructs_calc_state_for_ph(min_ph=6.4, max_ph=8.4, pka_std_range=1):
     """A pre-calculated list of R-groups with protonation sites, with their
@@ -418,7 +490,6 @@ def define_protonation_state(mean, std, min_ph, max_ph):
         protonation_state = 'DEPROTONATED'
 
     return protonation_state
-
 
 ###
 # We need to identify and mark groups that have been matched with a
