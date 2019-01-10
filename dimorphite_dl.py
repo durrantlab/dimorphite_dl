@@ -268,7 +268,6 @@ class UtilFuncs:
             # Try to fix azides here. They are just tricky to deal with.
             smiles_str = smiles_str.replace("N=N=N", "N=[N+]=N")
             smiles_str = smiles_str.replace("NN#N", "N=[N+]=N")
-
             mol = Chem.MolFromSmiles(smiles_str)
         except:
             return None
