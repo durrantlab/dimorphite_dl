@@ -10,6 +10,15 @@ open-source program for enumerating small-molecule ionization states.
 
 Users can provide SMILES strings from the command line or via an .smi file.
 
+Citation
+--------
+
+If you use Dimorphite-DL in your research, please cite:
+
+Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An
+open-source program for enumerating the ionization states of drug-like small
+molecules. J Cheminform 11:14. doi:10.1186/s13321-019-0336-9.
+
 Licensing
 ---------
 
