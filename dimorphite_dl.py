@@ -494,6 +494,7 @@ class Protonate(object):
 
             # new_smis_to_perhaps_add = ProtSubstructFuncs.protonate_site(new_smis, site)
             new_smis = ProtSubstructFuncs.protonate_site(new_smis, site)
+            # print(site, new_smis)  # Good for debugging.
 
             # Only add new smiles if not already in the list.
             # for s in new_smis_to_perhaps_add:
@@ -812,7 +813,8 @@ class TestFuncs:
             ["CC(=O)[n+]1ccc(N)cc1",   "CC(=O)[n+]1ccc([NH3+])cc1", "CC(=O)[n+]1ccc(N)cc1",     "Anilines_primary"],
             ["CCNc1ccccc1",            "CC[NH2+]c1ccccc1",          "CCNc1ccccc1",              "Anilines_secondary"],
             ["Cc1ccccc1N(C)C",         "Cc1ccccc1[NH+](C)C",        "Cc1ccccc1N(C)C",           "Anilines_tertiary"],
-            ["BrC1=CC2=C(C=C1)NC=C2",  "Brc1ccc2[nH+]ccc2c1",       "Brc1ccc2[nH]ccc2c1",       "Aromatic_nitrogen_protonated"],
+            ["BrC1=CC2=C(C=C1)NC=C2",  "Brc1ccc2[nH]ccc2c1",        "Brc1ccc2[nH-]ccc2c1",      "Indole_pyrrole"],
+            ["BrC1=CNC=C(C1=O)Br",     "O=c1c(Br)c[nH+]cc1Br",      "O=c1c(Br)c[nH]cc1Br",      "Aromatic_nitrogen_protonated"],
             ["C-N=[N+]=[N@H]",         "CN=[N+]=N",                 "CN=[N+]=[N-]",             "Azide"],
             ["BrC(C(O)=O)CBr",         "O=C(O)C(Br)CBr",            "O=C([O-])C(Br)CBr",        "Carboxyl"],
             ["NC(NN=O)=N",             "NC(=[NH2+])NN=O",           "N=C(N)NN=O",               "AmidineGuanidine1"],

@@ -86,6 +86,13 @@ protonated_mols = dimorphite_dl.run_with_mol_list(
 print([Chem.MolToSmiles(m) for m in protonated_mols])
 ```
 
+Caveats
+-------
+
+Dimorphite-DL deprotonates indoles and pyrroles around pH 14.5. But these
+substructures can also be protonated around pH -3.5. Dimorphite does not
+perform the protonation.
+
 Authors and Contacts
 --------------------
 
