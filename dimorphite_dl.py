@@ -970,7 +970,7 @@ class TestFuncs:
 
 def run(**kwargs):
     """A helpful, importable function for those who want to call Dimorphite-DL
-    from another python script rather than the command line. Note that this
+    from another Python script rather than the command line. Note that this
     function accepts keyword arguments that match the command-line parameters
     exactly. If you want to pass and return a list of RDKit Mol objects, import
     run_with_mol_list() instead.
@@ -984,6 +984,20 @@ def run(**kwargs):
     main(kwargs)
 
 def run_with_mol_list(mol_lst, **kwargs):
+    """A helpful, importable function for those who want to call Dimorphite-DL
+    from another Python script rather than the command line. Note that this
+    function is for passing Dimorphite-DL a list of RDKit Mol objects, together
+    with command-line parameters. If you want to use only the same parameters
+    that you would use from the command line, import run() instead.
+
+    :param mol_lst: A list of rdkit.Chem.rdchem.Mol objects.
+    :type mol_lst: list
+    :raises Exception: If the **kwargs includes "smiles", "smiles_file",
+                       "output_file", or "test" parameters.
+    :return: A list of properly protonated rdkit.Chem.rdchem.Mol objects.
+    :rtype: list
+    """
+
     # Do a quick check to make sure the user input makes sense.
     for bad_arg in ["smiles", "smiles_file", "output_file", "test"]:
         if bad_arg in kwargs:
@@ -993,7 +1007,6 @@ def run_with_mol_list(mol_lst, **kwargs):
                    "run(**kwargs) function instead?"
             print(msg)
             raise Exception(msg)
-
 
     # Set the return_as_list flag so main() will return the protonated smiles
     # as a list.
