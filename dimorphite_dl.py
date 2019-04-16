@@ -42,11 +42,24 @@ except:
     print(msg)
     raise Exception(msg)
 
-def main():
-    """The main definition run when you call the script from the commandline."""
+def main(params=None):
+    """The main definition run when you call the script from the commandline.
+
+    :param params: The parameters to use. Entirely optional. If absent,
+                   defaults to None, in which case argments will be taken from
+                   those given at the command line.
+    :param params: dict, optional
+    :return: Returns a list of the SMILES strings return_as_list parameter is
+             True. Otherwise, returns None.
+    """
 
     parser = ArgParseFuncs.get_args()
     args = vars(parser.parse_args())
+
+    # Add in any parameters in params.
+    if params is not None:
+        for k, v in params.items():
+            args[k] = v
 
     # If being run from the command line, print out all parameters.
     if __name__ == "__main__":
@@ -65,6 +78,8 @@ def main():
             with open(args["output_file"], "w") as file:
                 for protonated_smi in Protonate(args):
                     file.write(protonated_smi + "\n")
+        elif "return_as_list" in args and args["return_as_list"] == True:
+            return list(Protonate(args))
         else:
             # No output file specified. Just print it to the screen.
             for protonated_smi in Protonate(args):
@@ -442,7 +457,7 @@ class Protonate(object):
         """
 
         # If there are any SMILES strings in self.cur_prot_SMI, just return
-        # the first one and update the list.
+        # the first one and update the list to include only the remaining.
         if len(self.cur_prot_SMI) > 0:
             first, self.cur_prot_SMI = self.cur_prot_SMI[0], self.cur_prot_SMI[1:]
             return first
@@ -952,6 +967,55 @@ class TestFuncs:
         ph_range = sorted(list(set([args["min_ph"], args["max_ph"]])))
         ph_range_str = "(" + " - ".join("{0:.2f}".format(n) for n in ph_range) + ")"
         print("(CORRECT) " + ph_range_str.ljust(10) + " " + args["smiles"][0] + " => " + " AND ".join([l[0] for l in output]))
+
+def run(**kwargs):
+    """A helpful, importable function for those who want to call Dimorphite-DL
+    from another python script rather than the command line. Note that this
+    function accepts keyword arguments that match the command-line parameters
+    exactly. If you want to pass and return a list of RDKit Mol objects, import
+    run_with_mol_list() instead.
+
+    :param **kwargs: For a complete description, run dimorphite_dl.py from the
+        command line with the -h option.
+    :type kwargs: dict
+    """
+
+    # Run the main function with the specified arguments.
+    main(kwargs)
+
+def run_with_mol_list(mol_lst, **kwargs):
+    # Do a quick check to make sure the user input makes sense.
+    for bad_arg in ["smiles", "smiles_file", "output_file", "test"]:
+        if bad_arg in kwargs:
+            msg = "You're using Dimorphite-DL's run_with_mol_list(mol_lst, " + \
+                   "**kwargs) function, but you also passed the \"" + \
+                   bad_arg + "\" argument. Did you mean to use the " + \
+                   "run(**kwargs) function instead?"
+            print(msg)
+            raise Exception(msg)
+
+
+    # Set the return_as_list flag so main() will return the protonated smiles
+    # as a list.
+    kwargs["return_as_list"] = True
+
+    # Having reviewed the code, it will be very difficult to rewrite it so
+    # that a list of Mol objects can be used directly. Intead, convert this
+    # list of mols to smiles and pass that. Not memory efficient, but it will
+    # work.
+    protonated_smiles = []
+    for m in mol_lst:
+        smiles = Chem.MolToSmiles(m, isomericSmiles=True)
+        kwargs["smiles"] = smiles
+        protonated_smiles.extend(
+            [s.split("\t")[0] for s in main(kwargs)]
+        )
+
+    # Now convert the list of protonated smiles strings back to RDKit Mol
+    # objects.
+    mols = [Chem.MolFromSmiles(s) for s in protonated_smiles]
+
+    return mols
 
 if __name__ == "__main__":
     main()
