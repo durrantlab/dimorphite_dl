@@ -86,13 +86,20 @@ print("Output of first test saved to output.smi...")
 
 # Using the dimorphite_dl.run_with_mol_list() function, you can also pass a
 # list of RDKit Mol objects. The first argument is always the list.
-mols = [Chem.MolFromSmiles(s) for s in ["C[C@](F)(Br)CC(O)=O", "CCCCCN"]]
+smiles = ["C[C@](F)(Br)CC(O)=O", "CCCCCN"]
+mols = [Chem.MolFromSmiles(s) for s in smiles]
+for i, mol in enumerate(mols):
+    mol.SetProp("msg","Orig SMILES: " + smiles[i])
+
 protonated_mols = dimorphite_dl.run_with_mol_list(
     mols,
     min_ph=5.0,
     max_ph=9.0,
 )
 print([Chem.MolToSmiles(m) for m in protonated_mols])
+
+# Note that properties are preserved.
+print([m.GetProp("msg") for m in protonated_mols])
 ```
 
 Caveats

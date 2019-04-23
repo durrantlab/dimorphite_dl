@@ -1022,19 +1022,24 @@ def run_with_mol_list(mol_lst, **kwargs):
 
     # Having reviewed the code, it will be very difficult to rewrite it so
     # that a list of Mol objects can be used directly. Intead, convert this
-    # list of mols to smiles and pass that. Not memory efficient, but it will
-    # work.
-    protonated_smiles = []
+    # list of mols to smiles and pass that. Not efficient, but it will work.
+    protonated_smiles_and_props = []
     for m in mol_lst:
+        props = m.GetPropsAsDict()
         smiles = Chem.MolToSmiles(m, isomericSmiles=True)
         kwargs["smiles"] = smiles
-        protonated_smiles.extend(
-            [s.split("\t")[0] for s in main(kwargs)]
+        protonated_smiles_and_props.extend(
+            [(s.split("\t")[0], props) for s in main(kwargs)]
         )
 
     # Now convert the list of protonated smiles strings back to RDKit Mol
-    # objects.
-    mols = [Chem.MolFromSmiles(s) for s in protonated_smiles]
+    # objects. Also, add back in the properties from the original mol objects.
+    mols = []
+    for s, props in protonated_smiles_and_props:
+        m = Chem.MolFromSmiles(s)
+        for prop, val in props.items():
+            m.SetProp(prop, val)
+        mols.append(m)
 
     return mols
 
