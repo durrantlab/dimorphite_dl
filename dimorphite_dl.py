@@ -137,7 +137,7 @@ class ArgParseFuncs:
         :return: A parser object.
         """
 
-        parser = MyParser(description="Dimorphite 1.1: Creates models of " +
+        parser = MyParser(description="Dimorphite 1.1.1: Creates models of " +
                                     "appropriately protonated small moleucles. " +
                                     "Apache 2.0 License. Copyright 2018 Jacob D. " +
                                     "Durrant.")
@@ -1037,9 +1037,19 @@ def run_with_mol_list(mol_lst, **kwargs):
     mols = []
     for s, props in protonated_smiles_and_props:
         m = Chem.MolFromSmiles(s)
-        for prop, val in props.items():
-            m.SetProp(prop, val)
-        mols.append(m)
+        if m:
+            for prop, val in props.items():
+                if type(val) is int:
+                    m.SetIntProp(prop, val)
+                elif type(val) is float:
+                    m.SetDoubleProp(prop, val)
+                elif type(val) is bool:
+                    m.SetBoolProp(prop, val)
+                else:
+                    m.SetProp(prop, str(val))
+            mols.append(m)
+        else:
+            UtilFuncs.eprint("WARNING: Could not process molecule with SMILES string " + s + " and properties " + str(props))
 
     return mols
 

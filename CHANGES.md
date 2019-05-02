@@ -1,6 +1,12 @@
 Changes
 =======
 
+1.1.1
+-----
+* `run_with_mol_list()` now preserves non-string properties.
+* `run_with_mol_list()` throws a warning if it cannot process a molecule,
+  rather than terminating the program with an error.
+
 1.1
 ---
 
