@@ -36,4 +36,4 @@ Phosphate_diester	[PX4:1](=[O:2])(-[OX2:3]-[C,c,N,n,F,Cl,Br,I:4])(-[O+0:5]-[C,c,
 Phosphonate_ester	[PX4:1](=[O:2])(-[OX2:3]-[C,c,N,n,F,Cl,Br,I:4])(-[C,c,N,n,F,Cl,Br,I:5])-[OX2:6]-[H]	5	2.0868	0.4503028610465036
 Primary_hydroxyl_amine	[C,c:1]-[O:2]-[NH2:3]	2	4.035714285714286	0.8463816543155368
 *Indole_pyrrole	[c;R:1]1[c;R:2][c;R:3][c;R:4][n;R:5]1[H]	4	14.52875	4.06702491591416
-Aromatic_nitrogen_protonated	[n:1]-[H]	0	7.17	2.94602395490212
+*Aromatic_nitrogen_protonated	[n:1]-[H]	0	7.17	2.94602395490212

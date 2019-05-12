@@ -137,7 +137,7 @@ class ArgParseFuncs:
         :return: A parser object.
         """
 
-        parser = MyParser(description="Dimorphite 1.1.1: Creates models of " +
+        parser = MyParser(description="Dimorphite 1.1.2: Creates models of " +
                                     "appropriately protonated small moleucles. " +
                                     "Apache 2.0 License. Copyright 2018 Jacob D. " +
                                     "Durrant.")
@@ -280,18 +280,30 @@ class UtilFuncs:
             if it fails to convert to a Mol Obj
         """
 
+        # Check that there are no type errors, ie Nones or non-string
+        # A non-string type will cause RDKit to hard crash
         if smiles_str is None or type(smiles_str) is not str:
             return None
 
-        # Check that there are no type errors, ie Nones or non-string
-        # A non-string type will cause RDKit to hard crash
-        try:
-            # Try to fix azides here. They are just tricky to deal with.
-            smiles_str = smiles_str.replace("N=N=N", "N=[N+]=N")
-            smiles_str = smiles_str.replace("NN#N", "N=[N+]=N")
-            mol = Chem.MolFromSmiles(smiles_str)
-        except:
-            return None
+        # Try to fix azides here. They are just tricky to deal with.
+        smiles_str = smiles_str.replace("N=N=N", "N=[N+]=N")
+        smiles_str = smiles_str.replace("NN#N", "N=[N+]=N")
+
+        # Now convert to a mol object. Note the trick that is necessary to
+        # capture RDKit error/warning messages. See
+        # https://stackoverflow.com/questions/24277488/in-python-how-to-capture-the-stdout-from-a-c-shared-library-to-a-variable
+        stderr_fileno = sys.stderr.fileno()
+        stderr_save = os.dup(stderr_fileno)
+        stderr_pipe = os.pipe()
+        os.dup2(stderr_pipe[1], stderr_fileno)
+        os.close(stderr_pipe[1])
+
+        mol = Chem.MolFromSmiles(smiles_str)
+
+        os.close(stderr_fileno)
+        os.close(stderr_pipe[0])
+        os.dup2(stderr_save, stderr_fileno)
+        os.close(stderr_save)
 
         # Check that there are None type errors Chem.MolFromSmiles has sanitize on
         # which means if there is even a small error in the SMILES (kekulize,
@@ -513,6 +525,21 @@ class Protonate(object):
         # BOTH states. Let's remove this redundancy.
         new_smis = list(set(new_smis))
 
+        # Deprotonating protonated aromatic nitrogen gives [nH-]. Change this
+        # to [n-]. This is a hack.
+        new_smis = [s.replace("[nH-]", "[n-]") for s in new_smis]
+
+        # Sometimes Dimorphite-DL generates molecules that aren't actually
+        # possible. Simply convert these to mol objects to eliminate the bad
+        # ones (that are None).
+        new_smis = [s for s in new_smis if UtilFuncs.convert_smiles_str_to_mol(s) is not None]
+
+        # If there are no smi left, return the input one at the very least.
+        # All generated forms have apparently been judged
+        # inappropriate/mal-formed.
+        if len(new_smis) == 0:
+            new_smis = [smi]
+
         # If the user wants to see the target states, add those
         # to the ends of each line.
         if self.args["label_states"]:
@@ -522,6 +549,7 @@ class Protonate(object):
             new_lines = [x + "\t" + tag for x in new_smis]
 
         self.cur_prot_SMI = new_lines
+
         return self.next()
 
 class ProtSubstructFuncs:
@@ -555,7 +583,7 @@ class ProtSubstructFuncs:
                     sub["smart"] = splits[1]
                     sub["mol"] = Chem.MolFromSmarts(sub["smart"])
 
-                    #NEED TO DIVIDE THIS BY 3s
+                    # NEED TO DIVIDE THIS BY 3s
                     pka_ranges = [splits[i:i+3] for i in range(2, len(splits)-1, 3)]
 
                     prot = []
@@ -819,8 +847,8 @@ class TestFuncs:
             ["CC(=O)[n+]1ccc(N)cc1",   "CC(=O)[n+]1ccc([NH3+])cc1", "CC(=O)[n+]1ccc(N)cc1",     "Anilines_primary"],
             ["CCNc1ccccc1",            "CC[NH2+]c1ccccc1",          "CCNc1ccccc1",              "Anilines_secondary"],
             ["Cc1ccccc1N(C)C",         "Cc1ccccc1[NH+](C)C",        "Cc1ccccc1N(C)C",           "Anilines_tertiary"],
-            ["BrC1=CC2=C(C=C1)NC=C2",  "Brc1ccc2[nH]ccc2c1",        "Brc1ccc2[nH-]ccc2c1",      "Indole_pyrrole"],
-            ["BrC1=CNC=C(C1=O)Br",     "O=c1c(Br)c[nH+]cc1Br",      "O=c1c(Br)c[nH]cc1Br",      "Aromatic_nitrogen_protonated"],
+            ["BrC1=CC2=C(C=C1)NC=C2",  "Brc1ccc2[nH]ccc2c1",        "Brc1ccc2[n-]ccc2c1",       "Indole_pyrrole"],
+            ["O=c1cc[nH]cc1",          "O=c1cc[nH]cc1",             "O=c1cc[n-]cc1",            "Aromatic_nitrogen_protonated"],
             ["C-N=[N+]=[N@H]",         "CN=[N+]=N",                 "CN=[N+]=[N-]",             "Azide"],
             ["BrC(C(O)=O)CBr",         "O=C(O)C(Br)CBr",            "O=C([O-])C(Br)CBr",        "Carboxyl"],
             ["NC(NN=O)=N",             "NC(=[NH2+])NN=O",           "N=C(N)NN=O",               "AmidineGuanidine1"],
@@ -954,27 +982,27 @@ class TestFuncs:
         num_states = len(expected_output)
 
         if (len(output) != num_states):
-            msg = args["smiles"][0] + " should have " + str(num_states) + \
+            msg = args["smiles"] + " should have " + str(num_states) + \
                 " states at at pH " + str(args["min_ph"]) + ": " + str(output)
             print(msg)
             raise Exception(msg)
 
         if (len(set([l[0] for l in output]) - set(expected_output)) != 0):
-            msg = args["smiles"][0] + " is not " + " AND ".join(expected_output) + \
+            msg = args["smiles"] + " is not " + " AND ".join(expected_output) + \
                 " at pH " + str(args["min_ph"]) + " - " + str(args["max_ph"]) + \
                 "; it is " + " AND ".join([l[0] for l in output])
             print(msg)
             raise Exception(msg)
 
         if (len(set([l[1] for l in output]) - set(labels)) != 0):
-            msg = args["smiles"][0] + " not labeled as " + " AND ".join(labels) + \
+            msg = args["smiles"] + " not labeled as " + " AND ".join(labels) + \
                 "; it is " + " AND ".join([l[1] for l in output])
             print(msg)
             raise Exception(msg)
 
         ph_range = sorted(list(set([args["min_ph"], args["max_ph"]])))
         ph_range_str = "(" + " - ".join("{0:.2f}".format(n) for n in ph_range) + ")"
-        print("(CORRECT) " + ph_range_str.ljust(10) + " " + args["smiles"][0] + " => " + " AND ".join([l[0] for l in output]))
+        print("(CORRECT) " + ph_range_str.ljust(10) + " " + args["smiles"] + " => " + " AND ".join([l[0] for l in output]))
 
 def run(**kwargs):
     """A helpful, importable function for those who want to call Dimorphite-DL
@@ -1026,8 +1054,7 @@ def run_with_mol_list(mol_lst, **kwargs):
     protonated_smiles_and_props = []
     for m in mol_lst:
         props = m.GetPropsAsDict()
-        smiles = Chem.MolToSmiles(m, isomericSmiles=True)
-        kwargs["smiles"] = smiles
+        kwargs["smiles"] = Chem.MolToSmiles(m, isomericSmiles=True)
         protonated_smiles_and_props.extend(
             [(s.split("\t")[0], props) for s in main(kwargs)]
         )
