@@ -1,18 +1,14 @@
 Changes
 =======
 
-1.1.2
------
+1.2
+---
 
 * Corrected a bug that led Dimorphite-DL to sometimes produce output molecules
   that are non-physical.
 * Corrected a bug that gave incorrect protonation states for rare molecules
   (aromatic rings with nitrogens that are protonated when electrically
-  neutral, e.g., pyridin-4(1H)-one).
-
-1.1.1
------
-
+  neutral, e.g. pyridin-4(1H)-one).
 * `run_with_mol_list()` now preserves non-string properties.
 * `run_with_mol_list()` throws a warning if it cannot process a molecule,
   rather than terminating the program with an error.

@@ -137,7 +137,7 @@ class ArgParseFuncs:
         :return: A parser object.
         """
 
-        parser = MyParser(description="Dimorphite 1.1.2: Creates models of " +
+        parser = MyParser(description="Dimorphite 1.2: Creates models of " +
                                     "appropriately protonated small moleucles. " +
                                     "Apache 2.0 License. Copyright 2018 Jacob D. " +
                                     "Durrant.")
