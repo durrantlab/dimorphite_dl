@@ -137,10 +137,10 @@ class ArgParseFuncs:
         :return: A parser object.
         """
 
-        parser = MyParser(description="Dimorphite 1.2: Creates models of " +
-                                    "appropriately protonated small moleucles. " +
-                                    "Apache 2.0 License. Copyright 2018 Jacob D. " +
-                                    "Durrant.")
+        parser = MyParser(description="Dimorphite 1.2.1: Creates models of " +
+                                      "appropriately protonated small moleucles. " +
+                                      "Apache 2.0 License. Copyright 2018 Jacob D. " +
+                                      "Durrant.")
         parser.add_argument('--min_ph', metavar='MIN', type=float, default=6.4,
                             help='minimum pH to consider (default: 6.4)')
         parser.add_argument('--max_ph', metavar='MAX', type=float, default=8.4,
