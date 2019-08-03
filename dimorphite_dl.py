@@ -259,10 +259,10 @@ class UtilFuncs:
                 mol = current_rxn.RunReactants((mol,))[0][0]
                 mol.UpdatePropertyCache(strict=False)  # Update valences
 
-        # The mols have been altered from the reactions described above, we need
-        # to resanitize them. Make sure aromatic rings are shown as such This
-        # catches all RDKit Errors. without the catchError and sanitizeOps the
-        # Chem.SanitizeMol can crash the program.
+        # The mols have been altered from the reactions described above, we
+        # need to resanitize them. Make sure aromatic rings are shown as such
+        # This catches all RDKit Errors. without the catchError and
+        # sanitizeOps the Chem.SanitizeMol can crash the program.
         sanitize_string =  Chem.SanitizeMol(
             mol,
             sanitizeOps=rdkit.Chem.rdmolops.SanitizeFlags.SANITIZE_ALL,
@@ -281,8 +281,8 @@ class UtilFuncs:
             if it fails to convert to a Mol Obj
         """
 
-        # Check that there are no type errors, ie Nones or non-string
-        # A non-string type will cause RDKit to hard crash
+        # Check that there are no type errors, ie Nones or non-string A
+        # non-string type will cause RDKit to hard crash
         if smiles_str is None or type(smiles_str) is not str:
             return None
 
@@ -520,13 +520,10 @@ class Protonate(object):
             Chem.MolToSmiles(m, isomericSmiles=True, canonical=True) for m in new_mols
         ]))
 
-        # Deprotonating protonated aromatic nitrogen gives [nH-]. Change this
-        # to [n-]. This is a hack.
-        new_smis = [s.replace("[nH-]", "[n-]") for s in new_smis]
-
         # Sometimes Dimorphite-DL generates molecules that aren't actually
         # possible. Simply convert these to mol objects to eliminate the bad
         # ones (that are None).
+        UtilFuncs.convert_smiles_str_to_mol("Brc1ccc2nccc2c1")
         new_smis = [s for s in new_smis if UtilFuncs.convert_smiles_str_to_mol(s) is not None]
 
         # If there are no smi left, return the input one at the very least.
@@ -749,14 +746,19 @@ class ProtSubstructFuncs:
 
                 atom = mol_copy.GetAtomWithIdx(idx)
 
-                # Assign the protonation charge, with special care for Nitrogens
+                # Assign the protonation charge, with special care for
+                # nitrogens
                 element = atom.GetAtomicNum()
                 if element == 7:
                     atom.SetFormalCharge(nitro_charge)
                 else:
                     atom.SetFormalCharge(charge)
 
-                # Update the valences to reflect changes in the charges.
+                # Deprotonating protonated aromatic nitrogen gives [nH-]. Change this
+                # to [n-]. This is a hack.
+                if "[nH-]" in Chem.MolToSmiles(mol_copy):
+                    atom.SetNumExplicitHs(0)
+
                 mol_copy.UpdatePropertyCache()
 
                 output.append(mol_copy)
@@ -967,7 +969,7 @@ class TestFuncs:
         print("-----------")
         print("")
 
-        # Make sure no carbanion
+        # Make sure no carbanion (old bug).
         smi = 'Cc1nc2cc(-c3[nH]c4cc5ccccc5c5c4c3CCN(C(=O)O)[C@@H]5O)cc3c(=O)[nH][nH]c(n1)c23'
         output = list(
             Protonate({
