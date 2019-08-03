@@ -506,11 +506,17 @@ class Protonate(object):
         sites, mol_used_to_idx_sites = ProtSubstructFuncs.get_prot_sites_and_target_states(orig_smi, self.subs)
 
         new_mols = [mol_used_to_idx_sites]
-        for site in sites:
-            # Make a new smiles with the correct protonation state. Note that
-            # new_smis is a growing list. This is how multiple protonation
-            # sites are handled.
-            new_mols = ProtSubstructFuncs.protonate_site(new_mols, site)
+        if (len(sites) > 0):
+            for site in sites:
+                # Make a new smiles with the correct protonation state. Note that
+                # new_smis is a growing list. This is how multiple protonation
+                # sites are handled.
+                new_mols = ProtSubstructFuncs.protonate_site(new_mols, site)
+        else:
+            # Deprotonate the mols (because protonate_site never called to do
+            # it).
+            mol_used_to_idx_sites = Chem.RemoveHs(mol_used_to_idx_sites)
+            new_mols = [mol_used_to_idx_sites]
 
         # In some cases, the script might generate redundant molecules.
         # Phosphonates, when the pH is between the two pKa values and the
@@ -523,7 +529,6 @@ class Protonate(object):
         # Sometimes Dimorphite-DL generates molecules that aren't actually
         # possible. Simply convert these to mol objects to eliminate the bad
         # ones (that are None).
-        UtilFuncs.convert_smiles_str_to_mol("Brc1ccc2nccc2c1")
         new_smis = [s for s in new_smis if UtilFuncs.convert_smiles_str_to_mol(s) is not None]
 
         # If there are no smi left, return the input one at the very least.
@@ -742,7 +747,12 @@ class ProtSubstructFuncs:
                 mol_copy = copy.deepcopy(mol)
 
                 # Remove hydrogen atoms.
-                mol_copy = Chem.RemoveHs(mol_copy)
+                # print("DDD", Chem.MolToSmiles(mol_copy))
+                try:
+                    mol_copy = Chem.RemoveHs(mol_copy)
+                except:
+                    UtilFuncs.eprint("WARNING: Skipping poorly formed SMILES string: " + Chem.MolToSmiles(mol_copy))
+                    continue
 
                 atom = mol_copy.GetAtomWithIdx(idx)
 
@@ -755,7 +765,7 @@ class ProtSubstructFuncs:
                     atom.SetFormalCharge(charge)
 
                 # Deprotonating protonated aromatic nitrogen gives [nH-]. Change this
-                # to [n-]. This is a hack.
+                # to [n-].
                 if "[nH-]" in Chem.MolToSmiles(mol_copy):
                     atom.SetNumExplicitHs(0)
 
