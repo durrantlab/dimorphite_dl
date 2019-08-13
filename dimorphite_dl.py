@@ -518,8 +518,8 @@ class Protonate(object):
                 if len(new_mols) > self.args["max_variants"]:
                     new_mols = new_mols[:self.args["max_variants"]]
                     UtilFuncs.eprint("WARNING: Limited number of variants to " +
-                                     str(self.args["max_variants"]) + " (" +
-                                     orig_smi + ")")
+                                     str(self.args["max_variants"]) + ": " +
+                                     orig_smi)
         else:
             # Deprotonate the mols (because protonate_site never called to do
             # it).
