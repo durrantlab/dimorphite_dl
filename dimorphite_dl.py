@@ -711,6 +711,7 @@ class ProtSubstructFuncs:
                            "PROTONATED": [0],
                            "BOTH": [-1, 0]}
 
+
         charges = state_to_charge[target_prot_state]
 
         # Now make the actual smiles match the target protonation state.
@@ -740,7 +741,7 @@ class ProtSubstructFuncs:
         for charge in charges:
             # The charge for Nitrogens is 1 higher than others (i.e.,
             # protonated state is positively charged).
-            nitro_charge = charge + 1
+            nitrogen_charge = charge + 1
 
             # But there are a few nitrogen moieties where the acidic group is
             # the neutral one. Amides are a good example. I gave some thought
@@ -748,7 +749,7 @@ class ProtSubstructFuncs:
             # nitrogen-containing moieties where the acidic group is neutral
             # (rather than positively charged) will have "*" in the name.
             if "*" in prot_site_name:
-                nitro_charge = nitro_charge - 1  # Undo what was done previously.
+                nitrogen_charge = nitrogen_charge - 1  # Undo what was done previously.
 
             for mol in mols:
                 # Make a copy of the molecule.
@@ -763,20 +764,46 @@ class ProtSubstructFuncs:
 
                 atom = mol_copy.GetAtomWithIdx(idx)
 
+                explicit_bond_order_total = sum([b.GetBondTypeAsDouble() for b in atom.GetBonds()])
+
                 # Assign the protonation charge, with special care for
                 # nitrogens
                 element = atom.GetAtomicNum()
                 if element == 7:
-                    atom.SetFormalCharge(nitro_charge)
+                    atom.SetFormalCharge(nitrogen_charge)
+
+                    # Need to figure out how many hydrogens to add.
+                    if nitrogen_charge == 1 and explicit_bond_order_total == 1:
+                        atom.SetNumExplicitHs(3)
+                    elif nitrogen_charge == 1 and explicit_bond_order_total == 2:
+                        atom.SetNumExplicitHs(2)
+                    elif nitrogen_charge == 1 and explicit_bond_order_total == 3:
+                        atom.SetNumExplicitHs(1)
+                    elif nitrogen_charge == 0 and explicit_bond_order_total == 1:
+                        atom.SetNumExplicitHs(2)
+                    elif nitrogen_charge == 0 and explicit_bond_order_total == 2:
+                        atom.SetNumExplicitHs(1)
+                    elif nitrogen_charge == -1 and explicit_bond_order_total == 2:
+                        atom.SetNumExplicitHs(0)
+                    elif nitrogen_charge == -1 and explicit_bond_order_total == 1:
+                        atom.SetNumExplicitHs(1)
+                    #### JDD
                 else:
                     atom.SetFormalCharge(charge)
+                    if element == 8 or element == 16:  # O and S
+                        if charge == 0 and explicit_bond_order_total == 1:
+                            atom.SetNumExplicitHs(1)
+                        elif charge == -1 and explicit_bond_order_total == 1:
+                            atom.SetNumExplicitHs(0)
+                        # import pdb; pdb.set_trace()
 
                 # Deprotonating protonated aromatic nitrogen gives [nH-]. Change this
                 # to [n-].
                 if "[nH-]" in Chem.MolToSmiles(mol_copy):
                     atom.SetNumExplicitHs(0)
 
-                mol_copy.UpdatePropertyCache()
+                mol_copy.UpdatePropertyCache(strict=False)
+                # prod.UpdatePropertyCache(strict=False)
 
                 output.append(mol_copy)
 
@@ -925,6 +952,7 @@ class TestFuncs:
             args["smiles"] = smi
             TestFuncs.test_check(args, [protonated], ["PROTONATED"])
 
+        # Test phosphates separately
         for smi, protonated, mix, deprotonated, category in smis_phos:
             args["smiles"] = smi
             TestFuncs.test_check(args, [protonated], ["PROTONATED"])
