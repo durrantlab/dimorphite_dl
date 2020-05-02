@@ -1,4 +1,4 @@
-# Copyright 2018 Jacob D. Durrant
+# Copyright 2020 Jacob D. Durrant
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,19 +30,25 @@ except ImportError:
     # Python3
     from io import StringIO
 
-# Always let the user know a help file is available.
-print("\nFor help, use: python dimorphite_dl.py --help")
+def print_header():
+    """Prints out header information."""
+    # Always let the user know a help file is available.
+    print("\nFor help, use: python dimorphite_dl.py --help")
 
-# And always report citation information.
-print("\nIf you use Dimorphite-DL in your research, please cite:")
-print("Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An")
-print("open-source program for enumerating the ionization states of drug-like small")
-print("molecules. J Cheminform 11:14. doi:10.1186/s13321-019-0336-9.\n")
+    # And always report citation information.
+    print("\nIf you use Dimorphite-DL in your research, please cite:")
+    print("Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An")
+    print("open-source program for enumerating the ionization states of drug-like small")
+    print("molecules. J Cheminform 11:14. doi:10.1186/s13321-019-0336-9.\n")
 
 try:
     import rdkit
     from rdkit import Chem
     from rdkit.Chem import AllChem
+
+    # Disable the unnecessary RDKit warnings
+    from rdkit import RDLogger
+    RDLogger.DisableLog("rdApp.*")
 except:
     msg = "Dimorphite-DL requires RDKit. See https://www.rdkit.org/"
     print(msg)
@@ -61,6 +67,8 @@ def main(params=None):
 
     parser = ArgParseFuncs.get_args()
     args = vars(parser.parse_args())
+    if not args["silent"]:
+        print_header()
 
     # Add in any parameters in params.
     if params is not None:
@@ -69,10 +77,11 @@ def main(params=None):
 
     # If being run from the command line, print out all parameters.
     if __name__ == "__main__":
-        print("\nPARAMETERS:\n")
-        for k in sorted(args.keys()):
-            print(k.rjust(13) + ": " + str(args[k]))
-        print("")
+        if not args["silent"]:
+            print("\nPARAMETERS:\n")
+            for k in sorted(args.keys()):
+                print(k.rjust(13) + ": " + str(args[k]))
+            print("")
 
     if args["test"]:
         # Run tests.
@@ -139,7 +148,7 @@ class ArgParseFuncs:
 
         parser = MyParser(description="Dimorphite 1.2.3: Creates models of " +
                                       "appropriately protonated small moleucles. " +
-                                      "Apache 2.0 License. Copyright 2018 Jacob D. " +
+                                      "Apache 2.0 License. Copyright 2020 Jacob D. " +
                                       "Durrant.")
         parser.add_argument('--min_ph', metavar='MIN', type=float, default=6.4,
                             help='minimum pH to consider (default: 6.4)')
@@ -158,6 +167,8 @@ class ArgParseFuncs:
         parser.add_argument('--label_states', action="store_true",
                             help='label protonated SMILES with target state ' + \
                                 '(i.e., "DEPROTONATED", "PROTONATED", or "BOTH").')
+        parser.add_argument('--silent', action="store_true",
+                            help='do not print any messages to the screen')
         parser.add_argument('--test', action="store_true",
                             help='run unit tests (for debugging)')
 

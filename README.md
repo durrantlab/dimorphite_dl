@@ -35,7 +35,7 @@ usage: dimorphite_dl.py [-h] [--min_ph MIN] [--max_ph MAX]
                         [--label_states] [--test]
 
 Dimorphite 1.2.3: Creates models of appropriately protonated small moleucles.
-Apache 2.0 License. Copyright 2018 Jacob D. Durrant.
+Apache 2.0 License. Copyright 2020 Jacob D. Durrant.
 
 optional arguments:
   -h, --help           show this help message and exit
