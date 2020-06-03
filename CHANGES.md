@@ -1,6 +1,12 @@
 Changes
 =======
 
+WIP
+---
+
+site_substructures.smarts can now incldue comments (lines that start with # ignored.)
+Black formatting
+
 1.2.3
 -----
 
