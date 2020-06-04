@@ -73,6 +73,7 @@ def main(params=None):
 
     parser = ArgParseFuncs.get_args()
     args = vars(parser.parse_args())
+
     if not args["silent"]:
         print_header()
 
@@ -157,7 +158,7 @@ class ArgParseFuncs:
         """
 
         parser = MyParser(
-            description="Dimorphite 1.2.3: Creates models of "
+            description="Dimorphite 1.2.4: Creates models of "
             + "appropriately protonated small moleucles. "
             + "Apache 2.0 License. Copyright 2020 Jacob D. "
             + "Durrant."
@@ -260,7 +261,7 @@ class ArgParseFuncs:
             if isinstance(args["smiles"], str):
                 args["smiles_file"] = StringIO(args["smiles"])
 
-        args["smiles_and_data"] = LoadSMIFile(args["smiles_file"])
+        args["smiles_and_data"] = LoadSMIFile(args["smiles_file"], args)
 
         return args
 
@@ -414,12 +415,14 @@ class LoadSMIFile(object):
     """A generator class for loading in the SMILES strings from a file, one at
     a time."""
 
-    def __init__(self, filename):
+    def __init__(self, filename, args):
         """Initializes this class.
 
         :param filename: The filename or file object (i.e., StringIO).
         :type filename: str or StringIO
         """
+
+        self.args = args
 
         if type(filename) is str:
             # It's a filename
@@ -477,32 +480,36 @@ class LoadSMIFile(object):
             # into a canonical form. Filter if failed.
             mol = UtilFuncs.convert_smiles_str_to_mol(smiles_str)
             if mol is None:
-                UtilFuncs.eprint(
-                    "WARNING: Skipping poorly formed SMILES string: " + line
-                )
+                if not self.args["silent"]:
+                    UtilFuncs.eprint(
+                        "WARNING: Skipping poorly formed SMILES string: " + line
+                    )
                 return self.next()
 
             # Handle nuetralizing the molecules. Filter if failed.
             mol = UtilFuncs.neutralize_mol(mol)
             if mol is None:
-                UtilFuncs.eprint(
-                    "WARNING: Skipping poorly formed SMILES string: " + line
-                )
+                if not self.args["silent"]:
+                    UtilFuncs.eprint(
+                        "WARNING: Skipping poorly formed SMILES string: " + line
+                    )
                 return self.next()
 
             # Remove the hydrogens.
             try:
                 mol = Chem.RemoveHs(mol)
             except:
-                UtilFuncs.eprint(
-                    "WARNING: Skipping poorly formed SMILES string: " + line
-                )
+                if not self.args["silent"]:
+                    UtilFuncs.eprint(
+                        "WARNING: Skipping poorly formed SMILES string: " + line
+                    )
                 return self.next()
 
             if mol is None:
-                UtilFuncs.eprint(
-                    "WARNING: Skipping poorly formed SMILES string: " + line
-                )
+                if not self.args["silent"]:
+                    UtilFuncs.eprint(
+                        "WARNING: Skipping poorly formed SMILES string: " + line
+                    )
                 return self.next()
 
             # Regenerate the smiles string (to standardize).
@@ -533,6 +540,9 @@ class Protonate(object):
 
         # Clean and normalize the args
         self.args = ArgParseFuncs.clean_args(args)
+
+        # Make sure functions in ProtSubstructFuncs have access to the args.
+        ProtSubstructFuncs.args = args
 
         # Load the substructures that can be protonated.
         self.subs = ProtSubstructFuncs.load_protonation_substructs_calc_state_for_ph(
@@ -584,10 +594,18 @@ class Protonate(object):
             # There are no more input smiles strings...
             raise StopIteration()
 
+        # Keep track of the original smiles string for reporting, starting the
+        # protonation process, etc.
         orig_smi = smile_and_datum["smiles"]
-        data = smile_and_datum["data"]  # Everything on SMILES line but the
-        # SMILES string itself (e.g., the
+
+        # Dimorphite-DL may protonate some sites in ways that produce invalid
+        # SMILES. We need to keep track of all smiles so we can "rewind" to
+        # the last valid one, should things go south.
+        properly_formed_smi_found = [orig_smi]
+
+        # Everything on SMILES line but the SMILES string itself (e.g., the
         # molecule name).
+        data = smile_and_datum["data"]
 
         # Collect the data associated with this smiles (e.g., the molecule
         # name).
@@ -612,17 +630,28 @@ class Protonate(object):
                 new_mols = ProtSubstructFuncs.protonate_site(new_mols, site)
                 if len(new_mols) > self.args["max_variants"]:
                     new_mols = new_mols[: self.args["max_variants"]]
-                    UtilFuncs.eprint(
-                        "WARNING: Limited number of variants to "
-                        + str(self.args["max_variants"])
-                        + ": "
-                        + orig_smi
-                    )
+                    if not self.args["silent"]:
+                        UtilFuncs.eprint(
+                            "WARNING: Limited number of variants to "
+                            + str(self.args["max_variants"])
+                            + ": "
+                            + orig_smi
+                        )
+
+                # Go through each of these new molecules and add them to the
+                # properly_formed_smi_found, in case you generate a poorly
+                # formed SMILES in the future and have to "rewind."
+                properly_formed_smi_found += [Chem.MolToSmiles(m) for m in new_mols]
         else:
             # Deprotonate the mols (because protonate_site never called to do
             # it).
             mol_used_to_idx_sites = Chem.RemoveHs(mol_used_to_idx_sites)
             new_mols = [mol_used_to_idx_sites]
+
+            # Go through each of these new molecules and add them to the
+            # properly_formed_smi_found, in case you generate a poorly formed
+            # SMILES in the future and have to "rewind."
+            properly_formed_smi_found.append(Chem.MolToSmiles(mol_used_to_idx_sites))
 
         # In some cases, the script might generate redundant molecules.
         # Phosphonates, when the pH is between the two pKa values and the
@@ -648,7 +677,11 @@ class Protonate(object):
         # All generated forms have apparently been judged
         # inappropriate/malformed.
         if len(new_smis) == 0:
-            new_smis = [orig_smi]
+            properly_formed_smi_found.reverse()
+            for smi in properly_formed_smi_found:
+                if UtilFuncs.convert_smiles_str_to_mol(smi) is not None:
+                    new_smis = [smi]
+                    break
 
         # If the user wants to see the target states, add those to the ends of
         # each line.
@@ -667,8 +700,10 @@ class ProtSubstructFuncs:
     """A namespace to store functions for loading the substructures that can
     be protonated. To keep things organized."""
 
+    args = {}
+
     @staticmethod
-    def load_subdstructre_smarts_file():
+    def load_substructre_smarts_file():
         """Loads the substructure smarts file. Similar to just using readlines,
         except it filters out comments (lines that start with "#").
 
@@ -703,7 +738,7 @@ class ProtSubstructFuncs:
 
         subs = []
 
-        for line in ProtSubstructFuncs.load_subdstructre_smarts_file():
+        for line in ProtSubstructFuncs.load_substructre_smarts_file():
             line = line.strip()
             sub = {}
             if line is not "":
@@ -712,9 +747,7 @@ class ProtSubstructFuncs:
                 sub["smart"] = splits[1]
                 sub["mol"] = Chem.MolFromSmarts(sub["smart"])
 
-                pka_ranges = [
-                    splits[i : i + 3] for i in range(2, len(splits) - 1, 3)
-                ]
+                pka_ranges = [splits[i : i + 3] for i in range(2, len(splits) - 1, 3)]
 
                 prot = []
                 for pka_range in pka_ranges:
@@ -880,10 +913,11 @@ class ProtSubstructFuncs:
                 try:
                     mol_copy = Chem.RemoveHs(mol_copy)
                 except:
-                    UtilFuncs.eprint(
-                        "WARNING: Skipping poorly formed SMILES string: "
-                        + Chem.MolToSmiles(mol_copy)
-                    )
+                    if not ProtSubstructFuncs.args["silent"]:
+                        UtilFuncs.eprint(
+                            "WARNING: Skipping poorly formed SMILES string: "
+                            + Chem.MolToSmiles(mol_copy)
+                        )
                     continue
 
                 atom = mol_copy.GetAtomWithIdx(idx)
@@ -1009,159 +1043,71 @@ class TestFuncs:
     def test():
         """Tests all the 38 groups."""
 
+        # fmt: off
         smis = [
-            # [input smiles, pka, protonated, deprotonated, category]
-            ["C#CCO", "C#CCO", "C#CC[O-]", "Alcohol"],
-            ["C(=O)N", "NC=O", "[NH-]C=O", "Amide"],
-            [
-                "CC(=O)NOC(C)=O",
-                "CC(=O)NOC(C)=O",
-                "CC(=O)[N-]OC(C)=O",
-                "Amide_electronegative",
-            ],
-            ["COC(=N)N", "COC(N)=[NH2+]", "COC(=N)N", "AmidineGuanidine2"],
-            [
-                "Brc1ccc(C2NCCS2)cc1",
-                "Brc1ccc(C2[NH2+]CCS2)cc1",
-                "Brc1ccc(C2NCCS2)cc1",
-                "Amines_primary_secondary_tertiary",
-            ],
-            [
-                "CC(=O)[n+]1ccc(N)cc1",
-                "CC(=O)[n+]1ccc([NH3+])cc1",
-                "CC(=O)[n+]1ccc(N)cc1",
-                "Anilines_primary",
-            ],
-            ["CCNc1ccccc1", "CC[NH2+]c1ccccc1", "CCNc1ccccc1", "Anilines_secondary"],
-            [
-                "Cc1ccccc1N(C)C",
-                "Cc1ccccc1[NH+](C)C",
-                "Cc1ccccc1N(C)C",
-                "Anilines_tertiary",
-            ],
-            [
-                "BrC1=CC2=C(C=C1)NC=C2",
-                "Brc1ccc2[nH]ccc2c1",
-                "Brc1ccc2[n-]ccc2c1",
-                "Indole_pyrrole",
-            ],
-            [
-                "O=c1cc[nH]cc1",
-                "O=c1cc[nH]cc1",
-                "O=c1cc[n-]cc1",
-                "Aromatic_nitrogen_protonated",
-            ],
-            ["C-N=[N+]=[N@H]", "CN=[N+]=N", "CN=[N+]=[N-]", "Azide"],
-            ["BrC(C(O)=O)CBr", "O=C(O)C(Br)CBr", "O=C([O-])C(Br)CBr", "Carboxyl"],
-            ["NC(NN=O)=N", "NC(=[NH2+])NN=O", "N=C(N)NN=O", "AmidineGuanidine1"],
-            [
-                "C(F)(F)(F)C(=O)NC(=O)C",
-                "CC(=O)NC(=O)C(F)(F)F",
-                "CC(=O)[N-]C(=O)C(F)(F)F",
-                "Imide",
-            ],
-            ["O=C(C)NC(C)=O", "CC(=O)NC(C)=O", "CC(=O)[N-]C(C)=O", "Imide2"],
-            [
-                "CC(C)(C)C(N(C)O)=O",
-                "CN(O)C(=O)C(C)(C)C",
-                "CN([O-])C(=O)C(C)(C)C",
-                "N-hydroxyamide",
-            ],
-            ["C[N+](O)=O", "C[N+](=O)O", "C[N+](=O)[O-]", "Nitro"],
-            ["O=C1C=C(O)CC1", "O=C1C=C(O)CC1", "O=C1C=C([O-])CC1", "O=C-C=C-OH"],
-            ["C1CC1OO", "OOC1CC1", "[O-]OC1CC1", "Peroxide2"],
-            ["C(=O)OO", "O=COO", "O=CO[O-]", "Peroxide1"],
-            [
-                "Brc1cc(O)cc(Br)c1",
-                "Oc1cc(Br)cc(Br)c1",
-                "[O-]c1cc(Br)cc(Br)c1",
-                "Phenol",
-            ],
-            [
-                "CC(=O)c1ccc(S)cc1",
-                "CC(=O)c1ccc(S)cc1",
-                "CC(=O)c1ccc([S-])cc1",
-                "Phenyl_Thiol",
-            ],
-            [
-                "C=CCOc1ccc(C(=O)O)cc1",
-                "C=CCOc1ccc(C(=O)O)cc1",
-                "C=CCOc1ccc(C(=O)[O-])cc1",
-                "Phenyl_carboxyl",
-            ],
-            ["COP(=O)(O)OC", "COP(=O)(O)OC", "COP(=O)([O-])OC", "Phosphate_diester"],
-            ["CP(C)(=O)O", "CP(C)(=O)O", "CP(C)(=O)[O-]", "Phosphinic_acid"],
-            [
-                "CC(C)OP(C)(=O)O",
-                "CC(C)OP(C)(=O)O",
-                "CC(C)OP(C)(=O)[O-]",
-                "Phosphonate_ester",
-            ],
-            [
-                "CC1(C)OC(=O)NC1=O",
-                "CC1(C)OC(=O)NC1=O",
-                "CC1(C)OC(=O)[N-]C1=O",
-                "Ringed_imide1",
-            ],
-            ["O=C(N1)C=CC1=O", "O=C1C=CC(=O)N1", "O=C1C=CC(=O)[N-]1", "Ringed_imide2"],
-            ["O=S(OC)(O)=O", "COS(=O)(=O)O", "COS(=O)(=O)[O-]", "Sulfate"],
-            [
-                "COc1ccc(S(=O)O)cc1",
-                "COc1ccc(S(=O)O)cc1",
-                "COc1ccc(S(=O)[O-])cc1",
-                "Sulfinic_acid",
-            ],
-            ["CS(N)(=O)=O", "CS(N)(=O)=O", "CS([NH-])(=O)=O", "Sulfonamide"],
-            [
-                "CC(=O)CSCCS(O)(=O)=O",
-                "CC(=O)CSCCS(=O)(=O)O",
-                "CC(=O)CSCCS(=O)(=O)[O-]",
-                "Sulfonate",
-            ],
-            ["CC(=O)S", "CC(=O)S", "CC(=O)[S-]", "Thioic_acid"],
-            ["C(C)(C)(C)(S)", "CC(C)(C)S", "CC(C)(C)[S-]", "Thiol"],
-            [
-                "Brc1cc[nH+]cc1",
-                "Brc1cc[nH+]cc1",
-                "Brc1ccncc1",
-                "Aromatic_nitrogen_unprotonated",
-            ],
-            [
-                "C=C(O)c1c(C)cc(C)cc1C",
-                "C=C(O)c1c(C)cc(C)cc1C",
-                "C=C([O-])c1c(C)cc(C)cc1C",
-                "Vinyl_alcohol",
-            ],
-            ["CC(=O)ON", "CC(=O)O[NH3+]", "CC(=O)ON", "Primary_hydroxyl_amine"],
+            # input smiles,            protonated,                  deprotonated,               category
+            ["C#CCO",                  "C#CCO",                     "C#CC[O-]",                 "Alcohol"],
+            ["C(=O)N",                 "NC=O",                      "[NH-]C=O",                 "Amide"],
+            ["CC(=O)NOC(C)=O",         "CC(=O)NOC(C)=O",            "CC(=O)[N-]OC(C)=O",        "Amide_electronegative"],
+            ["COC(=N)N",               "COC(N)=[NH2+]",             "COC(=N)N",                 "AmidineGuanidine2"],
+            ["Brc1ccc(C2NCCS2)cc1",    "Brc1ccc(C2[NH2+]CCS2)cc1",  "Brc1ccc(C2NCCS2)cc1",      "Amines_primary_secondary_tertiary"],
+            ["CC(=O)[n+]1ccc(N)cc1",   "CC(=O)[n+]1ccc([NH3+])cc1", "CC(=O)[n+]1ccc(N)cc1",     "Anilines_primary"],
+            ["CCNc1ccccc1",            "CC[NH2+]c1ccccc1",          "CCNc1ccccc1",              "Anilines_secondary"],
+            ["Cc1ccccc1N(C)C",         "Cc1ccccc1[NH+](C)C",        "Cc1ccccc1N(C)C",           "Anilines_tertiary"],
+            ["BrC1=CC2=C(C=C1)NC=C2",  "Brc1ccc2[nH]ccc2c1",        "Brc1ccc2[n-]ccc2c1",       "Indole_pyrrole"],
+            ["O=c1cc[nH]cc1",          "O=c1cc[nH]cc1",             "O=c1cc[n-]cc1",            "Aromatic_nitrogen_protonated"],
+            ["C-N=[N+]=[N@H]",         "CN=[N+]=N",                 "CN=[N+]=[N-]",             "Azide"],
+            ["BrC(C(O)=O)CBr",         "O=C(O)C(Br)CBr",            "O=C([O-])C(Br)CBr",        "Carboxyl"],
+            ["NC(NN=O)=N",             "NC(=[NH2+])NN=O",           "N=C(N)NN=O",               "AmidineGuanidine1"],
+            ["C(F)(F)(F)C(=O)NC(=O)C", "CC(=O)NC(=O)C(F)(F)F",      "CC(=O)[N-]C(=O)C(F)(F)F",  "Imide"],
+            ["O=C(C)NC(C)=O",          "CC(=O)NC(C)=O",             "CC(=O)[N-]C(C)=O",         "Imide2"],
+            ["CC(C)(C)C(N(C)O)=O",     "CN(O)C(=O)C(C)(C)C",        "CN([O-])C(=O)C(C)(C)C",    "N-hydroxyamide"],
+            ["C[N+](O)=O",             "C[N+](=O)O",                "C[N+](=O)[O-]",            "Nitro"],
+            ["O=C1C=C(O)CC1",          "O=C1C=C(O)CC1",             "O=C1C=C([O-])CC1",         "O=C-C=C-OH"],
+            ["C1CC1OO",                "OOC1CC1",                   "[O-]OC1CC1",               "Peroxide2"],
+            ["C(=O)OO",                "O=COO",                     "O=CO[O-]",                 "Peroxide1"],
+            ["Brc1cc(O)cc(Br)c1",      "Oc1cc(Br)cc(Br)c1",         "[O-]c1cc(Br)cc(Br)c1",     "Phenol"],
+            ["CC(=O)c1ccc(S)cc1",      "CC(=O)c1ccc(S)cc1",         "CC(=O)c1ccc([S-])cc1",     "Phenyl_Thiol"],
+            ["C=CCOc1ccc(C(=O)O)cc1",  "C=CCOc1ccc(C(=O)O)cc1",     "C=CCOc1ccc(C(=O)[O-])cc1", "Phenyl_carboxyl"],
+            ["COP(=O)(O)OC",           "COP(=O)(O)OC",              "COP(=O)([O-])OC",          "Phosphate_diester"],
+            ["CP(C)(=O)O",             "CP(C)(=O)O",                "CP(C)(=O)[O-]",            "Phosphinic_acid"],
+            ["CC(C)OP(C)(=O)O",        "CC(C)OP(C)(=O)O",           "CC(C)OP(C)(=O)[O-]",       "Phosphonate_ester"],
+            ["CC1(C)OC(=O)NC1=O",      "CC1(C)OC(=O)NC1=O",         "CC1(C)OC(=O)[N-]C1=O",     "Ringed_imide1"],
+            ["O=C(N1)C=CC1=O",         "O=C1C=CC(=O)N1",            "O=C1C=CC(=O)[N-]1",        "Ringed_imide2"],
+            ["O=S(OC)(O)=O",           "COS(=O)(=O)O",              "COS(=O)(=O)[O-]",          "Sulfate"],
+            ["COc1ccc(S(=O)O)cc1",     "COc1ccc(S(=O)O)cc1",        "COc1ccc(S(=O)[O-])cc1",    "Sulfinic_acid"],
+            ["CS(N)(=O)=O",            "CS(N)(=O)=O",               "CS([NH-])(=O)=O",          "Sulfonamide"],
+            ["CC(=O)CSCCS(O)(=O)=O",   "CC(=O)CSCCS(=O)(=O)O",      "CC(=O)CSCCS(=O)(=O)[O-]",  "Sulfonate"],
+            ["CC(=O)S",                "CC(=O)S",                   "CC(=O)[S-]",               "Thioic_acid"],
+            ["C(C)(C)(C)(S)",          "CC(C)(C)S",                 "CC(C)(C)[S-]",             "Thiol"],
+            ["Brc1cc[nH+]cc1",         "Brc1cc[nH+]cc1",            "Brc1ccncc1",               "Aromatic_nitrogen_unprotonated"],
+            ["C=C(O)c1c(C)cc(C)cc1C",  "C=C(O)c1c(C)cc(C)cc1C",     "C=C([O-])c1c(C)cc(C)cc1C", "Vinyl_alcohol"],
+            ["CC(=O)ON",               "CC(=O)O[NH3+]",             "CC(=O)ON",                 "Primary_hydroxyl_amine"],
+            # Note testing Internal_phosphate_polyphos_chain and
+            # Initial_phosphate_like_in_ATP_ADP here because no way to
+            # generate monoprotic compounds to test them. See Other tests
+            # people...
         ]
 
         smis_phos = [
-            [
-                "O=P(O)(O)OCCCC",
-                "CCCCOP(=O)(O)O",
-                "CCCCOP(=O)([O-])O",
-                "CCCCOP(=O)([O-])[O-]",
-                "Phosphate",
-            ],
-            [
-                "CC(P(O)(O)=O)C",
-                "CC(C)P(=O)(O)O",
-                "CC(C)P(=O)([O-])O",
-                "CC(C)P(=O)([O-])[O-]",
-                "Phosphonate",
-            ],
+            # [input smiles,   protonated,       deprotonated1,       deprotonated2,          category]
+            ["O=P(O)(O)OCCCC", "CCCCOP(=O)(O)O", "CCCCOP(=O)([O-])O", "CCCCOP(=O)([O-])[O-]", "Phosphate"],
+            ["CC(P(O)(O)=O)C", "CC(C)P(=O)(O)O", "CC(C)P(=O)([O-])O", "CC(C)P(=O)([O-])[O-]", "Phosphonate"],
         ]
+        # fmt: on
+
+        cats_with_two_prot_sites = [inf[4] for inf in smis_phos]
 
         # Load the average pKa values.
         average_pkas = {
             l.split()[0].replace("*", ""): float(l.split()[3])
-            for l in ProtSubstructFuncs.load_subdstructre_smarts_file()
-            if l.split()[0] not in ["Phosphate", "Phosphonate"]
+            for l in ProtSubstructFuncs.load_substructre_smarts_file()
+            if l.split()[0] not in cats_with_two_prot_sites
         }
         average_pkas_phos = {
             l.split()[0].replace("*", ""): [float(l.split()[3]), float(l.split()[6])]
-            for l in ProtSubstructFuncs.load_subdstructre_smarts_file()
-            if l.split()[0] in ["Phosphate", "Phosphonate"]
+            for l in ProtSubstructFuncs.load_substructre_smarts_file()
+            if l.split()[0] in cats_with_two_prot_sites
         }
 
         print("Running Tests")
@@ -1178,6 +1124,7 @@ class TestFuncs:
             "pka_precision": 0.5,
             "smiles": "",
             "label_states": True,
+            "silent": True
         }
 
         for smi, protonated, deprotonated, category in smis:
@@ -1254,7 +1201,7 @@ class TestFuncs:
 
         # Make sure no carbanion (old bug).
         smi = "Cc1nc2cc(-c3[nH]c4cc5ccccc5c5c4c3CCN(C(=O)O)[C@@H]5O)cc3c(=O)[nH][nH]c(n1)c23"
-        output = list(Protonate({"smiles": smi, "test": False}))
+        output = list(Protonate({"smiles": smi, "test": False, "silent": True}))
 
         if "[C-]" in "".join(output).upper():
             msg = "Processing " + smi + " produced a molecule with a carbanion!"
@@ -1264,12 +1211,87 @@ class TestFuncs:
 
         # Make sure max number of variants is limited (old bug).
         smi = "CCCC[C@@H](C(=O)N)NC(=O)[C@@H](NC(=O)[C@@H](NC(=O)[C@@H](NC(=O)[C@H](C(C)C)NC(=O)[C@@H](NC(=O)[C@H](Cc1c[nH]c2c1cccc2)NC(=O)[C@@H](NC(=O)[C@@H](Cc1ccc(cc1)O)N)CCC(=O)N)C)C)Cc1nc[nH]c1)Cc1ccccc1"
-        output = list(Protonate({"smiles": smi, "test": False}))
+        output = list(Protonate({"smiles": smi, "test": False, "silent": True}))
         if len(output) != 128:
             msg = "Processing " + smi + " produced more than 128 variants!"
             raise Exception(msg)
         else:
             print("(CORRECT) Produced 128 variants: " + smi)
+
+        # Make sure ATP and NAD work at different pHs (because can't test
+        # Internal_phosphate_polyphos_chain and
+        # Initial_phosphate_like_in_ATP_ADP with monoprotic examples.
+        specific_examples = [
+            [
+                "O=P(O)(OP(O)(OP(O)(OCC1OC(C(C1O)O)N2C=NC3=C2N=CN=C3N)=O)=O)O",  # input, ATP
+                (
+                    0.5,
+                    "[NH3+]c1[nH+]c[nH+]c2c1[nH+]cn2C1OC(COP(=O)(O)OP(=O)(O)OP(=O)(O)O)C(O)C1O",
+                ),
+                (
+                    1.0,
+                    "[NH3+]c1[nH+]c[nH+]c2c1[nH+]cn2C1OC(COP(=O)(O)OP(=O)([O-])OP(=O)(O)O)C(O)C1O",
+                ),
+                (
+                    2.6,
+                    "[NH3+]c1[nH+]c[nH+]c2c1[nH+]cn2C1OC(COP(=O)([O-])OP(=O)([O-])OP(=O)([O-])O)C(O)C1O",
+                ),
+                (
+                    7.0,
+                    "Nc1ncnc2c1ncn2C1OC(COP(=O)([O-])OP(=O)([O-])OP(=O)([O-])[O-])C(O)C1O",
+                ),
+            ],
+            [
+                "O=P(O)(OP(O)(OCC1C(O)C(O)C(N2C=NC3=C(N)N=CN=C32)O1)=O)OCC(O4)C(O)C(O)C4[N+]5=CC=CC(C(N)=O)=C5",  # input, NAD
+                (
+                    0.5,
+                    "NC(=O)c1ccc[n+](C2OC(COP(=O)(O)OP(=O)(O)OCC3OC(n4cnc5c([NH3+])ncnc54)C(O)C3O)C(O)C2O)c1",
+                ),
+                (
+                    2.5,
+                    "NC(=O)c1ccc[n+](C2OC(COP(=O)([O-])OP(=O)([O-])OCC3OC(n4cnc5c([NH3+])ncnc54)C(O)C3O)C(O)C2O)c1",
+                ),
+                (
+                    7.4,
+                    "NC(=O)c1ccc[n+](C2OC(COP(=O)([O-])OP(=O)([O-])OCC3OC(n4cnc5c(N)ncnc54)C(O)C3O)C(O)C2O)c1",
+                ),
+            ],
+        ]
+        for example in specific_examples:
+            smi = example[0]
+            for ph, expected_output in example[1:]:
+                output = list(
+                    Protonate(
+                        {
+                            "smiles": smi,
+                            "test": False,
+                            "min_ph": ph,
+                            "max_ph": ph,
+                            "pka_precision": 0,
+                            "silent": True
+                        }
+                    )
+                )
+                if output[0].strip() == expected_output:
+                    print(
+                        "(CORRECT) "
+                        + smi
+                        + " at pH "
+                        + str(ph)
+                        + " is "
+                        + output[0].strip()
+                    )
+                else:
+                    msg = (
+                        smi
+                        + " at pH "
+                        + str(ph)
+                        + " should be "
+                        + expected_output
+                        + ", but it is "
+                        + output[0].strip()
+                    )
+                    raise Exception(msg)
 
     @staticmethod
     def test_check(args, expected_output, labels):
