@@ -12,6 +12,6 @@ setup(
     packages=find_packages(),
     package_data={
         "": ["sample_molecules.smi", "site_substructures.smarts", "training_data/training_data.json"]
-    }
+    },
     include_package_data=True,
 )
