@@ -1,6 +1,12 @@
 Changes
 =======
 
+1.2.5 (Unreleased)
+-----
+* Added the option for `dimorphite_dl` to be installed via
+  `pip install git+https://github.com/durrantlab/dimorphite_dl.git`
+* Rearranged main `dimorphite_dl.py` file location to accommodate `pip`
+
 1.2.4
 -----
 
