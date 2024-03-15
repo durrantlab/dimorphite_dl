@@ -11,7 +11,7 @@ setup(
     install_requires=["rdkit", "numpy", "scipy", "mpi4py", "setuptools"],
     packages=find_packages(),
     package_data={
-        "": ["*.smi", "dimorphite_dl/*.smi", "*.smarts", "dimorphite_dl/*.smarts", "training_data/*.json", "dimorphite_dl/training_data/*.json"]
+        "": ["*.smi", "*.smarts", "training_data/*.json"]
     },
     include_package_data=True,
 )
