@@ -10,8 +10,8 @@ setup(
     url="https://github.com/durrantlab/dimorphite_dl/",
     install_requires=["rdkit", "numpy", "scipy", "mpi4py", "setuptools"],
     packages=find_packages(),
-    include_package_data=True,
     package_data={
-        "dimorphite_dl": ["sample_molecules.smi", "site_substructures.smarts", "training_data/training_data.json"]
+        "": ["sample_molecules.smi", "site_substructures.smarts", "training_data/training_data.json"]
     }
+    include_package_data=True,
 )
