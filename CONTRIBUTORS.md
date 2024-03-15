@@ -6,3 +6,4 @@ CONTRIBUTORS
 * Patrick Ropp
 * Jacob Spiegel
 * Sara Yablonski
+* Alex Morehead
