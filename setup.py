@@ -12,6 +12,6 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_data={
-        "dimorphite_dl": ["*"]
+        "dimorphite_dl": ["sample_molecules.smi", "site_substructures.smarts", "training_data/training_data.json"]
     }
 )
