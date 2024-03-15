@@ -12,6 +12,6 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_data={
-        '': ["*", "training_data/*, "dimorphite_dl/*"]
+        '': ["*", "training_data/*", "dimorphite_dl/*"]
     }
 )
