@@ -1,0 +1,3 @@
+include sample_molecules.smi
+include site_substructures.smarts
+include training_data/training_data.json
