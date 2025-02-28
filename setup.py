@@ -8,7 +8,7 @@ setup(
     description="Dimorphite-DL adds hydrogen atoms to molecular representations, as appropriate for a user-specified pH range. It is a fast, accurate, accessible, and modular open-source program for enumerating small-molecule ionization states.",
     author="Durrant Lab",
     url="https://github.com/durrantlab/dimorphite_dl/",
-    install_requires=["rdkit", "numpy", "scipy", "mpi4py", "setuptools"],
+    install_requires=["rdkit", "numpy", "setuptools"],
     packages=find_packages(),
     package_data={
         "": ["*.smi", "*.smarts", "training_data/*.json"]
