@@ -1,8 +1,6 @@
-Dimorphite-DL 1.2.4
-===================
+<h1 align="center">dimorphite_dl</h1>
 
-What is it?
------------
+<h4 align="center">Adds hydrogen atoms to molecular representations as specified by pH</h4>
 
 Dimorphite-DL adds hydrogen atoms to molecular representations, as appropriate
 for a user-specified pH range. It is a fast, accurate, accessible, and modular
@@ -10,23 +8,23 @@ open-source program for enumerating small-molecule ionization states.
 
 Users can provide SMILES strings from the command line or via an .smi file.
 
-Citation
---------
+## Installation
 
-If you use Dimorphite-DL in your research, please cite:
+Clone the [repository](https://github.com/durrantlab/dimorphite_dl):
 
-Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An
-open-source program for enumerating the ionization states of drug-like small
-molecules. J Cheminform 11:14. doi:10.1186/s13321-019-0336-9.
+```bash
+git clone git@github.com:durrantlab/dimorphite_dl.git
+```
 
-Licensing
----------
+Install `dimorphite_dl` using `pip` after moving into the directory.
 
-Dimorphite-DL is released under the Apache 2.0 license. See LICENCE.txt for
-details.
+```sh
+pip install .
+```
 
-Usage
------
+This will install all dependencies and `dimorphite_dl` into your current Python environment.
+
+## Usage
 
 ```
 usage: dimorphite_dl.py [-h] [--min_ph MIN] [--max_ph MAX]
@@ -53,8 +51,7 @@ optional arguments:
 
 The default pH range is 6.4 to 8.4, considered biologically relevant pH.
 
-Examples
---------
+## Examples
 
 ```
   python dimorphite_dl.py --smiles_file sample_molecules.smi
@@ -64,8 +61,7 @@ Examples
   python dimorphite_dl.py --test
 ```
 
-Advanced Usage
---------------
+## Advanced
 
 It is also possible to access Dimorphite-DL from another Python script, rather
 than from the command line. Here's an example:
@@ -102,15 +98,35 @@ print([Chem.MolToSmiles(m) for m in protonated_mols])
 print([m.GetProp("msg") for m in protonated_mols])
 ```
 
-Caveats
--------
+## Caveats
 
 Dimorphite-DL deprotonates indoles and pyrroles around pH 14.5. But these
 substructures can also be protonated around pH -3.5. Dimorphite does not
 perform the protonation.
 
-Authors and Contacts
---------------------
+## Development
 
-See the `CONTRIBUTORS.md` file for a full list of contributors. Please contact
-Jacob Durrant (durrantj@pitt.edu) with any questions.
+We use [pixi](https://pixi.sh/latest/) to manage Python environments and simplify the developer workflow.
+Once you have [pixi](https://pixi.sh/latest/) installed, move into `dimorphite_dl` directory (e.g., `cd dimorphite_dl`) and install the environment using the command
+
+```bash
+pixi install
+```
+
+Now you can activate the new virtual environment using
+
+```sh
+pixi shell
+```
+
+## Citation
+
+If you use Dimorphite-DL in your research, please cite:
+
+Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An
+open-source program for enumerating the ionization states of drug-like small
+molecules. J Cheminform 11:14. doi:10.1186/s13321-019-0336-9.
+
+## License
+
+This project is released under the Apache-2.0 License as specified in `LICENSE.md`.
