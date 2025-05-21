@@ -13,10 +13,6 @@ readme = "README.md"
 [pypi-dependencies]
 dimorphite_dl = { path = ".", editable = true }
 
-[system-requirements]
-linux = "3.10.0"
-libc = { family="glibc", version="2.17" }
-
 [environments]
 dev = ["dev"]
 docs = ["docs"]
@@ -36,12 +32,14 @@ pytest-cov = ">=4.1.0"
 coverage = ">=7.3.1"
 pytest-html = ">=4.0.1"
 colorama = ">=0.4.6"
+basedpyright = ">=1.29.1,<2"
+ruff = ">=0.11.10,<0.12"
 
 [feature.dev.tasks]
 mdlint = { cmd = ["markdownlint-cli2", '"**/*.{md,markdown}"', "--fix", "--config", ".markdownlint.yaml", "||", "true"] }
 isort = { cmd = ["isort", "--settings-path", ".isort.cfg", "./dimorphite_dl", "./tests", "||", "true"] }
-black = { cmd = ["black", "--config", ".black.toml", "./dimorphite_dl", "./tests", "||", "true"] }
-format = { depends-on = ["mdlint", "isort", "black"] }
+ruff = { cmd = ["ruff", "format", "--config", ".ruff.toml", "./dimorphite_dl", "./tests", "||", "true"] }
+format = { depends-on = ["mdlint", "isort", "ruff"] }
 tests = { cmd = [
     "PYTHONPATH=.",
     "pytest",

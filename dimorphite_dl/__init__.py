@@ -1,9 +1,10 @@
 """Adds hydrogen atoms to molecular representations as specified by pH"""
 
+from typing import Any
+
 import os
 import sys
 from ast import literal_eval
-from typing import Any
 
 from loguru import logger
 
@@ -50,10 +51,6 @@ def enable_logging(
 
 if literal_eval(os.environ.get("DIMORPHITE_DL_LOG", "False")):
     level = int(os.environ.get("DIMORPHITE_DL_LOG_LEVEL", 20))
-    stdout = literal_eval(
-        os.environ.get("DIMORPHITE_DL_STDOUT", "True")
-    )
-    log_file_path = os.environ.get(
-        "DIMORPHITE_DL_LOG_FILE_PATH", None
-    )
+    stdout = literal_eval(os.environ.get("DIMORPHITE_DL_STDOUT", "True"))
+    log_file_path = os.environ.get("DIMORPHITE_DL_LOG_FILE_PATH", None)
     enable_logging(level, stdout, log_file_path)

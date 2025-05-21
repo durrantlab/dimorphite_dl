@@ -14,9 +14,16 @@ dependencies = [
     "rdkit>=2020.3.3,<2026",
 ]
 
+[project.scripts]
+dimorphite_dl = "dimorphite_dl.cli:main"
+
 [build-system]
 requires = ["setuptools"]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["dimorphite_dl*"]
+
+[tool.setuptools.package-data]
+dimorphite_dl = ["data/*.smarts"]
+
