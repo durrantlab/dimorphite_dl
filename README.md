@@ -2,6 +2,25 @@
 
 <h4 align="center">Adds hydrogen atoms to molecular representations as specified by pH</h4>
 
+<p align="center">
+    <a href="https://github.com/durrantlab/dimorphite_dl/actions/workflows/tests.yml">
+        <img src="https://github.com/durrantlab/dimorphite_dl/actions/workflows/tests.yml/badge.svg" alt="Build Status ">
+    </a>
+    <!-- <img alt="PyPI - Python Version" src="https://img.shields.io/pypi/pyversions/vaxstats"> -->
+    <a href="https://codecov.io/gh/durrantlab/dimorphite_dl">
+        <img src="https://codecov.io/gh/durrantlab/dimorphite_dl/branch/main/graph/badge.svg" alt="codecov">
+    </a>
+    <!-- <a href="https://github.com/durrantlab/dimorphite_dl/releases">
+        <img src="https://img.shields.io/github/v/release/durrantlab/dimorphite_dl" alt="GitHub release (latest by date)">
+    </a> -->
+    <a href="https://github.com/durrantlab/dimorphite_dl/blob/main/LICENSE" target="_blank">
+        <img src="https://img.shields.io/github/license/durrantlab/dimorphite_dl" alt="License">
+    </a>
+    <a href="https://github.com/durrantlab/dimorphite_dl/" target="_blank">
+        <img src="https://img.shields.io/github/repo-size/durrantlab/dimorphite_dl" alt="GitHub repo size">
+    </a>
+</p>
+
 Dimorphite-DL adds hydrogen atoms to molecular representations, as appropriate
 for a user-specified pH range. It is a fast, accurate, accessible, and modular
 open-source program for enumerating small-molecule ionization states.
@@ -10,24 +29,22 @@ Users can provide SMILES strings from the command line or via an .smi file.
 
 ## Installation
 
-Clone the [repository](https://github.com/durrantlab/dimorphite_dl):
+You can install the latest released version on [PyPI](https://pypi.org/) using the following command.
 
 ```bash
-git clone git@github.com:durrantlab/dimorphite_dl.git
+pip install dimorphite_dl
 ```
 
-Install `dimorphite_dl` using `pip` after moving into the directory.
+Or you can install the latest development version from the `main` branch on [GitHub](https://github.com/durrantlab/dimorphite_dl) using
 
-```sh
-pip install .
+```bash
+pip install https://github.com/durrantlab/dimorphite_dl.git
 ```
-
-This will install all dependencies and `dimorphite_dl` into your current Python environment.
 
 ## Usage
 
 ```
-usage: dimorphite_dl.py [-h] [--min_ph MIN] [--max_ph MAX]
+usage: dimorphite_dl [-h] [--min_ph MIN] [--max_ph MAX]
                         [--pka_precision PRE] [--smiles SMI]
                         [--smiles_file FILE] [--output_file FILE]
                         [--label_states] [--test]
@@ -54,11 +71,11 @@ The default pH range is 6.4 to 8.4, considered biologically relevant pH.
 ## Examples
 
 ```
-  python dimorphite_dl.py --smiles_file sample_molecules.smi
-  python dimorphite_dl.py --smiles "CCC(=O)O" --min_ph -3.0 --max_ph -2.0
-  python dimorphite_dl.py --smiles "CCCN" --min_ph -3.0 --max_ph -2.0 --output_file output.smi
-  python dimorphite_dl.py --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states
-  python dimorphite_dl.py --test
+  python dimorphite_dl --smiles_file sample_molecules.smi
+  python dimorphite_dl --smiles "CCC(=O)O" --min_ph -3.0 --max_ph -2.0
+  python dimorphite_dl --smiles "CCCN" --min_ph -3.0 --max_ph -2.0 --output_file output.smi
+  python dimorphite_dl --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states
+  python dimorphite_dl --test
 ```
 
 ## Advanced
@@ -72,7 +89,7 @@ import dimorphite_dl
 
 # Using the dimorphite_dl.run() function, you can run Dimorphite-DL exactly as
 # you would from the command line. Here's an example:
-dimorphite_dl.run(
+dimorphite_dl.cli.run(
    smiles="CCCN",
    min_ph=-3.0,
    max_ph=-2.0,
@@ -87,7 +104,7 @@ mols = [Chem.MolFromSmiles(s) for s in smiles]
 for i, mol in enumerate(mols):
     mol.SetProp("msg","Orig SMILES: " + smiles[i])
 
-protonated_mols = dimorphite_dl.run_with_mol_list(
+protonated_mols = dimorphite_dl.cli.run_with_mol_list(
     mols,
     min_ph=5.0,
     max_ph=9.0,
