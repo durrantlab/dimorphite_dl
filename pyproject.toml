@@ -1,18 +1,41 @@
 [project]
 authors = [
-    {name = "durrantlab", email = "durrantj@pitt.edu"}
+    {name = "Durrant Lab @ Pitt", email = "durrantj@pitt.edu"}
+]
+maintainers = [
+    {name = "Alex M. Maldonado", email = "alex.maldonado@pitt.edu"}
 ]
 description = "Adds hydrogen atoms to molecular representations as specified by pH"
 name = "dimorphite_dl"
 version = "1.2.5"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "Apache-2.0"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
 
 # TODO: Keep this here until pixi releases building capabilities
 dependencies = [
     "loguru>=0.7.2,<0.8",
     "rdkit>=2020.3.3,<2026",
 ]
+
+[project.urls]
+Documentation = "https://durrantlab.github.io/dimorphite_dl"
+Repository = "https://github.com/durrantlab/dimorphite_dl"
+Issues = "https://github.com/durrantlab/dimorphite_dl/issues"
+Changelog = "https://github.com/durrantlab/dimorphite_dl/blob/main/CHANGELOG.md"
 
 [project.scripts]
 dimorphite_dl = "dimorphite_dl.cli:main"

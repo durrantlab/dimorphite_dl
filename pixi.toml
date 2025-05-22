@@ -34,6 +34,7 @@ pytest-html = ">=4.0.1"
 colorama = ">=0.4.6"
 basedpyright = ">=1.29.1,<2"
 ruff = ">=0.11.10,<0.12"
+twine = ">=6.1.0,<7"
 
 [feature.dev.tasks]
 mdlint = { cmd = ["markdownlint-cli2", '"**/*.{md,markdown}"', "--fix", "--config", ".markdownlint.yaml", "||", "true"] }
