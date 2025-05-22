@@ -60,6 +60,7 @@ publish = { cmd = ["twine", "upload", "dist/*"] }
 build = ">=1.2.2.post1,<2"
 mypy-extensions = ">=1.0.0"
 black = { version = ">=23.10.0", extras = ["jupyter"] }
+pyrefly = ">=0.16.1, <0.17"
 
 [feature.docs.dependencies]
 mkdocs = ">=1.6.1,<2"

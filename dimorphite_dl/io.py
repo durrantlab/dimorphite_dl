@@ -1,4 +1,3 @@
-# Disable the unnecessary RDKit warnings
 from typing import Any
 
 import os
@@ -13,9 +12,12 @@ def convert_smiles_str_to_mol(smiles_str):
     """Given a SMILES string, check that it is actually a string and not a
     None. Then try to convert it to an RDKit Mol Object.
 
-    :param string smiles_str: The SMILES string.
-    :return: A rdkit.Chem.rdchem.Mol object, or None if it is the wrong type or
-        if it fails to convert to a Mol Obj
+    Args:
+        smiles_str: The SMILES string.
+
+    Returns:
+        A rdkit.Chem.rdchem.Mol object, or None if it is the wrong type or
+            if it fails to convert to a Mol Obj
     """
 
     # Check that there are no type errors, ie Nones or non-string A
@@ -56,8 +58,11 @@ def neutralize_mol(mol):
     """All molecules should be neuralized to the extent possible. The user
     should not be allowed to specify the valence of the atoms in most cases.
 
-    :param rdkit.Chem.rdchem.Mol mol: The rdkit Mol objet to be neutralized.
-    :return: The neutralized Mol object.
+    Args:
+        mol: The rdkit Mol objet to be neutralized.
+
+    Returns:
+        The neutralized Mol object.
     """
 
     # Get the reaction data
@@ -144,8 +149,8 @@ class LoadSMIFile:
     def __init__(self, filename: StringIO | str, kwargs: dict[str, Any]) -> None:
         """Initializes this class.
 
-        :param filename: The filename or file object (i.e., StringIO).
-        :type filename: str or StringIO
+        Args:
+            filename: The filename or file object (i.e., StringIO).
         """
 
         self.kwargs = kwargs
@@ -171,11 +176,10 @@ class LoadSMIFile:
     def next(self) -> dict[str, Any]:
         """Get the data associated with the next line.
 
-        :raises StopIteration: If there are no more lines left iin the file.
-        :return: A dict, where the "smiles" key contains the canonical SMILES
+        Returns:
+            A dict, where the "smiles" key contains the canonical SMILES
                  string and the "data" key contains the remaining information
                  (e.g., the molecule name).
-        :rtype: dict
         """
 
         line = self.f.readline()

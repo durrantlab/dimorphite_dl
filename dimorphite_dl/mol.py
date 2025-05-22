@@ -2,7 +2,6 @@ import copy
 import importlib.resources as pkg_resources
 from io import StringIO
 
-# Disable the unnecessary RDKit warnings
 from rdkit import Chem
 
 from dimorphite_dl import data
@@ -15,8 +14,8 @@ class Protonate(object):
     def __init__(self, args):
         """Initialize the generator.
 
-        :param args: A dictionary containing the arguments.
-        :type args: dict
+        Args:
+            args: A dictionary containing the arguments.
         """
 
         defaults = {
@@ -61,8 +60,8 @@ class Protonate(object):
     def __iter__(self):
         """Returns this generator object.
 
-        :return: This generator object.
-        :rtype: Protonate
+        Returns:
+            This generator object.
         """
 
         return self
@@ -70,10 +69,10 @@ class Protonate(object):
     def __next__(self):
         """Ensure Python3 compatibility.
 
-        :return: A dict, where the "smiles" key contains the canonical SMILES
+        Returns:
+            A dict, where the "smiles" key contains the canonical SMILES
                  string and the "data" key contains the remaining information
                  (e.g., the molecule name).
-        :rtype: dict
         """
 
         return self.next()
@@ -81,11 +80,10 @@ class Protonate(object):
     def next(self):
         """Return the next protonated SMILES string.
 
-        :raises StopIteration: If there are no more lines left iin the file.
-        :return: A dict, where the "smiles" key contains the canonical SMILES
+        Returns:
+            A dict, where the "smiles" key contains the canonical SMILES
                  string and the "data" key contains the remaining information
                  (e.g., the molecule name).
-        :rtype: dict
         """
 
         # If there are any SMILES strings in self.cur_prot_SMI, just return
@@ -213,7 +211,8 @@ class ProtSubstructFuncs:
         """Loads the substructure smarts file. Similar to just using readlines,
         except it filters out comments (lines that start with "#").
 
-        :return: A list of the lines in the site_substructures.smarts file,
+        Returns:
+            A list of the lines in the site_substructures.smarts file,
                  except blank lines and lines that start with "#"
         """
 
@@ -230,11 +229,13 @@ class ProtSubstructFuncs:
         """A pre-calculated list of R-groups with protonation sites, with their
         likely pKa bins.
 
-        :param float min_ph:  The lower bound on the pH range, defaults to 6.4.
-        :param float max_ph:  The upper bound on the pH range, defaults to 8.4.
-        :param pka_std_range: Basically the precision (stdev from predicted pKa to
+        Returns
+            min_ph:  The lower bound on the pH range, defaults to 6.4.
+            max_ph:  The upper bound on the pH range, defaults to 8.4.
+            pka_std_range: Basically the precision (stdev from predicted pKa to
                               consider), defaults to 1.
-        :return: A dict of the protonation substructions for the specified pH
+        Returns:
+            A dict of the protonation substructions for the specified pH
                  range.
         """
 
@@ -272,11 +273,14 @@ class ProtSubstructFuncs:
         based on the user-given pH range. The size of the pKa range is also based
         on the number of standard deviations to be considered by the user param.
 
-        :param float mean:   The mean pKa.
-        :param float std:    The precision (stdev).
-        :param float min_ph: The min pH of the range.
-        :param float max_ph: The max pH of the range.
-        :return: A string describing the protonation state.
+        Args:
+            mean:   The mean pKa.
+            std:    The precision (stdev).
+            min_ph: The min pH of the range.
+            max_ph: The max pH of the range.
+
+        Returns:
+            A string describing the protonation state.
         """
 
         min_pka = mean - std
@@ -299,11 +303,14 @@ class ProtSubstructFuncs:
         R-group list, subs. Items that are higher on the list will be matched
         first, to the exclusion of later items.
 
-        :param string smi: A SMILES string.
-        :param list subs: Substructure information.
-        :return: A list of protonation sites (atom index), pKa bin.
-            ('PROTONATED', 'BOTH', or  'DEPROTONATED'), and reaction name.
-            Also, the mol object that was used to generate the atom index.
+        Returns:
+            smi: A SMILES string.
+            subs: Substructure information.
+
+        Returns:
+            A list of protonation sites (atom index), pKa bin.
+                ('PROTONATED', 'BOTH', or  'DEPROTONATED'), and reaction name.
+                Also, the mol object that was used to generate the atom index.
         """
 
         # Convert the Smiles string (smi) to an RDKit Mol Obj
@@ -356,10 +363,13 @@ class ProtSubstructFuncs:
     def protonate_site(mols, site):
         """Given a list of molecule objects, we protonate the site.
 
-        :param list mols:  The list of molecule objects.
-        :param tuple site: Information about the protonation site.
-                           (idx, target_prot_state, prot_site_name)
-        :return: A list of the appropriately protonated molecule objects.
+        Returns:
+            mols:  The list of molecule objects.
+            site: Information about the protonation site.
+                (idx, target_prot_state, prot_site_name)
+
+        Returns:
+            A list of the appropriately protonated molecule objects.
         """
 
         # Decouple the atom index and its target protonation state from the
@@ -381,13 +391,14 @@ class ProtSubstructFuncs:
     def set_protonation_charge(mols, idx, charges, prot_site_name):
         """Sets the atomic charge on a particular site for a set of SMILES.
 
-        :param list mols:                  A list of the input molecule
-                                           objects.
-        :param int idx:                    The index of the atom to consider.
-        :param list charges:               A list of the charges (ints) to
-                                           assign at this site.
-        :param string prot_site_name:      The name of the protonation site.
-        :return: A list of the processed (protonated/deprotonated) molecule
+        Returns:
+            mols: A list of the input molecule objects.
+            idx: The index of the atom to consider.
+            charges: A list of the charges (ints) to assign at this site.
+            prot_site_name: The name of the protonation site.
+
+        Returns:
+            A list of the processed (protonated/deprotonated) molecule
                  objects.
         """
 
@@ -484,8 +495,8 @@ class ProtectUnprotectFuncs:
         """Sets the protected property on all atoms to 0. This also creates the
         property for new molecules.
 
-        :param rdkit.Chem.rdchem.Mol mol: The rdkit Mol object.
-        :type mol: The rdkit Mol object with atoms unprotected.
+        Args:
+            mol: The rdkit Mol object.
         """
 
         for atom in mol.GetAtoms():
@@ -497,8 +508,9 @@ class ProtectUnprotectFuncs:
         of each atom to 1. This will prevent any matches using that atom in the
         future.
 
-        :param rdkit.Chem.rdchem.Mol mol: The rdkit Mol object to protect.
-        :param list match: A list of molecule idx's.
+        Returns
+            mol: The rdkit Mol object to protect.
+            match: A list of molecule idx's.
         """
 
         for idx in match:
@@ -510,9 +522,12 @@ class ProtectUnprotectFuncs:
         """Finds substructure matches with atoms that have not been protected.
         Returns list of matches, each match a list of atom idxs.
 
-        :param rdkit.Chem.rdchem.Mol mol: The Mol object to consider.
-        :param string substruct: The SMARTS string of the substructure ot match.
-        :return: A list of the matches. Each match is itself a list of atom idxs.
+        Args:
+            mol: The Mol object to consider.
+            substruct: The SMARTS string of the substructure ot match.
+
+        Returns:
+            A list of the matches. Each match is itself a list of atom idxs.
         """
 
         matches = mol.GetSubstructMatches(substruct)
@@ -527,9 +542,12 @@ class ProtectUnprotectFuncs:
         """Checks a molecule to see if the substructure match contains any
         protected atoms.
 
-        :param rdkit.Chem.rdchem.Mol mol: The Mol object to check.
-        :param list match: The match to check.
-        :return: A boolean, whether the match is present or not.
+        Args:
+            mol: The Mol object to check.
+            match: The match to check.
+
+        Returns:
+            A boolean, whether the match is present or not.
         """
 
         for idx in match:

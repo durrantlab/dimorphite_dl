@@ -1,6 +1,10 @@
+from typing import Any
+
 import argparse
 import sys
 from io import StringIO
+
+from rdkit import Chem
 
 from dimorphite_dl.io import LoadSMIFile
 from dimorphite_dl.mol import Protonate
@@ -20,17 +24,15 @@ def print_header():
     print("molecules. J Cheminform 11:14. doi:10.1186/s13321-019-0336-9.\n")
 
 
-from rdkit import Chem
-
-
-def main(params=None):
+def main(params: None | dict[str, Any] = None) -> list[str] | None:
     """The main definition run when you call the script from the commandline.
 
-    :param params: The parameters to use. Entirely optional. If absent,
-                   defaults to None, in which case argments will be taken from
-                   those given at the command line.
-    :param params: dict, optional
-    :return: Returns a list of the SMILES strings return_as_list parameter is
+    Args:
+        params: The parameters to use. Entirely optional. If absent,
+            defaults to None, in which case arguments will be taken from
+            those given at the command line.
+    Returns:
+         Returns a list of the SMILES strings return_as_list parameter is
              True. Otherwise, returns None.
     """
 
@@ -72,10 +74,11 @@ class MyParser(argparse.ArgumentParser):
     """Overwrite default parse so it displays help file on error. See
     https://stackoverflow.com/questions/4042452/display-help-message-with-python-argparse-when-script-is-called-without-any-argu"""
 
-    def error(self, message):
+    def error(self, message: str) -> None:
         """Overwrites the default error message.
 
-        :param message: The default error message.
+        Args:
+            message: The default error message.
         """
 
         self.print_help()
@@ -83,10 +86,11 @@ class MyParser(argparse.ArgumentParser):
         print(msg)
         raise Exception(msg)
 
-    def print_help(self, file=None):
+    def print_help(self, file=None) -> None:
         """Overwrite the default print_help function
 
-        :param file: Output file, defaults to None
+        Args:
+            file: Output file, defaults to None
         """
 
         print("")
@@ -113,7 +117,8 @@ class ArgParseFuncs:
     def get_args():
         """Gets the arguments from the command line.
 
-        :return: A parser object.
+        Returns:
+            A parser object.
         """
 
         parser = MyParser(
@@ -183,9 +188,8 @@ class ArgParseFuncs:
     def clean_args(args):
         """Cleans and normalizes input parameters
 
-        :param args: A dictionary containing the arguments.
-        :type args: dict
-        :raises Exception: No SMILES in params.
+        Args:
+            args: A dictionary containing the arguments.
         """
 
         defaults = {
@@ -228,12 +232,10 @@ def run(**kwargs):
     exactly. If you want to pass and return a list of RDKit Mol objects, import
     run_with_mol_list() instead.
 
-    :param **kwargs: For a complete description, run dimorphite_dl.py from the
-        command line with the -h option.
-    :type kwargs: dict
+    Args:
+        **kwargs: For a complete description, run dimorphite_dl from the
+            command line with the -h option.
     """
-
-    # Run the main function with the specified arguments.
     main(kwargs)
 
 
@@ -244,12 +246,11 @@ def run_with_mol_list(mol_lst, **kwargs):
     with command-line parameters. If you want to use only the same parameters
     that you would use from the command line, import run() instead.
 
-    :param mol_lst: A list of rdkit.Chem.rdchem.Mol objects.
-    :type mol_lst: list
-    :raises Exception: If the **kwargs includes "smiles", "smiles_file",
-                       "output_file", or "test" parameters.
-    :return: A list of properly protonated rdkit.Chem.rdchem.Mol objects.
-    :rtype: list
+    Args:
+        mol_lst: A list of rdkit.Chem.rdchem.Mol objects.
+
+    Returns:
+        A list of properly protonated rdkit.Chem.rdchem.Mol objects.
     """
 
     # Do a quick check to make sure the user input makes sense.
