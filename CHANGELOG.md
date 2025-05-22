@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.2.5] - 2025-05-21
+
 ### Changed
 
 - Major reorganization of the original `dimorphite_dl.py` file into Python modules under the package name `dimorphite_dl`. No code logic has been change, just refactored.

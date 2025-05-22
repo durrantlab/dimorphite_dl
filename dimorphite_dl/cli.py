@@ -6,6 +6,7 @@ from io import StringIO
 
 from rdkit import Chem
 
+from dimorphite_dl import __version__
 from dimorphite_dl.io import LoadSMIFile
 from dimorphite_dl.mol import Protonate
 
@@ -122,10 +123,9 @@ class ArgParseFuncs:
         """
 
         parser = MyParser(
-            description="Dimorphite 1.2.4: Creates models of "
+            description=f"Dimorphite {__version__}: Creates models of "
             + "appropriately protonated small moleucles. "
-            + "Apache 2.0 License. Copyright 2020 Jacob D. "
-            + "Durrant."
+            + "Apache 2.0 License. Copyright 2025 Durrant Lab @ Pitt "
         )
         parser.add_argument(
             "--min_ph",

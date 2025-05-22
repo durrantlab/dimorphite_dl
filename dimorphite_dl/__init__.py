@@ -8,6 +8,8 @@ from ast import literal_eval
 
 from loguru import logger
 
+__version__ = "1.2.5"
+
 logger.disable("dimorphite_dl")
 
 LOG_FORMAT = (
