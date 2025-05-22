@@ -6,18 +6,21 @@
     <a href="https://github.com/durrantlab/dimorphite_dl/actions/workflows/tests.yml">
         <img src="https://github.com/durrantlab/dimorphite_dl/actions/workflows/tests.yml/badge.svg" alt="Build Status ">
     </a>
-    <!-- <img alt="PyPI - Python Version" src="https://img.shields.io/pypi/pyversions/vaxstats"> -->
+    <img alt="PyPI - Python Version" src="https://img.shields.io/pypi/pyversions/dimorphite_dl">
     <a href="https://codecov.io/gh/durrantlab/dimorphite_dl">
         <img src="https://codecov.io/gh/durrantlab/dimorphite_dl/branch/main/graph/badge.svg" alt="codecov">
     </a>
-    <!-- <a href="https://github.com/durrantlab/dimorphite_dl/releases">
+    <a href="https://github.com/durrantlab/dimorphite_dl/releases">
         <img src="https://img.shields.io/github/v/release/durrantlab/dimorphite_dl" alt="GitHub release (latest by date)">
-    </a> -->
+    </a>
     <a href="https://github.com/durrantlab/dimorphite_dl/blob/main/LICENSE" target="_blank">
         <img src="https://img.shields.io/github/license/durrantlab/dimorphite_dl" alt="License">
     </a>
     <a href="https://github.com/durrantlab/dimorphite_dl/" target="_blank">
         <img src="https://img.shields.io/github/repo-size/durrantlab/dimorphite_dl" alt="GitHub repo size">
+    </a>
+    <a href="https://doi.org/10.5281/zenodo.15486131">
+        <img src="https://zenodo.org/badge/DOI/10.5281/zenodo.15486131.svg" alt="DOI">
     </a>
 </p>
 
@@ -70,12 +73,12 @@ The default pH range is 6.4 to 8.4, considered biologically relevant pH.
 
 ## Examples
 
-```
-  python dimorphite_dl --smiles_file sample_molecules.smi
-  python dimorphite_dl --smiles "CCC(=O)O" --min_ph -3.0 --max_ph -2.0
-  python dimorphite_dl --smiles "CCCN" --min_ph -3.0 --max_ph -2.0 --output_file output.smi
-  python dimorphite_dl --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states
-  python dimorphite_dl --test
+```bash
+dimorphite_dl --smiles_file sample_molecules.smi
+dimorphite_dl --smiles "CCC(=O)O" --min_ph -3.0 --max_ph -2.0
+dimorphite_dl --smiles "CCCN" --min_ph -3.0 --max_ph -2.0 --output_file output.smi
+dimorphite_dl --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states
+dimorphite_dl --test
 ```
 
 ## Advanced
@@ -142,7 +145,7 @@ If you use Dimorphite-DL in your research, please cite:
 
 Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An
 open-source program for enumerating the ionization states of drug-like small
-molecules. J Cheminform 11:14. doi:10.1186/s13321-019-0336-9.
+molecules. J Cheminform 11:14. doi: [10.1186/s13321-019-0336-9](https://doi.org/10.1186/s13321-019-0336-9).
 
 ## License
 
