@@ -1,0 +1,29 @@
+[project]
+authors = [
+    {name = "durrantlab", email = "durrantj@pitt.edu"}
+]
+description = "Adds hydrogen atoms to molecular representations as specified by pH"
+name = "dimorphite_dl"
+version = "0.0.0"
+readme = "README.md"
+requires-python = ">=3.10"
+
+# TODO: Keep this here until pixi releases building capabilities
+dependencies = [
+    "loguru>=0.7.2,<0.8",
+    "rdkit>=2020.3.3,<2026",
+]
+
+[project.scripts]
+dimorphite_dl = "dimorphite_dl.cli:main"
+
+[build-system]
+requires = ["setuptools"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dimorphite_dl*"]
+
+[tool.setuptools.package-data]
+dimorphite_dl = ["data/*.smarts"]
+

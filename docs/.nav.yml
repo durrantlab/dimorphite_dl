@@ -1,0 +1,11 @@
+nav:
+  - Home: index.md
+  - API: api
+  - Development: development.md
+
+sort:
+  type: natural
+  ignore_case: true
+  by: title
+  direction: asc
+flatten_single_child_sections: true
