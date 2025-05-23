@@ -2,8 +2,8 @@ import os
 
 import pytest
 
-from dimorphite_dl import enable_logging
-from dimorphite_dl.mol import ProtSubstructFuncs
+from dimorphite_dl import enable_logging, substruct
+from dimorphite_dl.io import SMILESProcessor
 
 TEST_DIR = os.path.dirname(__file__)
 
@@ -13,10 +13,31 @@ def turn_on_logging():
     enable_logging(10)
 
 
+# Pytest fixtures for reusable test data
 @pytest.fixture
-def default_args():
-    args = {"pka_precision": 0.5, "smiles": "", "label_states": True, "silent": True}
-    return args
+def sample_smiles_list():
+    """Fixture providing a sample list of SMILES strings."""
+    return ["CCO", "CCC", "c1ccccc1", "CC(C)C", "CCN"]
+
+
+@pytest.fixture
+def sample_smiles_file(tmp_path):
+    """Fixture providing a temporary SMILES file."""
+    content = "CCO ethanol\nCCC propane\nc1ccccc1 benzene\n"
+    file_path = tmp_path / "test_molecules.smi"
+    file_path.write_text(content)
+    return str(file_path)
+
+
+@pytest.fixture
+def processor_no_validation():
+    """Fixture providing a processor with validation disabled."""
+    return SMILESProcessor(validate_smiles=False)
+
+
+@pytest.fixture
+def kwargs_default():
+    return {"pka_precision": 0.5, "label_states": True}
 
 
 @pytest.fixture
@@ -96,7 +117,7 @@ def average_pkas_groups(smiles_phosphates):
     cats_with_two_prot_sites = [inf[4] for inf in smiles_phosphates]
     average_pkas = {
         l.split()[0].replace("*", ""): float(l.split()[3])
-        for l in ProtSubstructFuncs.load_substructre_smarts_file()
+        for l in substruct.load_substructure_smarts_file()
         if l.split()[0] not in cats_with_two_prot_sites
     }
     return average_pkas
@@ -107,7 +128,7 @@ def average_pkas_phosphates(smiles_phosphates):
     cats_with_two_prot_sites = [inf[4] for inf in smiles_phosphates]
     average_pkas_phos = {
         l.split()[0].replace("*", ""): [float(l.split()[3]), float(l.split()[6])]
-        for l in ProtSubstructFuncs.load_substructre_smarts_file()
+        for l in substruct.load_substructure_smarts_file()
         if l.split()[0] in cats_with_two_prot_sites
     }
     return average_pkas_phos

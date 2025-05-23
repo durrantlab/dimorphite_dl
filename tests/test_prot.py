@@ -1,30 +1,29 @@
-from dimorphite_dl.mol import Protonate
+from dimorphite_dl.protonate import protonate_smiles
 
 
-def check_tests(args, expected_output, labels):
+def check_tests(smiles, kwargs, expected_output, labels):
     """Tests most ionizable groups. The ones that can only loose or gain a single proton.
 
-    :param args: The arguments to pass to protonate()
-    :param expected_output: A list of the expected SMILES-strings output.
-    :param labels: The labels. A list containing combo of BOTH, PROTONATED,
+    Args:
+        smiles: SMILES to protonate.
+        kwargs: The keyword arguments to pass to `protonate_smiles`.
+        expected_output: A list of the expected SMILES-strings output.
+        labels: The labels. A list containing combo of BOTH, PROTONATED,
                 DEPROTONATED.
-    :raises Exception: Wrong number of states produced.
-    :raises Exception: Unexpected output SMILES.
-    :raises Exception: Wrong labels.
     """
 
-    output = list(Protonate(args))
+    output = list(protonate_smiles(smiles, **kwargs))
     output = [o.split() for o in output]
 
     num_states = len(expected_output)
 
     if len(output) != num_states:
         msg = (
-            args["smiles"]
+            "smiles"
             + " should have "
             + str(num_states)
             + " states at at pH "
-            + str(args["min_ph"])
+            + str(kwargs["min_ph"])
             + ": "
             + str(output)
         )
@@ -32,13 +31,13 @@ def check_tests(args, expected_output, labels):
 
     if len(set([l[0] for l in output]) - set(expected_output)) != 0:
         msg = (
-            args["smiles"]
+            smiles
             + " is not "
             + " AND ".join(expected_output)
             + " at pH "
-            + str(args["min_ph"])
-            + " - "
-            + str(args["max_ph"])
+            + str(kwargs["min_ph"])
+            + " to "
+            + str(kwargs["max_ph"])
             + "; it is "
             + " AND ".join([l[0] for l in output])
         )
@@ -46,7 +45,7 @@ def check_tests(args, expected_output, labels):
 
     if len(set([l[1] for l in output]) - set(labels)) != 0:
         msg = (
-            args["smiles"]
+            smiles
             + " not labeled as "
             + " AND ".join(labels)
             + "; it is "
@@ -54,95 +53,90 @@ def check_tests(args, expected_output, labels):
         )
         raise Exception(msg)
 
-    ph_range = sorted(list(set([args["min_ph"], args["max_ph"]])))
+    ph_range = sorted(list(set([kwargs["min_ph"], kwargs["max_ph"]])))
     ph_range_str = "(" + " - ".join("{0:.2f}".format(n) for n in ph_range) + ")"
     print(
         "(CORRECT) "
         + ph_range_str.ljust(10)
         + " "
-        + args["smiles"]
+        + smiles
         + " => "
         + " AND ".join([l[0] for l in output])
     )
 
 
-def test_very_acidic(default_args, smiles_groups, smiles_phosphates):
-    args = default_args
-    args["min_ph"] = -10000000
-    args["max_ph"] = -10000000
+def test_very_acidic(kwargs_default, smiles_groups, smiles_phosphates):
+    kwargs = kwargs_default
+    kwargs["min_ph"] = -10000000
+    kwargs["max_ph"] = -10000000
 
     for smi, protonated, deprotonated, category in smiles_groups:
-        args["smiles"] = smi
-        check_tests(args, [protonated], ["PROTONATED"])
+        check_tests(smi, kwargs, [protonated], ["PROTONATED"])
 
     # Test phosphates separately
     for smi, protonated, mix, deprotonated, category in smiles_phosphates:
-        args["smiles"] = smi
-        check_tests(args, [protonated], ["PROTONATED"])
+        check_tests(smi, kwargs, [protonated], ["PROTONATED"])
 
 
-def test_very_basic(default_args, smiles_groups, smiles_phosphates):
-    args = default_args
-    args["min_ph"] = 10000000
-    args["max_ph"] = 10000000
+def test_very_basic(kwargs_default, smiles_groups, smiles_phosphates):
+    kwargs = kwargs_default
+    kwargs["min_ph"] = 10000000
+    kwargs["max_ph"] = 10000000
 
     for smi, protonated, deprotonated, category in smiles_groups:
-        args["smiles"] = smi
-        check_tests(args, [deprotonated], ["DEPROTONATED"])
+        check_tests(smi, kwargs, [deprotonated], ["DEPROTONATED"])
 
     for smi, protonated, mix, deprotonated, category in smiles_phosphates:
-        args["smiles"] = smi
-        check_tests(args, [deprotonated], ["DEPROTONATED"])
+        check_tests(smi, kwargs, [deprotonated], ["DEPROTONATED"])
 
 
 def test_avg_pka(
-    default_args,
+    kwargs_default,
     smiles_groups,
     smiles_phosphates,
     average_pkas_groups,
     average_pkas_phosphates,
 ):
-    args = default_args
+    kwargs = kwargs_default
 
     for smi, protonated, deprotonated, category in smiles_groups:
         avg_pka = average_pkas_groups[category]
 
-        args["smiles"] = smi
-        args["min_ph"] = avg_pka
-        args["max_ph"] = avg_pka
+        kwargs["min_ph"] = avg_pka
+        kwargs["max_ph"] = avg_pka
 
-        check_tests(args, [protonated, deprotonated], ["BOTH"])
+        check_tests(smi, kwargs, [protonated, deprotonated], ["BOTH"])
 
     for smi, protonated, mix, deprotonated, category in smiles_phosphates:
-        args["smiles"] = smi
+        kwargs["smiles"] = smi
 
         avg_pka = average_pkas_phosphates[category][0]
-        args["min_ph"] = avg_pka
-        args["max_ph"] = avg_pka
+        kwargs["min_ph"] = avg_pka
+        kwargs["max_ph"] = avg_pka
 
-        check_tests(args, [mix, protonated], ["BOTH"])
+        check_tests(smi, kwargs, [mix, protonated], ["BOTH"])
 
         avg_pka = average_pkas_phosphates[category][1]
-        args["min_ph"] = avg_pka
-        args["max_ph"] = avg_pka
+        kwargs["min_ph"] = avg_pka
+        kwargs["max_ph"] = avg_pka
 
-        check_tests(args, [mix, deprotonated], ["DEPROTONATED", "DEPROTONATED"])
+        check_tests(smi, kwargs, [mix, deprotonated], ["DEPROTONATED", "DEPROTONATED"])
 
         avg_pka = 0.5 * (
             average_pkas_phosphates[category][0] + average_pkas_phosphates[category][1]
         )
-        args["min_ph"] = avg_pka
-        args["max_ph"] = avg_pka
-        args["pka_precision"] = 5  # Should give all three
+        kwargs["min_ph"] = avg_pka
+        kwargs["max_ph"] = avg_pka
+        kwargs["pka_precision"] = 5  # Should give all three
 
-        check_tests(args, [mix, deprotonated, protonated], ["BOTH", "BOTH"])
+        check_tests(smi, kwargs, [mix, deprotonated, protonated], ["BOTH", "BOTH"])
 
 
 def test_no_carbanion():
     smi = (
         "Cc1nc2cc(-c3[nH]c4cc5ccccc5c5c4c3CCN(C(=O)O)[C@@H]5O)cc3c(=O)[nH][nH]c(n1)c23"
     )
-    output = list(Protonate({"smiles": smi, "test": False, "silent": True}))
+    output = list(protonate_smiles(smi))
 
     if "[C-]" in "".join(output).upper():
         msg = "Processing " + smi + " produced a molecule with a carbanion!"
@@ -154,7 +148,7 @@ def test_no_carbanion():
 def test_max_variants():
     # Make sure max number of variants is limited (old bug).
     smi = "CCCC[C@@H](C(=O)N)NC(=O)[C@@H](NC(=O)[C@@H](NC(=O)[C@@H](NC(=O)[C@H](C(C)C)NC(=O)[C@@H](NC(=O)[C@H](Cc1c[nH]c2c1cccc2)NC(=O)[C@@H](NC(=O)[C@@H](Cc1ccc(cc1)O)N)CCC(=O)N)C)C)Cc1nc[nH]c1)Cc1ccccc1"
-    output = list(Protonate({"smiles": smi, "test": False, "silent": True}))
+    output = list(protonate_smiles(smi))
     if len(output) != 128:
         msg = "Processing " + smi + " produced more than 128 variants!"
         raise Exception(msg)
@@ -203,19 +197,11 @@ def test_atp_nad():
         ],
     ]
     for example in specific_examples:
-        smi = example[0]
+        smi = str(example[0])
         for ph, expected_output in example[1:]:
+            ph = float(ph)
             output = list(
-                Protonate(
-                    {
-                        "smiles": smi,
-                        "test": False,
-                        "min_ph": ph,
-                        "max_ph": ph,
-                        "pka_precision": 0,
-                        "silent": True,
-                    }
-                )
+                protonate_smiles(smi, min_ph=ph, max_ph=ph, pka_precision=0.0)
             )
             if output[0].strip() == expected_output:
                 print(
