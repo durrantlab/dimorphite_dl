@@ -23,7 +23,7 @@ def smiles_to_mol(smiles_str: str) -> Chem.Mol | None:
 
     # Clean up the input
     smiles_str = smiles_str.strip()
-    logger.debug("Converting SMILES to RDKit mol: '{}'", smiles_str)
+    logger.debug("Converting SMILES to RDKit mol: {}", smiles_str)
 
     # Handle common azide patterns
     original_smiles = smiles_str
@@ -52,7 +52,7 @@ def smiles_to_mol(smiles_str: str) -> Chem.Mol | None:
             )
         return None
 
-    logger.debug("Successfully converted SMILES to RDKit mol object")
+    logger.trace("SMILES after conversion: {}", Chem.MolToSmiles(rdkit_errors["mol"]))
     return rdkit_errors["mol"]
 
 

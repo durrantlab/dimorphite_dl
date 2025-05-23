@@ -266,13 +266,14 @@ class SMILESProcessor:
 
     def _validate_smiles_syntax(self, smiles: str) -> bool:
         """SMILES syntax validation using RDKit."""
+        logger.debug("Processing {}", smiles)
         try:
-            logger.debug("Validating SMILES...")
+            logger.debug("Validating...")
             rdMolStandardize.ValidateSmiles(smiles)
-            logger.debug("SMILES is valid!")
+            logger.debug("SMILES is valid")
             return True
         except Exception:
-            logger.info("Invalid SMILES: {}", smiles)
+            logger.info("SMILES is NOT valid")
             return False
 
     def _is_file_path(self, s: str) -> bool:

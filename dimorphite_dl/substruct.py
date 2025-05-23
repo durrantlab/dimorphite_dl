@@ -151,7 +151,7 @@ def _parse_substructure_line(
 
     name = parts[0]
     smart = parts[1]
-
+    logger.trace("Parsing SMARTS of {}", name)
     # Create mol object from SMARTS
     try:
         mol = Chem.MolFromSmarts(smart)
@@ -180,9 +180,12 @@ def _parse_substructure_line(
             site = pka_data[i]
             mean = float(pka_data[i + 1])
             std_base = float(pka_data[i + 2])
-
+            logger.trace(
+                "pKa data of site {}: Mean = {} ; Stdev = {}", site, mean, std_base
+            )
             std = std_base * pka_std_range
             protonation_state = define_protonation_state(mean, std, min_ph, max_ph)
+            logger.trace("Calculated protonation state of {}", protonation_state)
             prot_states.append([site, protonation_state])
 
         except (ValueError, IndexError) as e:
@@ -234,31 +237,31 @@ def get_prot_sites_and_target_states(
     Returns:
         Tuple of (protonation sites list, molecule object used for indexing)
     """
-    logger.debug("Finding protonation sites for SMILES: '{}'", smi)
+    logger.debug("Finding protonation sites for {}", smi)
 
     # Convert SMILES to mol object
     mol_used_to_idx_sites = smiles_to_mol(smi)
     if mol_used_to_idx_sites is None:
-        logger.warning("Could not convert SMILES to molecule: '{}'", smi)
         return [], None
 
     # Add hydrogens
     try:
-        logger.debug("Adding hydrogens to molecule")
+        logger.debug("Adding hydrogens")
         mol_with_hs = Chem.AddHs(mol_used_to_idx_sites)
         if mol_with_hs is None:
-            logger.warning("Failed to add hydrogens to molecule: '{}'", smi)
+            logger.warning("Failed to add hydrogens to molecule: {}", smi)
             return [], None
+        logger.trace("After adding hydrogens: {}", Chem.MolToSmiles(mol_with_hs))
         mol_used_to_idx_sites = mol_with_hs
     except Exception as e:
-        logger.warning("Error adding hydrogens to molecule '{}': {}", smi, str(e))
+        logger.warning("Error adding hydrogens to molecule {} : {}", smi, str(e))
         return [], None
 
     # Unprotect molecule for substructure matching
     try:
         protect.unprotect_molecule(mol_used_to_idx_sites)
     except Exception as e:
-        logger.warning("Error unprotecting molecule '{}': {}", smi, str(e))
+        logger.warning("Error unprotecting molecule {} : {}", smi, str(e))
         return [], None
 
     protonation_sites = []
@@ -301,6 +304,12 @@ def get_prot_sites_and_target_states(
                                 and ps.target_state == prot_site.target_state
                                 for ps in protonation_sites
                             ):
+                                logger.debug(
+                                    "Found {} at index {} with {} target",
+                                    prot_site.site_name,
+                                    prot_site.atom_idx,
+                                    prot_site.target_state,
+                                )
                                 protonation_sites.append(prot_site)
 
                         except (ValueError, IndexError) as e:
@@ -323,11 +332,7 @@ def get_prot_sites_and_target_states(
                 "Error matching substructure {} to '{}': {}", sub_data.name, smi, str(e)
             )
 
-    logger.debug(
-        "Found {} protonation sites from {} substructure matches",
-        len(protonation_sites),
-        matches_found,
-    )
+    logger.info("Found {} protonation site(s)", len(protonation_sites))
 
     return protonation_sites, mol_used_to_idx_sites
 
@@ -398,7 +403,7 @@ def set_protonation_charge(
 
         # Special case for nitrogen moieties where acidic group is neutral
         if is_special_nitrogen:
-            nitrogen_charge = charge
+            nitrogen_charge = nitrogen_charge - 1
 
         for mol in mols:
             try:
@@ -431,6 +436,12 @@ def _apply_charge_to_molecule(
     Returns:
         Modified molecule or None if processing fails
     """
+    logger.trace(
+        "Applying charge of {} at index {} to SMILES: {}",
+        charge,
+        idx,
+        Chem.MolToSmiles(mol),
+    )
     # Create deep copy to avoid modifying original
     mol_copy = copy.deepcopy(mol)
 
@@ -506,8 +517,9 @@ def _set_nitrogen_properties(
         (-1, 2): 0,  # Negative charge
     }
 
-    h_count = h_count_map.get((charge, bond_order_total), 0)
-    atom.SetNumExplicitHs(h_count)
+    h_count = h_count_map.get((charge, bond_order_total), -1)
+    if h_count != -1:
+        atom.SetNumExplicitHs(h_count)
 
 
 def _set_other_element_properties(

@@ -108,8 +108,6 @@ def test_avg_pka(
         check_tests(smi, kwargs, [protonated, deprotonated], ["BOTH"])
 
     for smi, protonated, mix, deprotonated, category in smiles_phosphates:
-        kwargs["smiles"] = smi
-
         avg_pka = average_pkas_phosphates[category][0]
         kwargs["min_ph"] = avg_pka
         kwargs["max_ph"] = avg_pka

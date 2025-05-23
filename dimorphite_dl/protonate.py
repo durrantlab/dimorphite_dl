@@ -5,6 +5,7 @@ from pathlib import Path
 
 from loguru import logger
 from rdkit import Chem
+from rdkit.Chem import AllChem
 
 from dimorphite_dl import substruct
 from dimorphite_dl.io import SMILESProcessor, SMILESRecord
@@ -50,7 +51,6 @@ class Protonate:
         pka_precision: float = 1.0,
         label_states: bool = False,
         max_variants: int = 128,
-        silent: bool = False,
         validate_output: bool = True,
         **smiles_processor_kwargs,
     ):
@@ -63,7 +63,6 @@ class Protonate:
             pka_precision: pKa precision factor (default: 1.0)
             label_states: Whether to label protonated SMILES with target state
             max_variants: Maximum number of variants per input compound
-            silent: Whether to suppress warning messages
             validate_output: Whether to validate generated SMILES (default: True)
             **smiles_processor_kwargs: Additional arguments for SMILESProcessor
         """
@@ -81,11 +80,10 @@ class Protonate:
         self.pka_precision = pka_precision
         self.label_states = label_states
         self.max_variants = max_variants
-        self.silent = silent
         self.validate_output = validate_output
 
         logger.info(
-            "Initializing Protonate with pH range {:.1f}-{:.1f}, precision: {:.1f}",
+            "Initializing Protonate with pH range {:.1f} to {:.1f}, precision: {:.1f}",
             min_ph,
             max_ph,
             pka_precision,
@@ -97,12 +95,10 @@ class Protonate:
         # Queue to store the protonated SMILES strings for current molecule
         self.cur_prot_results: list[ProtonationResult] = []
 
-        logger.debug("Loading protonation substructures")
         try:
             self.subs = substruct.load_protonation_substructs_calc_state_for_ph(
                 self.min_ph, self.max_ph, self.pka_precision
             )
-            logger.info("Loaded {} substructures for protonation", len(self.subs))
         except Exception as e:
             logger.error("Failed to load substructures: {}", str(e))
             raise
@@ -173,7 +169,8 @@ class Protonate:
         orig_smi = smiles_record.smiles
         identifier = smiles_record.identifier or ""
 
-        logger.debug("Processing SMILES: '{}' ({})", orig_smi, identifier)
+        orig_smi = self._neutralize_smiles(orig_smi)
+
         self.stats.molecules_processed += 1
 
         # Track valid SMILES for fallback purposes
@@ -186,16 +183,13 @@ class Protonate:
             )
 
             if mol_used_to_idx_sites is None:
-                logger.warning("Could not process molecule: '{}'", orig_smi)
+                logger.warning("Could not find protonation sites for {}", orig_smi)
                 self._add_fallback_result(orig_smi, identifier)
                 return
 
             new_mols = [mol_used_to_idx_sites]
 
             if sites:
-                logger.debug(
-                    "Found {} protonation sites for '{}'", len(sites), orig_smi
-                )
                 self.stats.molecules_with_sites += 1
 
                 # Process each protonation site
@@ -206,13 +200,12 @@ class Protonate:
                         # Limit variants if necessary
                         if len(new_mols) > self.max_variants:
                             new_mols = new_mols[: self.max_variants]
-                            if not self.silent:
-                                logger.warning(
-                                    "Limited variants to {} for '{}' at site {}",
-                                    self.max_variants,
-                                    orig_smi,
-                                    i + 1,
-                                )
+                            logger.warning(
+                                "Limited variants to {} for '{}' at site {}",
+                                self.max_variants,
+                                orig_smi,
+                                i + 1,
+                            )
 
                         # Add valid SMILES to history for potential fallback
                         try:
@@ -274,6 +267,100 @@ class Protonate:
         except Exception as e:
             logger.error("Error processing SMILES '{}': {}", orig_smi, str(e))
             self._add_fallback_result(orig_smi, identifier)
+
+    def _neutralize_smiles(self, smi: str) -> str | None:
+        """All molecules should be neuralized to the extent possible. The user
+        should not be allowed to specify the valence of the atoms in most cases.
+
+        Args:
+            mol: The rdkit Mol objet to be neutralized.
+
+        Returns:
+            The neutralized Mol object.
+        """
+        logger.debug("Neutralizing {}", smi)
+        # Get the reaction data
+        rxn_data = [
+            [
+                "[Ov1-1:1]",
+                "[Ov2+0:1]-[H]",
+            ],  # To handle O- bonded to only one atom (add hydrogen).
+            [
+                "[#7v4+1:1]-[H]",
+                "[#7v3+0:1]",
+            ],  # To handle N+ bonded to a hydrogen (remove hydrogen).
+            [
+                "[Ov2-:1]",
+                "[Ov2+0:1]",
+            ],  # To handle O- bonded to two atoms. Should not be Negative.
+            [
+                "[#7v3+1:1]",
+                "[#7v3+0:1]",
+            ],  # To handle N+ bonded to three atoms. Should not be positive.
+            [
+                "[#7v2-1:1]",
+                "[#7+0:1]-[H]",
+            ],  # To handle N- Bonded to two atoms. Add hydrogen.
+            # ['[N:1]=[N+0:2]=[N:3]-[H]', '[N:1]=[N+1:2]=[N+0:3]-[H]'],  # To handle bad azide. Must be
+            # protonated. (Now handled
+            # elsewhere, before SMILES
+            # converted to Mol object.)
+            [
+                "[H]-[N:1]-[N:2]#[N:3]",
+                "[N:1]=[N+1:2]=[N:3]-[H]",
+            ],  # To handle bad azide. R-N-N#N should
+            # be R-N=[N+]=N
+        ]
+
+        # Add substructures and reactions (initially none)
+        for i, rxn_datum in enumerate(rxn_data):
+            rxn_data[i].append(Chem.MolFromSmarts(rxn_datum[0]))
+            rxn_data[i].append(None)
+
+        mol = smiles_to_mol(smi)
+        # Add hydrogens (respects valence, so incomplete).
+        mol.UpdatePropertyCache(strict=False)
+        mol = Chem.AddHs(mol)
+
+        while True:  # Keep going until all these issues have been resolved.
+            current_rxn = None  # The reaction to perform.
+            current_rxn_str = None
+
+            for i, rxn_datum in enumerate(rxn_data):
+                (
+                    reactant_smarts,
+                    product_smarts,
+                    substruct_match_mol,
+                    rxn_placeholder,
+                ) = rxn_datum
+                if mol.HasSubstructMatch(substruct_match_mol):
+                    if rxn_placeholder is None:
+                        current_rxn_str = reactant_smarts + ">>" + product_smarts
+                        logger.trace("Defining reaction: {}", current_rxn_str)
+                        current_rxn = AllChem.ReactionFromSmarts(current_rxn_str)
+                        rxn_data[i][3] = current_rxn  # Update the placeholder.
+                    else:
+                        current_rxn = rxn_data[i][3]
+                    break
+
+            # Perform the reaction if necessary
+            if current_rxn is None:  # No reaction left, so break out of while loop.
+                break
+            else:
+                mol = current_rxn.RunReactants((mol,))[0][0]
+                mol.UpdatePropertyCache(strict=False)  # Update valences
+
+        # The mols have been altered from the reactions described above, we
+        # need to resanitize them. Make sure aromatic rings are shown as such
+        # This catches all RDKit Errors. without the catchError and
+        # sanitizeOps the Chem.SanitizeMol can crash the program.
+        sanitize_string = Chem.SanitizeMol(
+            mol, sanitizeOps=Chem.rdmolops.SanitizeFlags.SANITIZE_ALL, catchErrors=True
+        )
+        if sanitize_string.name == "SANITIZE_NONE":
+            return Chem.MolToSmiles(mol)
+        else:
+            return None
 
     def _generate_canonical_smiles(
         self, mols: list[Chem.Mol], orig_smi: str
@@ -440,7 +527,6 @@ def protonate_smiles(
     pka_precision: float = 1.0,
     label_states: bool = False,
     max_variants: int = 128,
-    silent: bool = False,
     validate_output: bool = True,
     **kwargs,
 ) -> Generator[str, None, None]:
@@ -453,7 +539,6 @@ def protonate_smiles(
         pka_precision: pKa precision factor
         label_states: Whether to label protonated SMILES with target state
         max_variants: Maximum number of variants per input compound
-        silent: Whether to suppress warning messages
         validate_output: Whether to validate generated SMILES
         **kwargs: Additional arguments for SMILESProcessor
 
@@ -467,7 +552,6 @@ def protonate_smiles(
         pka_precision=pka_precision,
         label_states=label_states,
         max_variants=max_variants,
-        silent=silent,
         validate_output=validate_output,
         **kwargs,
     )
@@ -482,7 +566,6 @@ def protonate_smiles_batch(
     pka_precision: float = 1.0,
     label_states: bool = False,
     max_variants: int = 128,
-    silent: bool = False,
     validate_output: bool = True,
 ) -> dict[str, list[str] | dict[str, int]]:
     """Protonate a batch of SMILES and return results with statistics.
@@ -494,7 +577,6 @@ def protonate_smiles_batch(
         pka_precision: pKa precision factor
         label_states: Whether to label protonated SMILES with target state
         max_variants: Maximum number of variants per input compound
-        silent: Whether to suppress warning messages
         validate_output: Whether to validate generated SMILES
 
     Returns:
@@ -508,7 +590,6 @@ def protonate_smiles_batch(
         pka_precision=pka_precision,
         label_states=label_states,
         max_variants=max_variants,
-        silent=silent,
         validate_output=validate_output,
     )
 
