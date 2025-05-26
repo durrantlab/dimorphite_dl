@@ -14,19 +14,6 @@ from dimorphite_dl.mol import smiles_to_mol
 
 
 @dataclass
-class ProtonationSite:
-    """Data class for protonation site information."""
-
-    atom_idx: int
-    target_state: str
-    site_name: str
-
-    def __post_init__(self):
-        if self.target_state not in {"PROTONATED", "DEPROTONATED", "BOTH"}:
-            raise ValueError(f"Invalid target state: {self.target_state}")
-
-
-@dataclass
 class SubstructureData:
     """Data class for substructure information."""
 
