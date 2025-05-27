@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from dimorphite_dl.protonate.site import ProtonationState
+
 
 @dataclass
 class ProtonationResult:
@@ -7,12 +9,12 @@ class ProtonationResult:
 
     smiles: str
     identifier: str
-    states: str = ""
+    states: ProtonationState | None = None
 
     def to_string(self, include_states: bool = False) -> str:
         """Convert to output string format."""
         if include_states and self.states:
-            return f"{self.smiles}\t{self.identifier}\t{self.states}"
+            return f"{self.smiles}\t{self.identifier}\t{self.states.to_str()}"
         return f"{self.smiles}\t{self.identifier}"
 
 

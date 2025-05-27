@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from dimorphite_dl import enable_logging, substruct
+from dimorphite_dl import enable_logging
 from dimorphite_dl.io import SMILESProcessor
 
 TEST_DIR = os.path.dirname(__file__)

@@ -7,9 +7,11 @@ from loguru import logger
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-from dimorphite_dl import substruct
 from dimorphite_dl.io import SMILESProcessor, SMILESRecord
 from dimorphite_dl.mol import smiles_to_mol
+from dimorphite_dl.protonate import PKaData
+from dimorphite_dl.protonate.detect import ProtonationSiteDetector
+from dimorphite_dl.protonate.substruct import protonate_site
 
 
 @dataclass
@@ -45,10 +47,10 @@ class Protonate:
 
     def __init__(
         self,
-        smiles_input: str | Iterable[str] | Iterator[str] | Path | None = None,
-        min_ph: float = 6.4,
-        max_ph: float = 8.4,
-        pka_precision: float = 1.0,
+        smiles_input: str | Iterable[str] | Iterator[str] | None = None,
+        ph_min: float = 6.4,
+        ph_max: float = 8.4,
+        pka_stdev_prefactor: float = 1.0,
         label_states: bool = False,
         max_variants: int = 128,
         validate_output: bool = True,
@@ -58,35 +60,37 @@ class Protonate:
 
         Args:
             smiles_input: SMILES string, file path, or iterable of SMILES
-            min_ph: Minimum pH to consider (default: 6.4)
-            max_ph: Maximum pH to consider (default: 8.4)
-            pka_precision: pKa precision factor (default: 1.0)
+            ph_min: Minimum pH to consider (default: 6.4)
+            ph_max: Maximum pH to consider (default: 8.4)
+            pka_stdev_prefactor: pKa precision factor (default: 1.0)
             label_states: Whether to label protonated SMILES with target state
             max_variants: Maximum number of variants per input compound
             validate_output: Whether to validate generated SMILES (default: True)
             **smiles_processor_kwargs: Additional arguments for SMILESProcessor
         """
         # Validate input parameters
-        if min_ph > max_ph:
-            raise ValueError(f"min_ph ({min_ph}) must be less than max_ph ({max_ph})")
-        if pka_precision < 0:
-            raise ValueError(f"pka_precision must be positive, got: {pka_precision}")
+        if ph_min > ph_max:
+            raise ValueError(f"ph_min ({ph_min}) must be less than ph_max ({ph_max})")
+        if pka_stdev_prefactor < 0:
+            raise ValueError(
+                f"pka_stdev_prefactor must be positive, got: {pka_stdev_prefactor}"
+            )
         if max_variants <= 0:
             raise ValueError(f"max_variants must be positive, got: {max_variants}")
 
         self.smiles_input = smiles_input
-        self.min_ph = min_ph
-        self.max_ph = max_ph
-        self.pka_precision = pka_precision
+        self.ph_min = ph_min
+        self.ph_max = ph_max
+        self.pka_stdev_prefactor = pka_stdev_prefactor
         self.label_states = label_states
         self.max_variants = max_variants
         self.validate_output = validate_output
 
         logger.info(
-            "Initializing Protonate with pH range {:.1f} to {:.1f}, precision: {:.1f}",
-            min_ph,
-            max_ph,
-            pka_precision,
+            "Initializing with pH range {:.1f} to {:.1f}, precision: {:.1f}",
+            ph_min,
+            ph_max,
+            pka_stdev_prefactor,
         )
 
         self.smiles_processor = SMILESProcessor(**smiles_processor_kwargs)
@@ -95,13 +99,7 @@ class Protonate:
         # Queue to store the protonated SMILES strings for current molecule
         self.cur_prot_results: list[ProtonationResult] = []
 
-        try:
-            self.subs = substruct.load_protonation_substructs_calc_state_for_ph(
-                self.min_ph, self.max_ph, self.pka_precision
-            )
-        except Exception as e:
-            logger.error("Failed to load substructures: {}", str(e))
-            raise
+        self.pka_data = PKaData()
 
         # Initialize the SMILES stream
         self._smiles_stream: Iterator[SMILESRecord] | None = None
@@ -173,65 +171,64 @@ class Protonate:
 
         self.stats.molecules_processed += 1
 
+        if orig_smi is None:
+            return
+
         # Track valid SMILES for fallback purposes
         valid_smiles_history = [orig_smi]
 
         try:
-            # Find protonation sites
-            sites, mol_used_to_idx_sites = substruct.get_prot_sites_and_target_states(
-                orig_smi, self.subs
-            )
+            mol, sites = ProtonationSiteDetector.find(orig_smi)
 
-            if mol_used_to_idx_sites is None:
+            if (mol is None) or (len(sites) == 0):
                 logger.warning("Could not find protonation sites for {}", orig_smi)
                 self._add_fallback_result(orig_smi, identifier)
                 return
 
-            new_mols = [mol_used_to_idx_sites]
+            self.stats.molecules_with_sites += 1
+            new_mols = [mol]
 
-            if sites:
-                self.stats.molecules_with_sites += 1
+            # Process each protonation site
+            for i, site in enumerate(sites):
+                try:
+                    new_mols = protonate_site(
+                        new_mols,
+                        site,
+                        self.ph_min,
+                        self.ph_max,
+                        self.pka_stdev_prefactor,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Error processing site {} for '{}': {}", i + 1, orig_smi, str(e)
+                    )
+                    continue
 
-                # Process each protonation site
-                for i, site in enumerate(sites):
-                    try:
-                        new_mols = substruct.protonate_site(new_mols, site)
+                # Limit variants if necessary
+                if len(new_mols) > self.max_variants:
+                    new_mols = new_mols[: self.max_variants]
+                    logger.warning(
+                        "Limited variants to {} for '{}' at site {}",
+                        self.max_variants,
+                        orig_smi,
+                        i + 1,
+                    )
 
-                        # Limit variants if necessary
-                        if len(new_mols) > self.max_variants:
-                            new_mols = new_mols[: self.max_variants]
-                            logger.warning(
-                                "Limited variants to {} for '{}' at site {}",
-                                self.max_variants,
-                                orig_smi,
-                                i + 1,
-                            )
+                # Add valid SMILES to history for potential fallback
+                try:
+                    valid_smiles_history.extend(
+                        [Chem.MolToSmiles(m) for m in new_mols if m is not None]
+                    )
+                except Exception as e:
+                    logger.debug("Error generating SMILES for history: {}", str(e))
 
-                        # Add valid SMILES to history for potential fallback
-                        try:
-                            valid_smiles_history.extend(
-                                [Chem.MolToSmiles(m) for m in new_mols if m is not None]
-                            )
-                        except Exception as e:
-                            logger.debug(
-                                "Error generating SMILES for history: {}", str(e)
-                            )
-
-                    except Exception as e:
-                        logger.warning(
-                            "Error processing site {} for '{}': {}",
-                            i + 1,
-                            orig_smi,
-                            str(e),
-                        )
-                        continue
             else:
                 logger.debug("No protonation sites found for '{}'", orig_smi)
                 self.stats.molecules_without_sites += 1
 
                 # Remove hydrogens since protonate_site was never called
                 try:
-                    mol_used_to_idx_sites = Chem.RemoveHs(mol_used_to_idx_sites)
+                    mol_used_to_idx_sites = Chem.RemoveHs(mol)
                     if mol_used_to_idx_sites is not None:
                         new_mols = [mol_used_to_idx_sites]
                         valid_smiles_history.append(
@@ -432,10 +429,7 @@ class Protonate:
         return [valid_history[0]] if valid_history else []
 
     def _create_protonation_results(
-        self,
-        smiles_list: list[str],
-        identifier: str,
-        sites: list[substruct.ProtonationSite],
+        self, smiles_list: list[str], identifier: str, sites: list[int]
     ) -> None:
         """Create ProtonationResult objects from SMILES list."""
         if not smiles_list:
@@ -510,7 +504,9 @@ class Protonate:
         return {
             "processor": processor_stats,
             "protonation": protonation_stats,
-            "total_substructures_loaded": len(self.subs) if self.subs else 0,
+            "total_substructures_loaded": len(self.pka_data._data)
+            if self.pka_data
+            else 0,
         }
 
     def reset_stats(self) -> None:
@@ -522,9 +518,9 @@ class Protonate:
 # Convenience functions for backward compatibility and ease of use
 def protonate_smiles(
     smiles_input: str | Iterable[str] | Iterator[str] | Path,
-    min_ph: float = 6.4,
-    max_ph: float = 8.4,
-    pka_precision: float = 1.0,
+    ph_min: float = 6.4,
+    ph_max: float = 8.4,
+    pka_stdev_prefactor: float = 1.0,
     label_states: bool = False,
     max_variants: int = 128,
     validate_output: bool = True,
@@ -534,9 +530,9 @@ def protonate_smiles(
 
     Args:
         smiles_input: SMILES string, file path, or iterable of SMILES
-        min_ph: Minimum pH to consider
-        max_ph: Maximum pH to consider
-        pka_precision: pKa precision factor
+        ph_min: Minimum pH to consider
+        ph_max: Maximum pH to consider
+        pka_stdev_prefactor: pKa precision factor
         label_states: Whether to label protonated SMILES with target state
         max_variants: Maximum number of variants per input compound
         validate_output: Whether to validate generated SMILES
@@ -547,9 +543,9 @@ def protonate_smiles(
     """
     protonator = Protonate(
         smiles_input=smiles_input,
-        min_ph=min_ph,
-        max_ph=max_ph,
-        pka_precision=pka_precision,
+        ph_min=ph_min,
+        ph_max=ph_max,
+        pka_stdev_prefactor=pka_stdev_prefactor,
         label_states=label_states,
         max_variants=max_variants,
         validate_output=validate_output,
@@ -561,9 +557,9 @@ def protonate_smiles(
 
 def protonate_smiles_batch(
     smiles_list: list[str],
-    min_ph: float = 6.4,
-    max_ph: float = 8.4,
-    pka_precision: float = 1.0,
+    ph_min: float = 6.4,
+    ph_max: float = 8.4,
+    pka_stdev_prefactor: float = 1.0,
     label_states: bool = False,
     max_variants: int = 128,
     validate_output: bool = True,
@@ -572,9 +568,9 @@ def protonate_smiles_batch(
 
     Args:
         smiles_list: List of SMILES strings to protonate
-        min_ph: Minimum pH to consider
-        max_ph: Maximum pH to consider
-        pka_precision: pKa precision factor
+        ph_min: Minimum pH to consider
+        ph_max: Maximum pH to consider
+        pka_stdev_prefactor: pKa precision factor
         label_states: Whether to label protonated SMILES with target state
         max_variants: Maximum number of variants per input compound
         validate_output: Whether to validate generated SMILES
@@ -585,9 +581,9 @@ def protonate_smiles_batch(
     results = []
     protonator = Protonate(
         smiles_input=smiles_list,
-        min_ph=min_ph,
-        max_ph=max_ph,
-        pka_precision=pka_precision,
+        ph_min=ph_min,
+        ph_max=ph_max,
+        pka_stdev_prefactor=pka_stdev_prefactor,
         label_states=label_states,
         max_variants=max_variants,
         validate_output=validate_output,
