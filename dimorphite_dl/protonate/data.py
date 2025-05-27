@@ -1,66 +1,12 @@
 from typing import Generator
 
-import copy
 import importlib.resources as pkg_resources
-from dataclasses import dataclass, field
 
 from loguru import logger
 from rdkit import Chem
-from rdkit.Chem import Mol
 
 from dimorphite_dl import data  # type: ignore
-from dimorphite_dl.protonate.site import ProtonationState
-
-
-class PKaDatum:
-    def __init__(self, site, mean, stdev):
-        self.site = site
-        self.mean = mean
-        self.stdev = stdev
-
-    def get_state(
-        self, ph_min: float, ph_max: float, pka_stdev_prefactor: float
-    ) -> ProtonationState:
-        """Computes the protonation state at this pH."""
-
-        assert isinstance(ph_min, float)
-        assert isinstance(ph_max, float)
-        assert isinstance(pka_stdev_prefactor, float)
-
-        stdev = pka_stdev_prefactor * self.stdev
-
-        pka_min = self.mean - stdev
-        pka_max = self.mean + stdev
-
-        # This needs to be reassigned, and 'ERROR' should never make it past
-        # the next set of checks.
-        if (pka_min <= ph_max) and (ph_min <= pka_max):
-            protonation_state = ProtonationState.BOTH
-        elif self.mean > ph_max:
-            protonation_state = ProtonationState.PROTONATED
-        elif self.mean < ph_min:
-            protonation_state = ProtonationState.DEPROTONATED
-        else:
-            protonation_state = ProtonationState.UNKNOWN
-        return protonation_state
-
-
-@dataclass
-class SubstructureDatum:
-    """Data class for protonation site data from database."""
-
-    name: str = ""
-    """Name of the substructure"""
-    smarts: str = ""
-    """SMARTS pattern for substructure"""
-    mol: Mol | None = None
-    """RDKit Mol of substructure"""
-    pkas: list[PKaDatum] = field(default_factory=list)
-    """pKa data observed from the dataset and possibly computed states"""
-
-    def at_ph(self, ph_min: float, ph_max: float, pka_stdev_prefactor: float) -> None:
-        for pka in self.pkas:
-            pka.at_ph(ph_min, ph_max, pka_stdev_prefactor)
+from dimorphite_dl.protonate.site import SubstructureDatum, PKaDatum
 
 
 class PKaData:
@@ -131,9 +77,6 @@ class PKaData:
 
         Args:
             line: Line from the substructure file
-            min_ph: Minimum pH
-            max_ph: Maximum pH
-            pka_stdev_prefactor: pKa standard range multiplier
 
         Returns:
             SubstructureData object.

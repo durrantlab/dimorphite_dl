@@ -8,7 +8,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 
 from dimorphite_dl.io import SMILESProcessor, SMILESRecord
-from dimorphite_dl.mol import smiles_to_mol
+from dimorphite_dl.mol import MoleculeRecord
 from dimorphite_dl.protonate import PKaData
 from dimorphite_dl.protonate.detect import ProtonationSiteDetector
 from dimorphite_dl.protonate.substruct import protonate_site
@@ -50,7 +50,7 @@ class Protonate:
         smiles_input: str | Iterable[str] | Iterator[str] | None = None,
         ph_min: float = 6.4,
         ph_max: float = 8.4,
-        pka_stdev_prefactor: float = 1.0,
+        precision: float = 1.0,
         label_states: bool = False,
         max_variants: int = 128,
         validate_output: bool = True,
@@ -62,7 +62,7 @@ class Protonate:
             smiles_input: SMILES string, file path, or iterable of SMILES
             ph_min: Minimum pH to consider (default: 6.4)
             ph_max: Maximum pH to consider (default: 8.4)
-            pka_stdev_prefactor: pKa precision factor (default: 1.0)
+            precision: pKa precision factor (default: 1.0)
             label_states: Whether to label protonated SMILES with target state
             max_variants: Maximum number of variants per input compound
             validate_output: Whether to validate generated SMILES (default: True)
@@ -71,17 +71,15 @@ class Protonate:
         # Validate input parameters
         if ph_min > ph_max:
             raise ValueError(f"ph_min ({ph_min}) must be less than ph_max ({ph_max})")
-        if pka_stdev_prefactor < 0:
-            raise ValueError(
-                f"pka_stdev_prefactor must be positive, got: {pka_stdev_prefactor}"
-            )
+        if precision < 0:
+            raise ValueError(f"precision must be positive, got: {precision}")
         if max_variants <= 0:
             raise ValueError(f"max_variants must be positive, got: {max_variants}")
 
         self.smiles_input = smiles_input
         self.ph_min = ph_min
         self.ph_max = ph_max
-        self.pka_stdev_prefactor = pka_stdev_prefactor
+        self.precision = precision
         self.label_states = label_states
         self.max_variants = max_variants
         self.validate_output = validate_output
@@ -90,7 +88,7 @@ class Protonate:
             "Initializing with pH range {:.1f} to {:.1f}, precision: {:.1f}",
             ph_min,
             ph_max,
-            pka_stdev_prefactor,
+            precision,
         )
 
         self.smiles_processor = SMILESProcessor(**smiles_processor_kwargs)
@@ -164,8 +162,7 @@ class Protonate:
         Args:
             smiles_record: SMILESRecord object containing SMILES and metadata
         """
-        orig_smi = smiles_record.smiles
-        identifier = smiles_record.identifier or ""
+        mol_record = MoleculeRecord(smiles_record.smiles, smiles_record.identifier)
 
         orig_smi = self._neutralize_smiles(orig_smi)
 
@@ -192,11 +189,7 @@ class Protonate:
             for i, site in enumerate(sites):
                 try:
                     new_mols = protonate_site(
-                        new_mols,
-                        site,
-                        self.ph_min,
-                        self.ph_max,
-                        self.pka_stdev_prefactor,
+                        new_mols, site, self.ph_min, self.ph_max, self.precision
                     )
                 except Exception as e:
                     logger.warning(
@@ -355,7 +348,9 @@ class Protonate:
             mol, sanitizeOps=Chem.rdmolops.SanitizeFlags.SANITIZE_ALL, catchErrors=True
         )
         if sanitize_string.name == "SANITIZE_NONE":
-            return Chem.MolToSmiles(mol)
+            smiles_done = Chem.MolToSmiles(mol)
+            logger.debug("Smiles after neutralization: {}", smiles_done)
+            return smiles_done
         else:
             return None
 
@@ -520,7 +515,7 @@ def protonate_smiles(
     smiles_input: str | Iterable[str] | Iterator[str] | Path,
     ph_min: float = 6.4,
     ph_max: float = 8.4,
-    pka_stdev_prefactor: float = 1.0,
+    precision: float = 1.0,
     label_states: bool = False,
     max_variants: int = 128,
     validate_output: bool = True,
@@ -532,7 +527,7 @@ def protonate_smiles(
         smiles_input: SMILES string, file path, or iterable of SMILES
         ph_min: Minimum pH to consider
         ph_max: Maximum pH to consider
-        pka_stdev_prefactor: pKa precision factor
+        precision: pKa precision factor
         label_states: Whether to label protonated SMILES with target state
         max_variants: Maximum number of variants per input compound
         validate_output: Whether to validate generated SMILES
@@ -545,7 +540,7 @@ def protonate_smiles(
         smiles_input=smiles_input,
         ph_min=ph_min,
         ph_max=ph_max,
-        pka_stdev_prefactor=pka_stdev_prefactor,
+        precision=precision,
         label_states=label_states,
         max_variants=max_variants,
         validate_output=validate_output,
@@ -559,7 +554,7 @@ def protonate_smiles_batch(
     smiles_list: list[str],
     ph_min: float = 6.4,
     ph_max: float = 8.4,
-    pka_stdev_prefactor: float = 1.0,
+    precision: float = 1.0,
     label_states: bool = False,
     max_variants: int = 128,
     validate_output: bool = True,
@@ -570,7 +565,7 @@ def protonate_smiles_batch(
         smiles_list: List of SMILES strings to protonate
         ph_min: Minimum pH to consider
         ph_max: Maximum pH to consider
-        pka_stdev_prefactor: pKa precision factor
+        precision: pKa precision factor
         label_states: Whether to label protonated SMILES with target state
         max_variants: Maximum number of variants per input compound
         validate_output: Whether to validate generated SMILES
@@ -583,7 +578,7 @@ def protonate_smiles_batch(
         smiles_input=smiles_list,
         ph_min=ph_min,
         ph_max=ph_max,
-        pka_stdev_prefactor=pka_stdev_prefactor,
+        precision=precision,
         label_states=label_states,
         max_variants=max_variants,
         validate_output=validate_output,

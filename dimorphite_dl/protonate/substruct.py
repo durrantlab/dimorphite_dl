@@ -8,7 +8,7 @@ from dimorphite_dl.protonate.site import ProtonationSite
 
 
 def protonate_site(
-    mols: list[Mol], site: ProtonationSite, ph_min, ph_max, pka_stdev_prefactor
+    mols: list[Mol], site: ProtonationSite, ph_min, ph_max, precision
 ) -> list[Mol]:
     """Protonate a specific site in a list of molecules.
 
@@ -25,7 +25,7 @@ def protonate_site(
 
     logger.debug("Protonating site {} ({})", site.idx_atom, site.substructure.name)
 
-    for state in site.get_states(ph_min, ph_max, pka_stdev_prefactor):
+    for state in site.get_states(ph_min, ph_max, precision):
         try:
             output_mols = set_protonation_charge(
                 mols, site.idx_atom, state.get_charges(), site.substructure.name

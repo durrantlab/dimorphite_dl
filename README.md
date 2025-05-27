@@ -47,8 +47,8 @@ pip install https://github.com/durrantlab/dimorphite_dl.git
 ## Usage
 
 ```
-usage: dimorphite_dl [-h] [--min_ph MIN] [--max_ph MAX]
-                        [--pka_precision PRE] [--smiles SMI]
+usage: dimorphite_dl [-h] [--ph_min MIN] [--ph_max MAX]
+                        [--precision PRE] [--smiles SMI]
                         [--smiles_file FILE] [--output_file FILE]
                         [--label_states] [--test]
 
@@ -57,9 +57,9 @@ Apache 2.0 License. Copyright 2020 Jacob D. Durrant.
 
 optional arguments:
   -h, --help           show this help message and exit
-  --min_ph MIN         minimum pH to consider (default: 6.4)
-  --max_ph MAX         maximum pH to consider (default: 8.4)
-  --pka_precision PRE  pKa precision factor (number of standard devations,
+  --ph_min MIN         minimum pH to consider (default: 6.4)
+  --ph_max MAX         maximum pH to consider (default: 8.4)
+  --precision PRE  pKa precision factor (number of standard devations,
                        default: 1.0)
   --smiles SMI         SMILES string to protonate
   --smiles_file FILE   file that contains SMILES strings to protonate
@@ -75,9 +75,9 @@ The default pH range is 6.4 to 8.4, considered biologically relevant pH.
 
 ```bash
 dimorphite_dl --smiles_file sample_molecules.smi
-dimorphite_dl --smiles "CCC(=O)O" --min_ph -3.0 --max_ph -2.0
-dimorphite_dl --smiles "CCCN" --min_ph -3.0 --max_ph -2.0 --output_file output.smi
-dimorphite_dl --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states
+dimorphite_dl --smiles "CCC(=O)O" --ph_min -3.0 --ph_max -2.0
+dimorphite_dl --smiles "CCCN" --ph_min -3.0 --ph_max -2.0 --output_file output.smi
+dimorphite_dl --smiles_file sample_molecules.smi --precision 2.0 --label_states
 dimorphite_dl --test
 ```
 
@@ -94,8 +94,8 @@ import dimorphite_dl
 # you would from the command line. Here's an example:
 dimorphite_dl.cli.run(
    smiles="CCCN",
-   min_ph=-3.0,
-   max_ph=-2.0,
+   ph_min=-3.0,
+   ph_max=-2.0,
    output_file="output.smi"
 )
 print("Output of first test saved to output.smi...")
@@ -109,8 +109,8 @@ for i, mol in enumerate(mols):
 
 protonated_mols = dimorphite_dl.cli.run_with_mol_list(
     mols,
-    min_ph=5.0,
-    max_ph=9.0,
+    ph_min=5.0,
+    ph_max=9.0,
 )
 print([Chem.MolToSmiles(m) for m in protonated_mols])
 

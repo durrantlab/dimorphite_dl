@@ -4,13 +4,14 @@ import pytest
 
 from dimorphite_dl import enable_logging
 from dimorphite_dl.io import SMILESProcessor
+from dimorphite_dl.protonate import PKaData
 
 TEST_DIR = os.path.dirname(__file__)
 
 
 @pytest.fixture(scope="session", autouse=True)
 def turn_on_logging():
-    enable_logging(10)
+    enable_logging(0)
 
 
 # Pytest fixtures for reusable test data
@@ -37,7 +38,7 @@ def processor_no_validation():
 
 @pytest.fixture
 def kwargs_default():
-    return {"pka_precision": 0.5, "label_states": True}
+    return {"precision": 0.5, "label_states": True}
 
 
 @pytest.fixture
@@ -110,25 +111,3 @@ def smiles_phosphates():
         ],
     ]
     return smis_phos
-
-
-@pytest.fixture
-def average_pkas_groups(smiles_phosphates):
-    cats_with_two_prot_sites = [inf[4] for inf in smiles_phosphates]
-    average_pkas = {
-        l.split()[0].replace("*", ""): float(l.split()[3])
-        for l in substruct.load_substructure_smarts_file()
-        if l.split()[0] not in cats_with_two_prot_sites
-    }
-    return average_pkas
-
-
-@pytest.fixture
-def average_pkas_phosphates(smiles_phosphates):
-    cats_with_two_prot_sites = [inf[4] for inf in smiles_phosphates]
-    average_pkas_phos = {
-        l.split()[0].replace("*", ""): [float(l.split()[3]), float(l.split()[6])]
-        for l in substruct.load_substructure_smarts_file()
-        if l.split()[0] in cats_with_two_prot_sites
-    }
-    return average_pkas_phos

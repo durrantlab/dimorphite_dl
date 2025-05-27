@@ -10,38 +10,38 @@ def run_cli() -> None:
     """The main definition run when you call the script from the commandline."""
     parser = argparse.ArgumentParser(description=f"dimorphite_dl v{__version__}")
     parser.add_argument(
-        "--min_ph",
+        "--ph_min",
         metavar="MIN",
         type=float,
         default=6.4,
-        help="minimum pH to consider (default: 6.4)",
+        help="Minimum pH to consider (default: 6.4)",
     )
     parser.add_argument(
-        "--max_ph",
+        "--ph_max",
         metavar="MAX",
         type=float,
         default=8.4,
-        help="maximum pH to consider (default: 8.4)",
+        help="Maximum pH to consider",
     )
     parser.add_argument(
-        "--pka_precision",
+        "--precision",
         metavar="PRE",
         type=float,
         default=1.0,
-        help="pKa precision factor (number of standard devations, default: 1.0)",
+        help="pKa precision factor (i.e., number of standard devations)",
     )
     parser.add_argument(
         "--output_file",
         metavar="FILE",
         type=str,
-        help="output file to write protonated SMILES (optional)",
+        help="Output file to write protonated SMILES (optional)",
     )
     parser.add_argument(
         "--max_variants",
         metavar="MXV",
         type=int,
         default=128,
-        help="limit number of variants per input compound (default: 128)",
+        help="Limit number of variants per input compound (default: 128)",
     )
     parser.add_argument(
         "--label_states",
@@ -64,9 +64,9 @@ def run_cli() -> None:
 
     for smiles_protonated in protonate_smiles(
         smiles_input=args.smiles,
-        min_ph=args.min_ph,
-        max_ph=args.max_ph,
-        pka_precision=args.pka_precision,
+        ph_min=args.ph_min,
+        ph_max=args.ph_max,
+        precision=args.precision,
         label_states=args.label_states,
         max_variants=args.max_variants,
     ):

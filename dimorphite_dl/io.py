@@ -11,7 +11,7 @@ import gzip
 import os
 import pathlib
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from loguru import logger
 from rdkit.Chem.MolStandardize import rdMolStandardize
@@ -22,13 +22,9 @@ class SMILESRecord:
     """Container for a SMILES string with metadata."""
 
     smiles: str
-    identifier: str | None = None
+    identifier: str = ""
     source_line: int | None = None
-    metadata: dict[str, Any] | None = None
-
-    def __post_init__(self):
-        if self.metadata is None:
-            self.metadata = {}
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class SMILESValidationError(Exception):
@@ -168,7 +164,7 @@ class SMILESProcessor:
                 if len(line_split) == 2:
                     identifier = line_split[1]
                 else:
-                    identifier = None
+                    identifier = ""
                 record = self._create_record(smiles, identifier, source_line=line_num)
                 if record:
                     yield record
@@ -217,7 +213,7 @@ class SMILESProcessor:
                 # Handle multi-column format (SMILES ID)
                 parts = line.split()
                 smiles = parts[0]
-                identifier = parts[1] if len(parts) > 1 else None
+                identifier = parts[1] if len(parts) > 1 else ""
 
                 record = self._create_record(
                     smiles, identifier=identifier, source_line=line_num
@@ -228,7 +224,7 @@ class SMILESProcessor:
     def _create_record(
         self,
         smiles: str,
-        identifier: str | None = None,
+        identifier: str = "",
         source_line: int | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> SMILESRecord | None:

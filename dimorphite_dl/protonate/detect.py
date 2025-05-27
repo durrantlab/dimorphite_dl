@@ -17,6 +17,7 @@ from dimorphite_dl.protonate.site import ProtonationSite
 class ProtonationSiteDetector:
     @classmethod
     def find(cls, smiles: str) -> tuple[Chem.Mol | None, list[ProtonationSite]]:
+        logger.debug("Finding protonation substructures for {}", smiles)
         mol = cls._prep_mol(smiles)
         if mol is None:
             logger.warning("RDKit Mol conversion failed for {}", smiles)
@@ -28,7 +29,7 @@ class ProtonationSiteDetector:
     def _get_mol(cls, smiles: str) -> Chem.Mol | None:
         logger.debug("Processing {}", smiles)
         mol = smiles_to_mol(smiles)
-        mol = cls._add_hs(mol)
+        return mol
 
     @staticmethod
     def _add_hs(mol: Chem.Mol) -> Chem.Mol | None:

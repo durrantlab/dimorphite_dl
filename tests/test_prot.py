@@ -23,7 +23,7 @@ def check_tests(smiles, kwargs, expected_output, labels):
             + " should have "
             + str(num_states)
             + " states at at pH "
-            + str(kwargs["min_ph"])
+            + str(kwargs["ph_min"])
             + ": "
             + str(output)
         )
@@ -35,9 +35,9 @@ def check_tests(smiles, kwargs, expected_output, labels):
             + " is not "
             + " AND ".join(expected_output)
             + " at pH "
-            + str(kwargs["min_ph"])
+            + str(kwargs["ph_min"])
             + " to "
-            + str(kwargs["max_ph"])
+            + str(kwargs["ph_max"])
             + "; it is "
             + " AND ".join([l[0] for l in output])
         )
@@ -53,7 +53,7 @@ def check_tests(smiles, kwargs, expected_output, labels):
         )
         raise Exception(msg)
 
-    ph_range = sorted(list(set([kwargs["min_ph"], kwargs["max_ph"]])))
+    ph_range = sorted(list(set([kwargs["ph_min"], kwargs["ph_max"]])))
     ph_range_str = "(" + " - ".join("{0:.2f}".format(n) for n in ph_range) + ")"
     print(
         "(CORRECT) "
@@ -67,8 +67,8 @@ def check_tests(smiles, kwargs, expected_output, labels):
 
 def test_very_acidic(kwargs_default, smiles_groups, smiles_phosphates):
     kwargs = kwargs_default
-    kwargs["min_ph"] = -10000000
-    kwargs["max_ph"] = -10000000
+    kwargs["ph_min"] = -10000000
+    kwargs["ph_max"] = -10000000
 
     for smi, protonated, deprotonated, category in smiles_groups:
         check_tests(smi, kwargs, [protonated], ["PROTONATED"])
@@ -80,8 +80,8 @@ def test_very_acidic(kwargs_default, smiles_groups, smiles_phosphates):
 
 def test_very_basic(kwargs_default, smiles_groups, smiles_phosphates):
     kwargs = kwargs_default
-    kwargs["min_ph"] = 10000000
-    kwargs["max_ph"] = 10000000
+    kwargs["ph_min"] = 10000000
+    kwargs["ph_max"] = 10000000
 
     for smi, protonated, deprotonated, category in smiles_groups:
         check_tests(smi, kwargs, [deprotonated], ["DEPROTONATED"])
@@ -102,30 +102,30 @@ def test_avg_pka(
     for smi, protonated, deprotonated, category in smiles_groups:
         avg_pka = average_pkas_groups[category]
 
-        kwargs["min_ph"] = avg_pka
-        kwargs["max_ph"] = avg_pka
+        kwargs["ph_min"] = avg_pka
+        kwargs["ph_max"] = avg_pka
 
         check_tests(smi, kwargs, [protonated, deprotonated], ["BOTH"])
 
     for smi, protonated, mix, deprotonated, category in smiles_phosphates:
         avg_pka = average_pkas_phosphates[category][0]
-        kwargs["min_ph"] = avg_pka
-        kwargs["max_ph"] = avg_pka
+        kwargs["ph_min"] = avg_pka
+        kwargs["ph_max"] = avg_pka
 
         check_tests(smi, kwargs, [mix, protonated], ["BOTH"])
 
         avg_pka = average_pkas_phosphates[category][1]
-        kwargs["min_ph"] = avg_pka
-        kwargs["max_ph"] = avg_pka
+        kwargs["ph_min"] = avg_pka
+        kwargs["ph_max"] = avg_pka
 
         check_tests(smi, kwargs, [mix, deprotonated], ["DEPROTONATED", "DEPROTONATED"])
 
         avg_pka = 0.5 * (
             average_pkas_phosphates[category][0] + average_pkas_phosphates[category][1]
         )
-        kwargs["min_ph"] = avg_pka
-        kwargs["max_ph"] = avg_pka
-        kwargs["pka_precision"] = 5  # Should give all three
+        kwargs["ph_min"] = avg_pka
+        kwargs["ph_max"] = avg_pka
+        kwargs["precision"] = 5  # Should give all three
 
         check_tests(smi, kwargs, [mix, deprotonated, protonated], ["BOTH", "BOTH"])
 
@@ -198,9 +198,7 @@ def test_atp_nad():
         smi = str(example[0])
         for ph, expected_output in example[1:]:
             ph = float(ph)
-            output = list(
-                protonate_smiles(smi, min_ph=ph, max_ph=ph, pka_precision=0.0)
-            )
+            output = list(protonate_smiles(smi, ph_min=ph, ph_max=ph, precision=0.0))
             if output[0].strip() == expected_output:
                 print(
                     "(CORRECT) "
