@@ -140,10 +140,10 @@ class PKaData:
         pka_data = []
         for i in range(0, len(line_parts), 3):
             try:
-                site = int(line_parts[i])
+                idx_site = int(line_parts[i])
                 mean = float(line_parts[i + 1])
                 stdev = float(line_parts[i + 2])
-                pka_data.append(PKaDatum(site=site, mean=mean, stdev=stdev))
+                pka_data.append(PKaDatum(idx_site=idx_site, mean=mean, stdev=stdev))
             except (ValueError, IndexError) as e:
                 logger.warning("Error parsing pKa data: {}", line_parts)
                 raise ValueError from e

@@ -82,20 +82,22 @@ class ProtonationSiteDetector:
                 return mol_record, []
 
             mol_record.mol = prepared_mol
-            protonation_sites = self._detect_all_sites_in_molecule(prepared_mol)
+            gen_sites = self._detect_all_sites_in_molecule(prepared_mol)
 
-            if self.validate_sites:
-                protonation_sites = self._validate_detected_sites(
-                    protonation_sites, mol_record
-                )
+            sites_found = []
+            for site in gen_sites:
+                if self.validate_sites:
+                    if not site.is_valid():
+                        continue
+                sites_found.append(site)
 
-            sites_count = len(protonation_sites)
+            sites_count = len(sites_found)
             self._stats_sites_found += sites_count
 
             logger.info(
                 "Found {} protonation site(s) for '{}'", sites_count, mol_record.smiles
             )
-            return mol_record, protonation_sites
+            return mol_record, sites_found
 
         except Exception as error:
             logger.error(
@@ -105,21 +107,24 @@ class ProtonationSiteDetector:
             )
             raise ProtonationSiteDetectionError(f"Detection failed: {error}") from error
 
-    def _detect_all_sites_in_molecule(self, mol: Chem.Mol) -> list[ProtonationSite]:
+    def _detect_all_sites_in_molecule(
+        self, mol: Chem.Mol
+    ) -> Generator[ProtonationSite]:
         """
         Detect all protonation sites in the prepared molecule.
 
         Args:
             mol: Prepared RDKit mol object
 
-        Returns:
-            List of detected protonation sites
+        Yields:
+            Detected protonation sites.
         """
         assert mol is not None
         assert mol.GetNumAtoms() > 0
 
         protonation_sites = []
         total_matches_found = 0
+        n_sites = 0
 
         for substructure_data in self._iterate_available_substructures():
             if substructure_data.mol is None:
@@ -132,38 +137,29 @@ class ProtonationSiteDetector:
                 mol, substructure_data
             )
 
-            if len(matches) == 0:
+            n_matches = len(matches)
+            if n_matches == 0:
                 continue
 
-            match_count = len(matches)
-            total_matches_found += match_count
+            total_matches_found += n_matches
             self._stats_substructures_matched += 1
 
             logger.debug(
                 "Found {} match(es) for substructure '{}'",
-                match_count,
+                n_matches,
                 substructure_data.name,
             )
 
-            sites_created = self._create_sites_from_matches(
-                matches, substructure_data, protonation_sites
-            )
-            if sites_created == 0:
-                break  # Hit the limit, stop processing
+            for site in self._create_sites_from_matches(
+                mol, matches, substructure_data
+            ):
+                n_sites += 1
+                if n_sites >= self.max_sites_per_molecule:
+                    break
 
-            mol = self._protect_matched_atoms_in_molecule(mol, matches)
+                mol = self._protect_matched_atoms_in_molecule(mol, matches)
 
-            if len(protonation_sites) >= self.max_sites_per_molecule:
-                break
-
-        logger.debug(
-            "Total matches found: {}, sites created: {}",
-            total_matches_found,
-            len(protonation_sites),
-        )
-        assert len(protonation_sites) <= self.max_sites_per_molecule
-
-        return protonation_sites
+                yield site
 
     def _iterate_available_substructures(
         self,
@@ -305,46 +301,33 @@ class ProtonationSiteDetector:
 
     def _create_sites_from_matches(
         self,
+        mol: Chem.Mol,
         matches: list[tuple[int, ...]],
         substructure_data: SubstructureDatum,
-        existing_sites: list[ProtonationSite],
-    ) -> int:
+    ) -> Generator[ProtonationSite]:
         """
         Create ProtonationSite objects from matches.
 
         Args:
+            mol: RDKit mol object used to detect this protonation site.
             matches: List of atom index tuples
             substructure_data: Substructure information
-            existing_sites: Current list of sites (modified in place)
 
-        Returns:
-            Number of sites actually created (may be limited by max_sites)
+        Yields:
+            Detected protonation sites.
         """
         assert isinstance(matches, list)
         assert isinstance(substructure_data, SubstructureDatum)
-        assert isinstance(existing_sites, list)
-
-        sites_created = 0
 
         for match_indices in matches:
-            current_site_count = len(existing_sites)
-            if current_site_count >= self.max_sites_per_molecule:
-                logger.warning(
-                    "Reached maximum sites limit ({}) for molecule",
-                    self.max_sites_per_molecule,
-                )
-                break
-
             site = ProtonationSite(
-                idx_atom=match_indices, substructure=copy.deepcopy(substructure_data)
+                mol=mol,
+                idxs_match=tuple(match_indices),
+                pkas=substructure_data.pkas,
+                smarts=substructure_data.smarts,
+                name=substructure_data.name,
             )
-            existing_sites.append(site)
-            sites_created += 1
-
-        assert sites_created <= len(matches)
-        assert len(existing_sites) <= self.max_sites_per_molecule
-
-        return sites_created
+            yield site
 
     def _protect_matched_atoms_in_molecule(
         self, mol: Chem.Mol, matches: list[tuple[int, ...]]
@@ -368,144 +351,6 @@ class ProtonationSiteDetector:
             mol = MoleculeRecord.protect_atoms(mol, atom_indices)
 
         return mol
-
-    def _validate_detected_sites(
-        self, sites: list[ProtonationSite], mol_record: MoleculeRecord
-    ) -> list[ProtonationSite]:
-        """
-        Validate all detected protonation sites.
-
-        Args:
-            sites: List of protonation sites to validate
-            mol_record: Original molecule record for context
-
-        Returns:
-            List of validated protonation sites
-        """
-        assert isinstance(sites, list)
-        assert isinstance(mol_record, MoleculeRecord)
-
-        if len(sites) == 0:
-            return sites
-
-        logger.debug("Validating {} protonation sites", len(sites))
-        validated_sites = []
-
-        for site_index, site in enumerate(sites):
-            assert isinstance(site, ProtonationSite)
-
-            try:
-                if self._is_single_site_valid(site, mol_record):
-                    validated_sites.append(site)
-                    self._stats_sites_validated += 1
-                else:
-                    self._stats_sites_rejected += 1
-                    logger.debug(
-                        "Rejected site {} due to validation failure", site_index
-                    )
-
-            except Exception as error:
-                logger.warning("Error validating site {}: {}", site_index, str(error))
-                self._stats_sites_rejected += 1
-
-        validated_count = len(validated_sites)
-        original_count = len(sites)
-        logger.debug("Validated {}/{} sites", validated_count, original_count)
-
-        assert validated_count <= original_count
-        return validated_sites
-
-    def _is_single_site_valid(
-        self, site: ProtonationSite, mol_record: MoleculeRecord
-    ) -> bool:
-        """
-        Validate a single protonation site.
-
-        Args:
-            site: ProtonationSite to validate
-            mol_record: Original molecule record for bounds checking
-
-        Returns:
-            True if site is valid, False otherwise
-        """
-        assert isinstance(site, ProtonationSite)
-        assert isinstance(mol_record, MoleculeRecord)
-
-        mol = mol_record.mol
-        if mol is None:
-            logger.debug("Site validation failed: no mol object")
-            return False
-
-        if not self._are_atom_indices_valid_for_molecule(site.idx_atom, mol):
-            return False
-
-        if not self._is_substructure_data_valid(site.substructure):
-            return False
-
-        return True
-
-    def _are_atom_indices_valid_for_molecule(self, idx_atom, mol: Chem.Mol) -> bool:
-        """
-        Check if atom indices are valid for the molecule.
-
-        Args:
-            idx_atom: Single index or tuple of indices
-            mol: RDKit mol object for bounds checking
-
-        Returns:
-            True if all indices are valid, False otherwise
-        """
-        assert mol is not None
-
-        atom_count = mol.GetNumAtoms()
-        assert atom_count > 0
-
-        # Handle both single atom index and tuple of indices
-        if isinstance(idx_atom, (list, tuple)):
-            indices_to_check = idx_atom
-        else:
-            indices_to_check = [idx_atom]
-
-        for atom_index in indices_to_check:
-            if not isinstance(atom_index, int):
-                logger.debug("Invalid atom index type: {}", type(atom_index))
-                return False
-            if atom_index < 0:
-                logger.debug("Negative atom index: {}", atom_index)
-                return False
-            if atom_index >= atom_count:
-                logger.debug(
-                    "Atom index {} out of range (molecule has {} atoms)",
-                    atom_index,
-                    atom_count,
-                )
-                return False
-
-        return True
-
-    def _is_substructure_data_valid(self, substructure: SubstructureDatum) -> bool:
-        """
-        Check if substructure data is valid.
-
-        Args:
-            substructure: SubstructureDatum to validate
-
-        Returns:
-            True if substructure data is valid, False otherwise
-        """
-        if substructure is None:
-            logger.debug("Site has null substructure")
-            return False
-
-        if not substructure.pkas:
-            logger.debug("Site has no pKa data")
-            return False
-
-        if len(substructure.pkas) == 0:
-            logger.debug("Site has empty pKa list")
-            return False
-
-        return True
 
     def get_stats(self) -> dict[str, int]:
         """

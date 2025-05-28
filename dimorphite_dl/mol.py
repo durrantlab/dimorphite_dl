@@ -366,14 +366,11 @@ class MoleculeRecord:
 
         base_mol = self.to_mol()
         if base_mol is None:
-            logger.warning(
-                "Could not create RDKit mol from SMILES: '{}'", mol_record.smiles
-            )
-            return None
+            raise RuntimeError("Could not convert SMILES to RDKit Mol")
 
         mol_with_hydrogens = self.add_hydrogens(base_mol)
         if mol_with_hydrogens is None:
-            return None
+            raise RuntimeError("Could not add Hydrogens to Mol")
 
         prepared_mol = self.unprotect_atoms(mol_with_hydrogens)
 

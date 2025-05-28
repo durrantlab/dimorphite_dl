@@ -8,18 +8,16 @@ aspect of the protonation workflow with comprehensive error handling.
 
 from typing import Generator, Iterable, Iterator
 
-import copy
 from dataclasses import dataclass
-from pathlib import Path
 
 from loguru import logger
 from rdkit import Chem
 
 from dimorphite_dl.io import SMILESProcessor, SMILESRecord
 from dimorphite_dl.mol import MoleculeRecord
+from dimorphite_dl.protonate.change import protonate_site
 from dimorphite_dl.protonate.data import PKaData
 from dimorphite_dl.protonate.detect import ProtonationSiteDetector
-from dimorphite_dl.protonate.substruct import protonate_site
 
 
 class ProtonationError(Exception):
@@ -120,10 +118,8 @@ class Protonate:
             **smiles_processor_kwargs: Additional arguments for SMILESProcessor
         """
         # Validate all input parameters with clear bounds
-        # assert ph_min >= 0.0 and ph_min <= 14.0, f"ph_min must be 0-14, got: {ph_min}"
-        # assert ph_max >= 0.0 and ph_max <= 14.0, f"ph_max must be 0-14, got: {ph_max}"
         assert ph_min <= ph_max, (
-            f"ph_min ({ph_min}) must be less than ph_max ({ph_max})"
+            f"ph_min ({ph_min}) must be less than or equal to ph_max ({ph_max})"
         )
         assert precision >= 0.0 and precision <= 10.0, (
             f"precision must be 0-10, got: {precision}"
@@ -269,17 +265,13 @@ class Protonate:
             protonated_molecules = self._generate_protonated_variants(
                 mol_record, protonation_sites
             )
+            for molecu in protonated_molecules:
+                print(Chem.MolToSmiles(molecu))
 
             # Convert to SMILES and validate
             smiles_strings = self._convert_molecules_to_smiles(
-                protonated_molecules, mol_record.smiles_original
+                list(protonated_molecules), mol_record.smiles_original
             )
-
-            if self.validate_output:
-                smiles_strings = self._validate_generated_smiles(
-                    smiles_strings, mol_record.smiles_original
-                )
-
             # Handle empty results with fallback
             if len(smiles_strings) == 0:
                 self._add_fallback_result(
@@ -287,6 +279,10 @@ class Protonate:
                 )
                 return
 
+            if self.validate_output:
+                smiles_strings = self._validate_generated_smiles(
+                    smiles_strings, mol_record.smiles_original
+                )
             # Create results with state information
             self._create_results_from_smiles(
                 smiles_strings, mol_record.identifier, protonation_sites
@@ -389,7 +385,7 @@ class Protonate:
 
     def _generate_protonated_variants(
         self, mol_record: MoleculeRecord, sites: list
-    ) -> list[Chem.Mol]:
+    ) -> Generator[Chem.Mol]:
         """
         Generate protonated molecular variants from detected sites.
 
@@ -409,19 +405,22 @@ class Protonate:
 
         for site_index, site in enumerate(sites):
             try:
-                protonated_molecules = self._protonate_single_site(
+                gen_mol = self._protonate_single_site(
                     protonated_molecules, site, mol_record.smiles_original, site_index
                 )
 
-                # Apply variant limit if necessary
-                if len(protonated_molecules) > self.max_variants:
-                    protonated_molecules = protonated_molecules[: self.max_variants]
-                    logger.warning(
-                        "Limited variants to {} for '{}' at site {}",
-                        self.max_variants,
-                        mol_record.smiles_original,
-                        site_index + 1,
-                    )
+                n_mols = 0
+                for mol in gen_mol:
+                    n_mols += 1
+                    if n_mols > self.max_variants:
+                        logger.warning(
+                            "Limited variants to {} for '{}' at site {}",
+                            self.max_variants,
+                            mol_record.smiles_original,
+                            site_index + 1,
+                        )
+                        break
+                    yield mol
 
             except Exception as error:
                 logger.warning(
@@ -432,12 +431,9 @@ class Protonate:
                 )
                 continue
 
-        assert len(protonated_molecules) <= self.max_variants
-        return protonated_molecules
-
     def _protonate_single_site(
         self, molecules: list[Chem.Mol], site, original_smiles: str, site_index: int
-    ) -> list[Chem.Mol]:
+    ) -> Generator[Chem.Mol]:
         """
         Apply protonation to a single site across all molecules.
 
@@ -461,26 +457,18 @@ class Protonate:
                 molecules, site, self.ph_min, self.ph_max, self.precision
             )
 
-            new_count = len(new_molecules)
-            original_count = len(molecules)
-            logger.debug(
-                "Site {} generated {} variants from {} molecules for '{}'",
-                site_index + 1,
-                new_count,
-                original_count,
-                original_smiles,
-            )
-
-            return new_molecules
+            for mol_new in new_molecules:
+                yield mol_new
 
         except Exception as error:
             logger.warning(
                 "Failed to protonate site {} for '{}': {}",
-                site_index + 1,
+                site_index,
                 original_smiles,
                 str(error),
             )
-            return molecules  # Return original molecules as fallback
+            for mol in molecules:  # Return original molecules as fallback
+                yield mol
 
     def _convert_molecules_to_smiles(
         self, molecules: list[Chem.Mol], original_smiles: str
@@ -776,9 +764,8 @@ class Protonate:
         logger.debug("Reset protonation statistics")
 
 
-# Convenience functions for backward compatibility and ease of use
 def protonate_smiles(
-    smiles_input: str | Iterable[str] | Iterator[str] | Path,
+    smiles_input: str | Iterable[str] | Iterator[str],
     ph_min: float = 6.4,
     ph_max: float = 8.4,
     precision: float = 1.0,

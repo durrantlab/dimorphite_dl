@@ -11,6 +11,7 @@ from typing import Generator
 from dataclasses import dataclass, field
 from enum import Enum
 
+from loguru import logger
 from rdkit import Chem
 
 
@@ -69,21 +70,22 @@ class PKaDatum:
     for calculating protonation states at different pH values.
     """
 
-    def __init__(self, site: int, mean: float, stdev: float):
+    def __init__(self, idx_site: int, mean: float, stdev: float):
         """
         Initialize pKa data with validation.
 
         Args:
-            site: Site index (non-negative integer)
+            idx_atom: Site index (non-negative integer)
             mean: Mean pKa value (bounded 0-20 for realistic range)
             stdev: Standard deviation (non-negative, bounded 0-5)
         """
-        assert isinstance(site, int)
+        assert isinstance(idx_site, int)
         assert isinstance(mean, (int, float))
         assert isinstance(stdev, (int, float))
-        assert site >= 0, f"Site index must be non-negative, got: {site}"
+        assert idx_site >= 0, f"Site index must be non-negative, got: {idx_site}"
 
-        self.site = site
+        self.idx_site = idx_site
+        """Index of the atom we would protonate in the SMARTS substructure pattern"""
         self.mean = float(mean)
         self.stdev = float(stdev)
 
@@ -104,8 +106,6 @@ class PKaDatum:
         assert isinstance(ph_min, (int, float))
         assert isinstance(ph_max, (int, float))
         assert isinstance(precision, (int, float))
-        assert 0.0 <= ph_min <= 14.0, f"ph_min must be 0-14, got: {ph_min}"
-        assert 0.0 <= ph_max <= 14.0, f"ph_max must be 0-14, got: {ph_max}"
         assert ph_min <= ph_max, (
             f"ph_min ({ph_min}) must be less than ph_max ({ph_max})"
         )
@@ -206,117 +206,61 @@ class ProtonationSite:
     for a specific protonation site in a molecule.
     """
 
-    idx_atom: int | tuple[int, ...]
-    substructure: SubstructureDatum = field(default_factory=SubstructureDatum)
+    mol: Chem.Mol
+    """RDKit Mol object that this protonation site was detected"""
 
-    def __post_init__(self):
-        """Validate protonation site data after initialization."""
-        # Validate atom index format
-        if isinstance(self.idx_atom, int):
-            assert self.idx_atom >= 0, (
-                f"Atom index must be non-negative, got: {self.idx_atom}"
-            )
-        elif isinstance(self.idx_atom, tuple):
-            assert len(self.idx_atom) > 0, "Atom index tuple cannot be empty"
-            for idx in self.idx_atom:
-                assert isinstance(idx, int), (
-                    f"All atom indices must be integers, got: {type(idx)}"
-                )
-                assert idx >= 0, f"All atom indices must be non-negative, got: {idx}"
-        else:
-            raise ValueError(
-                f"idx_atom must be int or tuple of ints, got: {type(self.idx_atom)}"
-            )
+    idxs_match: tuple[int, ...]
+    """Atom indices of substructure match"""
 
-        assert isinstance(self.substructure, SubstructureDatum)
+    pkas: list[PKaDatum]
+    """Observed pKas of this site."""
 
-    def get_atom_indices(self) -> list[int]:
-        """
-        Get atom indices as a list for consistent handling.
+    smarts: str
+    """SMARTS used to detect the protonation site."""
 
-        Returns:
-            List of atom indices involved in this protonation site
-        """
-        if isinstance(self.idx_atom, int):
-            return [self.idx_atom]
-        else:
-            return list(self.idx_atom)
-
-    def get_primary_atom_index(self) -> int:
-        """
-        Get the primary (first) atom index for this site.
-
-        Returns:
-            Primary atom index
-        """
-        if isinstance(self.idx_atom, int):
-            return self.idx_atom
-        else:
-            assert len(self.idx_atom) > 0
-            return self.idx_atom[0]
-
-    def get_atom_count(self) -> int:
-        """
-        Get the number of atoms involved in this protonation site.
-
-        Returns:
-            Number of atoms in the protonation site
-        """
-        if isinstance(self.idx_atom, int):
-            return 1
-        else:
-            return len(self.idx_atom)
-
-    def has_substructure_data(self) -> bool:
-        """
-        Check if site has valid substructure data.
-
-        Returns:
-            True if substructure data is available and valid
-        """
-        return self.substructure.is_valid_for_matching()
+    name: str
+    """Name of identified protonation site."""
 
     def get_states(
         self, ph_min: float, ph_max: float, precision: float
-    ) -> Generator[ProtonationState, None, None]:
+    ) -> Generator[tuple[int, ProtonationState], None, None]:
         """
         Generate protonation states for all pKa data at this site.
 
         Args:
-            ph_min: Minimum pH value (bounded 0-14)
-            ph_max: Maximum pH value (bounded 0-14, greater than ph_min)
-            precision: Precision factor for pKa calculation (positive)
+            ph_min: Minimum pH value
+            ph_max: Maximum pH value
+            precision: Precision factor for pKa calculation
 
         Yields:
-            ProtonationState for each pKa datum at this site
+            Atom index of Mol and ProtonationState for each pKa datum at this site
         """
         assert isinstance(ph_min, (int, float))
         assert isinstance(ph_max, (int, float))
         assert isinstance(precision, (int, float))
-        assert 0.0 <= ph_min <= 14.0, f"ph_min must be 0-14, got: {ph_min}"
-        assert 0.0 <= ph_max <= 14.0, f"ph_max must be 0-14, got: {ph_max}"
         assert ph_min <= ph_max, (
-            f"ph_min ({ph_min}) must be less than ph_max ({ph_max})"
+            f"ph_min ({ph_min}) must be less than or equal to ph_max ({ph_max})"
         )
         assert precision >= 0.0, f"precision must be positive, got: {precision}"
 
-        pka_count = len(self.substructure.pkas)
+        pka_count = len(self.pkas)
         assert pka_count > 0, "Cannot generate states without pKa data"
 
         states_generated = 0
-        for pka in self.substructure.pkas:
+        for pka in self.pkas:
             assert isinstance(pka, PKaDatum)
+            idx_atom = self.idxs_match[pka.idx_site]
             state = pka.get_state(ph_min, ph_max, precision)
             states_generated += 1
-            yield state
+            yield idx_atom, state
 
         assert states_generated == pka_count, (
             f"Expected {pka_count} states, generated {states_generated}"
         )
 
-    def get_states_list(
+    def get_unique_states(
         self, ph_min: float, ph_max: float, precision: float
-    ) -> list[ProtonationState]:
+    ) -> tuple[tuple[int, ProtonationState], ...]:
         """
         Get protonation states as a list for easier handling.
 
@@ -328,10 +272,37 @@ class ProtonationSite:
         Returns:
             List of ProtonationState objects for this site
         """
-        return list(self.get_states(ph_min, ph_max, precision))
+        gen = tuple(state for state in self.get_states(ph_min, ph_max, precision))
+        states_unique = tuple(set(gen))
+        return states_unique
+
+    def is_valid(self) -> bool:
+        if self.mol is None:
+            logger.debug("Site validation failed: no mol object")
+            return False
+
+        atom_count = self.mol.GetNumAtoms()
+        if atom_count <= 0:
+            return False
+
+        for atom_index in self.idxs_match:
+            if not isinstance(atom_index, int):
+                logger.debug("Invalid atom index type: {}", type(atom_index))
+                return False
+            if atom_index < 0:
+                logger.debug("Negative atom index: {}", atom_index)
+                return False
+            if atom_index >= atom_count:
+                logger.debug(
+                    "Atom index {} out of range (molecule has {} atoms)",
+                    atom_index,
+                    atom_count,
+                )
+                return False
+
+        return True
 
 
-# Utility functions for working with protonation states
 def validate_ph_range(ph_min: float, ph_max: float) -> bool:
     """
     Validate pH range parameters.
@@ -354,12 +325,12 @@ def validate_ph_range(ph_min: float, ph_max: float) -> bool:
         return False
 
 
-def create_pka_datum_safe(site: int, mean: float, stdev: float) -> PKaDatum | None:
+def create_pka_datum_safe(idx_site: int, mean: float, stdev: float) -> PKaDatum | None:
     """
     Create PKaDatum with error handling.
 
     Args:
-        site: Site index
+        idx_site: Site index
         mean: Mean pKa value
         stdev: Standard deviation
 
@@ -367,20 +338,23 @@ def create_pka_datum_safe(site: int, mean: float, stdev: float) -> PKaDatum | No
         PKaDatum object or None if parameters are invalid
     """
     try:
-        return PKaDatum(site, mean, stdev)
+        return PKaDatum(idx_site, mean, stdev)
     except (AssertionError, ValueError):
         return None
 
 
 def create_protonation_site_safe(
-    idx_atom: int | tuple[int, ...], substructure: SubstructureDatum | None = None
+    mol: Chem.Mol,
+    idxs_match: tuple[int, ...],
+    substructure: SubstructureDatum | None = None,
 ) -> ProtonationSite | None:
     """
     Create ProtonationSite with error handling.
 
     Args:
-        idx_atom: Atom index or tuple of indices
-        substructure: Substructure data (optional)
+        mol: RDKit Mol object we are creating a protonation site for.
+        idxs_match: Atom indices of substructure match.
+        substructure: Substructure data
 
     Returns:
         ProtonationSite object or None if parameters are invalid
@@ -388,6 +362,12 @@ def create_protonation_site_safe(
     try:
         if substructure is None:
             substructure = SubstructureDatum()
-        return ProtonationSite(idx_atom, substructure)
+        return ProtonationSite(
+            mol=mol,
+            idxs_match=idxs_match,
+            pkas=substructure.pkas,
+            smarts=substructure.smarts,
+            name=substructure.name,
+        )
     except (AssertionError, ValueError):
         return None

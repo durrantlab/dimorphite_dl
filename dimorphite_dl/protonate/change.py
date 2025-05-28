@@ -1,3 +1,5 @@
+from typing import Generator
+
 import copy
 
 from loguru import logger
@@ -9,7 +11,7 @@ from dimorphite_dl.protonate.site import ProtonationSite
 
 def protonate_site(
     mols: list[Mol], site: ProtonationSite, ph_min, ph_max, precision
-) -> list[Mol]:
+) -> Generator[Mol]:
     """Protonate a specific site in a list of molecules.
 
     Args:
@@ -21,21 +23,18 @@ def protonate_site(
     """
     if not mols:
         logger.warning("No molecules provided for protonation")
-        return []
 
-    logger.debug("Protonating site {} ({})", site.idx_atom, site.substructure.name)
+    logger.debug("Protonating site: {}", site.name)
 
-    for state in site.get_states(ph_min, ph_max, precision):
+    for idx_atom, state in site.get_unique_states(ph_min, ph_max, precision):
         try:
-            for idx_atom in site.get_atom_indices():
-                output_mols = set_protonation_charge(
-                    mols, idx_atom, state.get_charges(), site.substructure.name
-                )
-            logger.debug("Generated {} protonated variants", len(output_mols))
-            return output_mols
+            gen_mols = set_protonation_charge(
+                mols, idx_atom, state.get_charges(), site.name
+            )
+            for mol in gen_mols:
+                yield mol
         except Exception as e:
-            logger.error("Error protonating site {}: {}", site.idx_atom, str(e))
-    return mols
+            logger.error("Error protonating site {}: {}", idx_atom, str(e))
 
 
 def set_protonation_charge(
@@ -68,7 +67,7 @@ def set_protonation_charge(
         for mol in mols:
             try:
                 processed_mol = _apply_charge_to_molecule(
-                    mol, idx, charge, nitrogen_charge, prot_site_name
+                    mol, idx, charge, nitrogen_charge
                 )
                 if processed_mol is not None:
                     output.append(processed_mol)
@@ -82,7 +81,7 @@ def set_protonation_charge(
 
 
 def _apply_charge_to_molecule(
-    mol: Mol, idx: int, charge: int, nitrogen_charge: int, prot_site_name: str
+    mol: Mol, idx: int, charge: int, nitrogen_charge: int
 ) -> Mol | None:
     """Apply charge to a specific atom in a molecule.
 
