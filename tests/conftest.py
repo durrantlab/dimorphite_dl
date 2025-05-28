@@ -1,11 +1,24 @@
 import os
 
 import pytest
+from rdkit import Chem
 
 from dimorphite_dl import enable_logging
 from dimorphite_dl.io import SMILESProcessor
 
 TEST_DIR = os.path.dirname(__file__)
+
+
+def compare_smiles(smiles1, smiles2):
+    detected_can = Chem.MolToSmiles(Chem.MolFromSmiles(smiles1), isomericSmiles=True)
+    expected_can = Chem.MolToSmiles(Chem.MolFromSmiles(smiles2), isomericSmiles=True)
+    assert detected_can == expected_can, f"got {smiles1}, expected {smiles2}"
+
+
+def compare_smarts(smarts1, smarts2):
+    detected_can = Chem.MolToSmarts(Chem.MolFromSmarts(smarts1))
+    expected_can = Chem.MolToSmarts(Chem.MolFromSmarts(smarts2))
+    assert detected_can == expected_can, f"got {smarts1}, expected {smarts2}"
 
 
 @pytest.fixture(scope="session", autouse=True)

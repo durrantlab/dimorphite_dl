@@ -265,8 +265,6 @@ class Protonate:
             protonated_molecules = self._generate_protonated_variants(
                 mol_record, protonation_sites
             )
-            for molecu in protonated_molecules:
-                print(Chem.MolToSmiles(molecu))
 
             # Convert to SMILES and validate
             smiles_strings = self._convert_molecules_to_smiles(
