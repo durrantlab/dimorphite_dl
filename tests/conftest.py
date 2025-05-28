@@ -4,7 +4,6 @@ import pytest
 
 from dimorphite_dl import enable_logging
 from dimorphite_dl.io import SMILESProcessor
-from dimorphite_dl.protonate import PKaData
 
 TEST_DIR = os.path.dirname(__file__)
 

@@ -29,7 +29,7 @@ class TestSMILESRecord:
         """Test basic SMILESRecord creation."""
         record = SMILESRecord("CCO")
         assert record.smiles == "CCO"
-        assert record.identifier is None
+        assert record.identifier == ""
         assert record.source_line is None
         assert record.metadata == {}
 
@@ -46,12 +46,12 @@ class TestSMILESRecord:
 
     def test_smiles_record_metadata_initialization(self):
         """Test that metadata is properly initialized as empty dict."""
-        record = SMILESRecord("CCO", metadata=None)
-        assert record.metadata is not None
+        record = SMILESRecord("CCO")
+        assert record.metadata != dict()
 
         # Ensure it's a new dict each time
-        record2 = SMILESRecord("CCC", metadata=None)
-        assert record2.metadata is not None
+        record2 = SMILESRecord("CCC")
+        assert record2.metadata != dict()
 
         record.metadata["test"] = "value"
         assert "test" not in record2.metadata
@@ -318,7 +318,7 @@ class TestFileProcessing:
 
             assert len(records) == 3
             assert records[0].smiles == "CCO"
-            assert records[0].identifier is None
+            assert records[0].identifier == ""
             assert records[1].smiles == "CCC"
             assert records[1].identifier == "ethane"
             assert records[2].smiles == "c1ccccc1"
@@ -528,7 +528,7 @@ class TestEdgeCases:
         assert records[1].smiles == "CCC"
         assert records[1].identifier == "propane"
         assert records[2].smiles == "c1ccccc1"
-        assert records[2].identifier is None
+        assert records[2].identifier == ""
 
     def test_very_large_batch_size(self):
         """Test batch processing with very large batch size."""

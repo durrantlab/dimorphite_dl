@@ -27,9 +27,10 @@ def protonate_site(
 
     for state in site.get_states(ph_min, ph_max, precision):
         try:
-            output_mols = set_protonation_charge(
-                mols, site.idx_atom, state.get_charges(), site.substructure.name
-            )
+            for idx_atom in site.get_atom_indices():
+                output_mols = set_protonation_charge(
+                    mols, idx_atom, state.get_charges(), site.substructure.name
+                )
             logger.debug("Generated {} protonated variants", len(output_mols))
             return output_mols
         except Exception as e:

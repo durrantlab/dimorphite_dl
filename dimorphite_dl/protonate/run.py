@@ -1,37 +1,68 @@
+"""
+Robust protonation processing module.
+
+This module provides the main Protonate class for processing SMILES strings
+and generating protonated variants. Each function is focused on a specific
+aspect of the protonation workflow with comprehensive error handling.
+"""
+
 from typing import Generator, Iterable, Iterator
 
+import copy
 from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
 from rdkit import Chem
-from rdkit.Chem import AllChem
 
 from dimorphite_dl.io import SMILESProcessor, SMILESRecord
 from dimorphite_dl.mol import MoleculeRecord
-from dimorphite_dl.protonate import PKaData
+from dimorphite_dl.protonate.data import PKaData
 from dimorphite_dl.protonate.detect import ProtonationSiteDetector
 from dimorphite_dl.protonate.substruct import protonate_site
 
 
+class ProtonationError(Exception):
+    """Raised when protonation processing encounters an error."""
+
+    pass
+
+
 @dataclass
 class ProtonationResult:
-    """Data class for protonation results."""
+    """Data structure for protonation results with explicit fields."""
 
     smiles: str
     identifier: str
     states: str = ""
 
+    def __post_init__(self):
+        """Validate result data after initialization."""
+        assert isinstance(self.smiles, str)
+        assert isinstance(self.identifier, str)
+        assert isinstance(self.states, str)
+        assert len(self.smiles) > 0  # SMILES cannot be empty
+
     def to_string(self, include_states: bool = False) -> str:
-        """Convert to output string format."""
-        if include_states and self.states:
+        """
+        Convert result to output string format.
+
+        Args:
+            include_states: Whether to include state information (explicit)
+
+        Returns:
+            Formatted string representation
+        """
+        assert isinstance(include_states, bool)
+
+        if include_states and len(self.states) > 0:
             return f"{self.smiles}\t{self.identifier}\t{self.states}"
         return f"{self.smiles}\t{self.identifier}"
 
 
 @dataclass
 class ProtonationStats:
-    """Statistics for protonation processing."""
+    """Statistics tracking for protonation processing with explicit counters."""
 
     molecules_processed: int = 0
     total_variants_generated: int = 0
@@ -41,9 +72,28 @@ class ProtonationStats:
     molecules_without_sites: int = 0
     fallback_used: int = 0
 
+    def __post_init__(self):
+        """Validate statistics after initialization."""
+        assert self.molecules_processed >= 0
+        assert self.total_variants_generated >= 0
+        assert self.variants_validated >= 0
+        assert self.variants_rejected >= 0
+        assert self.molecules_with_sites >= 0
+        assert self.molecules_without_sites >= 0
+        assert self.fallback_used >= 0
+
 
 class Protonate:
-    """A generator class for protonating SMILES strings, one at a time."""
+    """
+    Generator class for protonating SMILES strings with comprehensive error handling.
+
+    Processes molecules one at a time, generating protonated variants based on
+    pH conditions and pKa data. Includes validation, fallback mechanisms,
+    and detailed statistics tracking.
+
+    Design goals: Safety through validation, performance through batching,
+    developer experience through clear error messages and statistics.
+    """
 
     def __init__(
         self,
@@ -56,25 +106,33 @@ class Protonate:
         validate_output: bool = True,
         **smiles_processor_kwargs,
     ):
-        """Initialize the generator.
+        """
+        Initialize the protonation generator with explicit parameters.
 
         Args:
             smiles_input: SMILES string, file path, or iterable of SMILES
-            ph_min: Minimum pH to consider (default: 6.4)
-            ph_max: Maximum pH to consider (default: 8.4)
-            precision: pKa precision factor (default: 1.0)
-            label_states: Whether to label protonated SMILES with target state
-            max_variants: Maximum number of variants per input compound
-            validate_output: Whether to validate generated SMILES (default: True)
+            ph_min: Minimum pH to consider (bounded)
+            ph_max: Maximum pH to consider (bounded)
+            precision: pKa precision factor (positive)
+            label_states: Whether to label protonated SMILES with target state (explicit)
+            max_variants: Maximum number of variants per input compound (bounded)
+            validate_output: Whether to validate generated SMILES (explicit)
             **smiles_processor_kwargs: Additional arguments for SMILESProcessor
         """
-        # Validate input parameters
-        if ph_min > ph_max:
-            raise ValueError(f"ph_min ({ph_min}) must be less than ph_max ({ph_max})")
-        if precision < 0:
-            raise ValueError(f"precision must be positive, got: {precision}")
-        if max_variants <= 0:
-            raise ValueError(f"max_variants must be positive, got: {max_variants}")
+        # Validate all input parameters with clear bounds
+        # assert ph_min >= 0.0 and ph_min <= 14.0, f"ph_min must be 0-14, got: {ph_min}"
+        # assert ph_max >= 0.0 and ph_max <= 14.0, f"ph_max must be 0-14, got: {ph_max}"
+        assert ph_min <= ph_max, (
+            f"ph_min ({ph_min}) must be less than ph_max ({ph_max})"
+        )
+        assert precision >= 0.0 and precision <= 10.0, (
+            f"precision must be 0-10, got: {precision}"
+        )
+        assert max_variants > 0 and max_variants <= 10000, (
+            f"max_variants must be 1-10000, got: {max_variants}"
+        )
+        assert isinstance(label_states, bool)
+        assert isinstance(validate_output, bool)
 
         self.smiles_input = smiles_input
         self.ph_min = ph_min
@@ -85,381 +143,584 @@ class Protonate:
         self.validate_output = validate_output
 
         logger.info(
-            "Initializing with pH range {:.1f} to {:.1f}, precision: {:.1f}",
+            "Initializing protonation with pH {:.1f}-{:.1f}, precision: {:.1f}, max_variants: {}",
             ph_min,
             ph_max,
             precision,
+            max_variants,
         )
 
         self.smiles_processor = SMILESProcessor(**smiles_processor_kwargs)
         self.stats = ProtonationStats()
-
-        # Queue to store the protonated SMILES strings for current molecule
-        self.cur_prot_results: list[ProtonationResult] = []
-
         self.pka_data = PKaData()
+        self.site_detector = ProtonationSiteDetector(
+            validate_sites=True, max_sites_per_molecule=50
+        )
 
-        # Initialize the SMILES stream
+        # Current processing state
+        self.current_results_queue: list[ProtonationResult] = []
         self._smiles_stream: Iterator[SMILESRecord] | None = None
-        self._initialize_stream()
 
-    def _initialize_stream(self) -> None:
-        """Initialize the SMILES stream from the input."""
-        if self.smiles_input is not None:
-            try:
-                self._smiles_stream = iter(
-                    self.smiles_processor.stream(self.smiles_input)
-                )
-                logger.debug("Initialized SMILES stream")
-            except Exception as e:
-                logger.error("Failed to initialize SMILES stream: {}", str(e))
-                raise ValueError(f"Failed to initialize SMILES stream: {e}")
-        else:
-            raise ValueError("No SMILES input provided")
+        self._initialize_smiles_stream()
+
+    def _initialize_smiles_stream(self) -> None:
+        """
+        Initialize the SMILES input stream with error handling.
+
+        Raises:
+            ProtonationError: If stream initialization fails
+        """
+        if self.smiles_input is None:
+            raise ProtonationError("No SMILES input provided")
+
+        try:
+            self._smiles_stream = iter(self.smiles_processor.stream(self.smiles_input))
+            logger.debug("Initialized SMILES stream successfully")
+
+        except Exception as error:
+            logger.error("Failed to initialize SMILES stream: {}", str(error))
+            raise ProtonationError(
+                f"Failed to initialize SMILES stream: {error}"
+            ) from error
 
     def __iter__(self):
-        """Returns this generator object."""
+        """Return this generator object for iteration."""
         return self
 
     def __next__(self) -> str:
-        """Return the next protonated SMILES string.
+        """
+        Generate the next protonated SMILES string.
 
         Returns:
-            A string containing the protonated SMILES with metadata.
+            String containing protonated SMILES with metadata
 
         Raises:
-            StopIteration: When no more SMILES are available to process.
+            StopIteration: When no more SMILES are available to process
+            ProtonationError: When processing encounters a critical error
         """
-        # If there are any results in the queue, return the first one
-        if self.cur_prot_results:
-            result = self.cur_prot_results.pop(0)
+        # Return queued results first
+        if len(self.current_results_queue) > 0:
+            result = self.current_results_queue.pop(0)
             return result.to_string(include_states=self.label_states)
 
-        # If no current results, process the next input SMILES
+        # Process next input SMILES if queue is empty
+        next_smiles_record = self._get_next_smiles_record()
+        self._process_single_smiles_record(next_smiles_record)
+
+        # Return first result from newly populated queue
+        if len(self.current_results_queue) > 0:
+            result = self.current_results_queue.pop(0)
+            return result.to_string(include_states=self.label_states)
+        else:
+            # If no results generated, try next record
+            return self.__next__()
+
+    def _get_next_smiles_record(self) -> SMILESRecord:
+        """
+        Get the next SMILES record from input stream.
+
+        Returns:
+            Next SMILESRecord from input stream
+
+        Raises:
+            StopIteration: When no more input SMILES available
+        """
         if self._smiles_stream is None:
+            logger.info(
+                "Processing complete. Final stats: {}", self._format_statistics()
+            )
             raise StopIteration("No SMILES stream available")
 
         try:
             smiles_record = next(self._smiles_stream)
-            self._process_smiles_record(smiles_record)
-
-            # After processing, there should be results in the queue
-            if self.cur_prot_results:
-                result = self.cur_prot_results.pop(0)
-                return result.to_string(include_states=self.label_states)
-            else:
-                # If processing didn't generate any results, try next record
-                return self.__next__()
+            assert isinstance(smiles_record, SMILESRecord)
+            assert len(smiles_record.smiles) > 0
+            return smiles_record
 
         except StopIteration:
-            # No more input SMILES
-            logger.info("Processing complete. Final stats: {}", self._format_stats())
+            logger.info(
+                "Processing complete. Final stats: {}", self._format_statistics()
+            )
             raise StopIteration("No more SMILES to process")
 
-    def _process_smiles_record(self, smiles_record: SMILESRecord) -> None:
-        """Process a single SMILES record and generate protonated variants.
+    def _process_single_smiles_record(self, smiles_record: SMILESRecord) -> None:
+        """
+        Process one SMILES record and populate results queue.
 
         Args:
-            smiles_record: SMILESRecord object containing SMILES and metadata
+            smiles_record: SMILESRecord containing SMILES and metadata
         """
+        assert isinstance(smiles_record, SMILESRecord)
+        assert len(smiles_record.smiles) > 0
+
         mol_record = MoleculeRecord(smiles_record.smiles, smiles_record.identifier)
-
-        orig_smi = self._neutralize_smiles(orig_smi)
-
         self.stats.molecules_processed += 1
 
-        if orig_smi is None:
-            return
-
-        # Track valid SMILES for fallback purposes
-        valid_smiles_history = [orig_smi]
-
         try:
-            mol, sites = ProtonationSiteDetector.find(orig_smi)
+            mol_record.prepare_for_protonation()
+            # Find protonation sites
+            mol_record, protonation_sites = self._detect_protonation_sites(mol_record)
 
-            if (mol is None) or (len(sites) == 0):
-                logger.warning("Could not find protonation sites for {}", orig_smi)
-                self._add_fallback_result(orig_smi, identifier)
+            if mol_record.mol is None or len(protonation_sites) == 0:
+                self._handle_molecule_without_sites(mol_record)
                 return
 
-            self.stats.molecules_with_sites += 1
-            new_mols = [mol]
+            # Generate protonated variants
+            protonated_molecules = self._generate_protonated_variants(
+                mol_record, protonation_sites
+            )
 
-            # Process each protonation site
-            for i, site in enumerate(sites):
-                try:
-                    new_mols = protonate_site(
-                        new_mols, site, self.ph_min, self.ph_max, self.precision
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "Error processing site {} for '{}': {}", i + 1, orig_smi, str(e)
-                    )
-                    continue
+            # Convert to SMILES and validate
+            smiles_strings = self._convert_molecules_to_smiles(
+                protonated_molecules, mol_record.smiles_original
+            )
 
-                # Limit variants if necessary
-                if len(new_mols) > self.max_variants:
-                    new_mols = new_mols[: self.max_variants]
+            if self.validate_output:
+                smiles_strings = self._validate_generated_smiles(
+                    smiles_strings, mol_record.smiles_original
+                )
+
+            # Handle empty results with fallback
+            if len(smiles_strings) == 0:
+                self._add_fallback_result(
+                    mol_record.smiles_original, mol_record.identifier
+                )
+                return
+
+            # Create results with state information
+            self._create_results_from_smiles(
+                smiles_strings, mol_record.identifier, protonation_sites
+            )
+
+        except Exception as error:
+            logger.error(
+                "Error processing SMILES '{}': {}",
+                mol_record.smiles_original,
+                str(error),
+            )
+            self._add_fallback_result(mol_record.smiles_original, mol_record.identifier)
+
+    def _detect_protonation_sites(
+        self, mol_record: MoleculeRecord
+    ) -> tuple[MoleculeRecord, list]:
+        """
+        Detect protonation sites in molecule.
+
+        Args:
+            mol_record: MoleculeRecord to analyze
+
+        Returns:
+            Tuple of (updated_mol_record, protonation_sites_list)
+        """
+        assert isinstance(mol_record, MoleculeRecord)
+
+        try:
+            mol_record, sites = self.site_detector.find_sites(mol_record)
+            site_count = len(sites)
+
+            if site_count > 0:
+                self.stats.molecules_with_sites += 1
+                logger.debug(
+                    "Found {} protonation sites for '{}'", site_count, mol_record.smiles
+                )
+            else:
+                logger.debug("No protonation sites found for '{}'", mol_record.smiles)
+
+            return mol_record, sites
+
+        except Exception as error:
+            logger.warning(
+                "Error detecting sites for '{}': {}", mol_record.smiles, str(error)
+            )
+            return mol_record, []
+
+    def _handle_molecule_without_sites(self, mol_record: MoleculeRecord) -> None:
+        """
+        Handle molecules that have no protonation sites.
+
+        Args:
+            mol_record: MoleculeRecord without protonation sites
+        """
+        assert isinstance(mol_record, MoleculeRecord)
+
+        logger.warning(
+            "No protonation sites found for '{}'", mol_record.smiles_original
+        )
+        self.stats.molecules_without_sites += 1
+
+        # Try to generate a clean molecule without explicit hydrogens
+        clean_smiles = self._generate_clean_smiles_without_hydrogens(mol_record)
+        if clean_smiles is not None:
+            self._add_result_to_queue(clean_smiles, mol_record.identifier, "")
+        else:
+            self._add_fallback_result(mol_record.smiles_original, mol_record.identifier)
+
+    def _generate_clean_smiles_without_hydrogens(
+        self, mol_record: MoleculeRecord
+    ) -> str | None:
+        """
+        Generate clean SMILES without explicit hydrogens.
+
+        Args:
+            mol_record: MoleculeRecord to process
+
+        Returns:
+            Clean SMILES string or None if generation failed
+        """
+        assert isinstance(mol_record, MoleculeRecord)
+
+        try:
+            if mol_record.mol is not None:
+                mol_without_hs = MoleculeRecord.remove_hydrogens(mol_record.mol)
+                if mol_without_hs is not None:
+                    clean_smiles = Chem.MolToSmiles(
+                        mol_without_hs, isomericSmiles=True, canonical=True
+                    )
+                    if clean_smiles and len(clean_smiles) > 0:
+                        return clean_smiles
+        except Exception as error:
+            logger.warning(
+                "Error generating clean SMILES for '{}': {}",
+                mol_record.smiles,
+                str(error),
+            )
+
+        return None
+
+    def _generate_protonated_variants(
+        self, mol_record: MoleculeRecord, sites: list
+    ) -> list[Chem.Mol]:
+        """
+        Generate protonated molecular variants from detected sites.
+
+        Args:
+            mol_record: MoleculeRecord with detected sites
+            sites: List of protonation sites
+
+        Returns:
+            List of protonated RDKit mol objects
+        """
+        assert isinstance(mol_record, MoleculeRecord)
+        assert isinstance(sites, list)
+        assert mol_record.mol is not None
+        assert len(sites) > 0
+
+        protonated_molecules = [mol_record.mol]
+
+        for site_index, site in enumerate(sites):
+            try:
+                protonated_molecules = self._protonate_single_site(
+                    protonated_molecules, site, mol_record.smiles_original, site_index
+                )
+
+                # Apply variant limit if necessary
+                if len(protonated_molecules) > self.max_variants:
+                    protonated_molecules = protonated_molecules[: self.max_variants]
                     logger.warning(
                         "Limited variants to {} for '{}' at site {}",
                         self.max_variants,
-                        orig_smi,
-                        i + 1,
+                        mol_record.smiles_original,
+                        site_index + 1,
                     )
 
-                # Add valid SMILES to history for potential fallback
-                try:
-                    valid_smiles_history.extend(
-                        [Chem.MolToSmiles(m) for m in new_mols if m is not None]
-                    )
-                except Exception as e:
-                    logger.debug("Error generating SMILES for history: {}", str(e))
-
-            else:
-                logger.debug("No protonation sites found for '{}'", orig_smi)
-                self.stats.molecules_without_sites += 1
-
-                # Remove hydrogens since protonate_site was never called
-                try:
-                    mol_used_to_idx_sites = Chem.RemoveHs(mol)
-                    if mol_used_to_idx_sites is not None:
-                        new_mols = [mol_used_to_idx_sites]
-                        valid_smiles_history.append(
-                            Chem.MolToSmiles(mol_used_to_idx_sites)
-                        )
-                except Exception as e:
-                    logger.warning(
-                        "Error removing hydrogens from '{}': {}", orig_smi, str(e)
-                    )
-
-            # Generate canonical SMILES and remove duplicates
-            canonical_smiles = self._generate_canonical_smiles(new_mols, orig_smi)
-
-            # Validate generated SMILES if requested
-            if self.validate_output:
-                validated_smiles = self._validate_smiles_list(
-                    canonical_smiles, orig_smi
-                )
-            else:
-                validated_smiles = canonical_smiles
-
-            # If no valid SMILES remain, use fallback
-            if not validated_smiles:
+            except Exception as error:
                 logger.warning(
-                    "No valid SMILES generated for '{}', using fallback", orig_smi
+                    "Error processing site {} for '{}': {}",
+                    site_index + 1,
+                    mol_record.smiles_original,
+                    str(error),
                 )
-                validated_smiles = self._get_fallback_smiles(valid_smiles_history)
-                self.stats.fallback_used += 1
+                continue
 
-            # Create results with state information
-            self._create_protonation_results(validated_smiles, identifier, sites)
+        assert len(protonated_molecules) <= self.max_variants
+        return protonated_molecules
 
-        except Exception as e:
-            logger.error("Error processing SMILES '{}': {}", orig_smi, str(e))
-            self._add_fallback_result(orig_smi, identifier)
-
-    def _neutralize_smiles(self, smi: str) -> str | None:
-        """All molecules should be neuralized to the extent possible. The user
-        should not be allowed to specify the valence of the atoms in most cases.
+    def _protonate_single_site(
+        self, molecules: list[Chem.Mol], site, original_smiles: str, site_index: int
+    ) -> list[Chem.Mol]:
+        """
+        Apply protonation to a single site across all molecules.
 
         Args:
-            mol: The rdkit Mol objet to be neutralized.
+            molecules: List of RDKit mol objects to protonate
+            site: Protonation site to process
+            original_smiles: Original SMILES for logging context
+            site_index: Site index for logging context
 
         Returns:
-            The neutralized Mol object.
+            List of protonated mol objects
         """
-        logger.debug("Neutralizing {}", smi)
-        # Get the reaction data
-        rxn_data = [
-            [
-                "[Ov1-1:1]",
-                "[Ov2+0:1]-[H]",
-            ],  # To handle O- bonded to only one atom (add hydrogen).
-            [
-                "[#7v4+1:1]-[H]",
-                "[#7v3+0:1]",
-            ],  # To handle N+ bonded to a hydrogen (remove hydrogen).
-            [
-                "[Ov2-:1]",
-                "[Ov2+0:1]",
-            ],  # To handle O- bonded to two atoms. Should not be Negative.
-            [
-                "[#7v3+1:1]",
-                "[#7v3+0:1]",
-            ],  # To handle N+ bonded to three atoms. Should not be positive.
-            [
-                "[#7v2-1:1]",
-                "[#7+0:1]-[H]",
-            ],  # To handle N- Bonded to two atoms. Add hydrogen.
-            # ['[N:1]=[N+0:2]=[N:3]-[H]', '[N:1]=[N+1:2]=[N+0:3]-[H]'],  # To handle bad azide. Must be
-            # protonated. (Now handled
-            # elsewhere, before SMILES
-            # converted to Mol object.)
-            [
-                "[H]-[N:1]-[N:2]#[N:3]",
-                "[N:1]=[N+1:2]=[N:3]-[H]",
-            ],  # To handle bad azide. R-N-N#N should
-            # be R-N=[N+]=N
-        ]
+        assert isinstance(molecules, list)
+        assert len(molecules) > 0
+        assert isinstance(original_smiles, str)
+        assert isinstance(site_index, int)
+        assert site_index >= 0
 
-        # Add substructures and reactions (initially none)
-        for i, rxn_datum in enumerate(rxn_data):
-            rxn_data[i].append(Chem.MolFromSmarts(rxn_datum[0]))
-            rxn_data[i].append(None)
-
-        mol = smiles_to_mol(smi)
-        # Add hydrogens (respects valence, so incomplete).
-        mol.UpdatePropertyCache(strict=False)
-        mol = Chem.AddHs(mol)
-
-        while True:  # Keep going until all these issues have been resolved.
-            current_rxn = None  # The reaction to perform.
-            current_rxn_str = None
-
-            for i, rxn_datum in enumerate(rxn_data):
-                (
-                    reactant_smarts,
-                    product_smarts,
-                    substruct_match_mol,
-                    rxn_placeholder,
-                ) = rxn_datum
-                if mol.HasSubstructMatch(substruct_match_mol):
-                    if rxn_placeholder is None:
-                        current_rxn_str = reactant_smarts + ">>" + product_smarts
-                        logger.trace("Defining reaction: {}", current_rxn_str)
-                        current_rxn = AllChem.ReactionFromSmarts(current_rxn_str)
-                        rxn_data[i][3] = current_rxn  # Update the placeholder.
-                    else:
-                        current_rxn = rxn_data[i][3]
-                    break
-
-            # Perform the reaction if necessary
-            if current_rxn is None:  # No reaction left, so break out of while loop.
-                break
-            else:
-                mol = current_rxn.RunReactants((mol,))[0][0]
-                mol.UpdatePropertyCache(strict=False)  # Update valences
-
-        # The mols have been altered from the reactions described above, we
-        # need to resanitize them. Make sure aromatic rings are shown as such
-        # This catches all RDKit Errors. without the catchError and
-        # sanitizeOps the Chem.SanitizeMol can crash the program.
-        sanitize_string = Chem.SanitizeMol(
-            mol, sanitizeOps=Chem.rdmolops.SanitizeFlags.SANITIZE_ALL, catchErrors=True
-        )
-        if sanitize_string.name == "SANITIZE_NONE":
-            smiles_done = Chem.MolToSmiles(mol)
-            logger.debug("Smiles after neutralization: {}", smiles_done)
-            return smiles_done
-        else:
-            return None
-
-    def _generate_canonical_smiles(
-        self, mols: list[Chem.Mol], orig_smi: str
-    ) -> list[str]:
-        """Generate canonical SMILES from molecule objects."""
         try:
-            smiles_set = set()
-            for mol in mols:
-                if mol is not None:
-                    try:
-                        canonical = Chem.MolToSmiles(
-                            mol, isomericSmiles=True, canonical=True
-                        )
-                        if canonical:
-                            smiles_set.add(canonical)
-                    except Exception as e:
-                        logger.debug("Error generating canonical SMILES: {}", str(e))
-                        continue
+            new_molecules = protonate_site(
+                molecules, site, self.ph_min, self.ph_max, self.precision
+            )
 
-            smiles_list = list(smiles_set)
-            self.stats.total_variants_generated += len(smiles_list)
+            new_count = len(new_molecules)
+            original_count = len(molecules)
             logger.debug(
-                "Generated {} unique canonical SMILES for '{}'",
-                len(smiles_list),
-                orig_smi,
+                "Site {} generated {} variants from {} molecules for '{}'",
+                site_index + 1,
+                new_count,
+                original_count,
+                original_smiles,
             )
-            return smiles_list
 
-        except Exception as e:
+            return new_molecules
+
+        except Exception as error:
             logger.warning(
-                "Error in canonical SMILES generation for '{}': {}", orig_smi, str(e)
+                "Failed to protonate site {} for '{}': {}",
+                site_index + 1,
+                original_smiles,
+                str(error),
             )
+            return molecules  # Return original molecules as fallback
+
+    def _convert_molecules_to_smiles(
+        self, molecules: list[Chem.Mol], original_smiles: str
+    ) -> list[str]:
+        """
+        Convert RDKit mol objects to canonical SMILES strings.
+
+        Args:
+            molecules: List of RDKit mol objects
+            original_smiles: Original SMILES for logging context
+
+        Returns:
+            List of unique canonical SMILES strings
+        """
+        assert isinstance(molecules, list)
+        assert isinstance(original_smiles, str)
+
+        if len(molecules) == 0:
             return []
 
-    def _validate_smiles_list(self, smiles_list: list[str], orig_smi: str) -> list[str]:
-        """Validate a list of SMILES strings."""
-        if not smiles_list:
+        unique_smiles = set()
+        valid_molecule_count = 0
+
+        for mol in molecules:
+            if mol is None:
+                continue
+
+            valid_molecule_count += 1
+            canonical_smiles = self._generate_canonical_smiles_from_mol(mol)
+            if canonical_smiles is not None:
+                unique_smiles.add(canonical_smiles)
+
+        smiles_list = list(unique_smiles)
+        unique_count = len(smiles_list)
+        self.stats.total_variants_generated += unique_count
+
+        logger.debug(
+            "Generated {} unique SMILES from {} valid molecules for '{}'",
+            unique_count,
+            valid_molecule_count,
+            original_smiles,
+        )
+
+        return smiles_list
+
+    def _generate_canonical_smiles_from_mol(self, mol: Chem.Mol) -> str | None:
+        """
+        Generate canonical SMILES from a single mol object.
+
+        Args:
+            mol: RDKit mol object
+
+        Returns:
+            Canonical SMILES string or None if generation failed
+        """
+        assert mol is not None
+
+        try:
+            canonical = Chem.MolToSmiles(mol, isomericSmiles=True, canonical=True)
+            if canonical and len(canonical) > 0:
+                return canonical
+        except Exception as error:
+            logger.debug("Error generating canonical SMILES: {}", str(error))
+
+        return None
+
+    def _validate_generated_smiles(
+        self, smiles_list: list[str], original_smiles: str
+    ) -> list[str]:
+        """
+        Validate list of generated SMILES strings.
+
+        Args:
+            smiles_list: List of SMILES to validate
+            original_smiles: Original SMILES for logging context
+
+        Returns:
+            List of validated SMILES strings
+        """
+        assert isinstance(smiles_list, list)
+        assert isinstance(original_smiles, str)
+
+        if len(smiles_list) == 0:
             return []
 
-        logger.debug("Validating {} SMILES for '{}'", len(smiles_list), orig_smi)
-        valid_smiles = []
+        logger.debug("Validating {} SMILES for '{}'", len(smiles_list), original_smiles)
+        validated_smiles = []
 
-        for smi in smiles_list:
-            if smiles_to_mol(smi) is not None:
-                valid_smiles.append(smi)
+        for smiles in smiles_list:
+            assert isinstance(smiles, str)
+            assert len(smiles) > 0
+
+            if self._is_smiles_valid(smiles):
+                validated_smiles.append(smiles)
                 self.stats.variants_validated += 1
             else:
                 self.stats.variants_rejected += 1
-                logger.debug("Rejected invalid SMILES: '{}'", smi)
+                logger.debug("Rejected invalid SMILES: '{}'", smiles)
 
+        validated_count = len(validated_smiles)
+        original_count = len(smiles_list)
         logger.debug(
             "Validated {}/{} SMILES for '{}'",
-            len(valid_smiles),
-            len(smiles_list),
-            orig_smi,
+            validated_count,
+            original_count,
+            original_smiles,
         )
-        return valid_smiles
 
-    def _get_fallback_smiles(self, valid_history: list[str]) -> list[str]:
-        """Get fallback SMILES from the history of valid SMILES."""
-        # Try to find a valid SMILES from the history, starting from most recent
-        for smi in reversed(valid_history):
-            if smiles_to_mol(smi) is not None:
-                logger.debug("Using fallback SMILES: '{}'", smi)
-                return [smi]
+        return validated_smiles
 
-        # If all else fails, return the original
-        logger.warning("All fallback options failed, using original SMILES")
-        return [valid_history[0]] if valid_history else []
+    def _is_smiles_valid(self, smiles: str) -> bool:
+        """
+        Check if a SMILES string represents a valid molecule.
 
-    def _create_protonation_results(
-        self, smiles_list: list[str], identifier: str, sites: list[int]
+        Args:
+            smiles: SMILES string to validate
+
+        Returns:
+            True if SMILES is valid, False otherwise
+        """
+        assert isinstance(smiles, str)
+        assert len(smiles) > 0
+
+        try:
+            mol = Chem.MolFromSmiles(smiles)
+            return mol is not None
+        except Exception:
+            return False
+
+    def _create_results_from_smiles(
+        self, smiles_list: list[str], identifier: str, sites: list
     ) -> None:
-        """Create ProtonationResult objects from SMILES list."""
-        if not smiles_list:
+        """
+        Create ProtonationResult objects from SMILES list.
+
+        Args:
+            smiles_list: List of SMILES strings
+            identifier: Molecule identifier
+            sites: List of protonation sites for state labeling
+        """
+        assert isinstance(smiles_list, list)
+        assert isinstance(identifier, str)
+        assert isinstance(sites, list)
+
+        if len(smiles_list) == 0:
             return
 
-        # Generate states string if needed
-        states_str = ""
-        if self.label_states and sites:
-            states_str = "\t".join([site.target_state for site in sites])
+        # Generate states string if labeling is requested
+        states_string = ""
+        if self.label_states and len(sites) > 0:
+            states_string = self._generate_states_string_from_sites(sites)
 
-        # Create results
-        for smi in smiles_list:
+        # Create results for each SMILES
+        for smiles in smiles_list:
+            assert isinstance(smiles, str)
+            assert len(smiles) > 0
+
             result = ProtonationResult(
-                smiles=smi, identifier=identifier, states=states_str
+                smiles=smiles, identifier=identifier, states=states_string
             )
-            self.cur_prot_results.append(result)
+            self.current_results_queue.append(result)
+
+    def _generate_states_string_from_sites(self, sites: list) -> str:
+        """
+        Generate states string from protonation sites.
+
+        Args:
+            sites: List of protonation sites
+
+        Returns:
+            Tab-separated string of site states
+        """
+        assert isinstance(sites, list)
+        assert len(sites) > 0
+
+        try:
+            state_strings = []
+            for site in sites:
+                if hasattr(site, "target_state") and site.target_state:
+                    state_strings.append(str(site.target_state))
+
+            return "\t".join(state_strings)
+        except Exception as error:
+            logger.debug("Error generating states string: {}", str(error))
+            return ""
+
+    def _add_result_to_queue(self, smiles: str, identifier: str, states: str) -> None:
+        """
+        Add a single result to the processing queue.
+
+        Args:
+            smiles: SMILES string
+            identifier: Molecule identifier
+            states: States string
+        """
+        assert isinstance(smiles, str)
+        assert isinstance(identifier, str)
+        assert isinstance(states, str)
+        assert len(smiles) > 0
+
+        result = ProtonationResult(smiles=smiles, identifier=identifier, states=states)
+        self.current_results_queue.append(result)
 
     def _add_fallback_result(self, smiles: str, identifier: str) -> None:
-        """Add a fallback result when processing fails."""
-        result = ProtonationResult(smiles=smiles, identifier=identifier)
-        self.cur_prot_results.append(result)
+        """
+        Add a fallback result when processing fails.
+
+        Args:
+            smiles: Original SMILES string to use as fallback
+            identifier: Molecule identifier
+        """
+        assert isinstance(smiles, str)
+        assert isinstance(identifier, str)
+        assert len(smiles) > 0
+
+        result = ProtonationResult(smiles=smiles, identifier=identifier, states="")
+        self.current_results_queue.append(result)
         self.stats.fallback_used += 1
 
-    def _format_stats(self) -> str:
-        """Format statistics for logging."""
+        logger.debug("Added fallback result for '{}'", smiles)
+
+    def _format_statistics(self) -> str:
+        """
+        Format processing statistics for logging.
+
+        Returns:
+            Formatted statistics string
+        """
         return (
             f"processed: {self.stats.molecules_processed}, "
             f"with_sites: {self.stats.molecules_with_sites}, "
+            f"without_sites: {self.stats.molecules_without_sites}, "
             f"variants: {self.stats.total_variants_generated}, "
             f"validated: {self.stats.variants_validated}, "
             f"fallbacks: {self.stats.fallback_used}"
         )
 
     def stream_all(self) -> Generator[str, None, None]:
-        """Stream all protonated SMILES as a generator.
+        """
+        Stream all protonated SMILES as a generator.
 
         Yields:
             Protonated SMILES strings with metadata
@@ -471,7 +732,8 @@ class Protonate:
             return
 
     def to_list(self) -> list[str]:
-        """Return all protonated SMILES as a list.
+        """
+        Return all protonated SMILES as a list.
 
         Returns:
             List of protonated SMILES strings with metadata
@@ -479,13 +741,15 @@ class Protonate:
         return list(self.stream_all())
 
     def get_stats(self) -> dict[str, int | dict[str, int]]:
-        """Get comprehensive processing statistics.
+        """
+        Get comprehensive processing statistics.
 
         Returns:
             Dictionary containing processing statistics
         """
         processor_stats = self.smiles_processor.get_stats()
 
+        # Convert dataclass to dict for consistency
         protonation_stats = {
             "molecules_processed": self.stats.molecules_processed,
             "molecules_with_sites": self.stats.molecules_with_sites,
@@ -496,16 +760,18 @@ class Protonate:
             "fallback_used": self.stats.fallback_used,
         }
 
+        substructure_count = 0
+        if self.pka_data and hasattr(self.pka_data, "_data"):
+            substructure_count = len(self.pka_data._data)
+
         return {
             "processor": processor_stats,
             "protonation": protonation_stats,
-            "total_substructures_loaded": len(self.pka_data._data)
-            if self.pka_data
-            else 0,
+            "total_substructures_loaded": substructure_count,
         }
 
     def reset_stats(self) -> None:
-        """Reset processing statistics."""
+        """Reset all processing statistics to zero."""
         self.stats = ProtonationStats()
         logger.debug("Reset protonation statistics")
 
@@ -521,26 +787,34 @@ def protonate_smiles(
     validate_output: bool = True,
     **kwargs,
 ) -> Generator[str, None, None]:
-    """Convenience function to protonate SMILES.
+    """
+    Convenience function to protonate SMILES with explicit parameters.
 
     Args:
         smiles_input: SMILES string, file path, or iterable of SMILES
-        ph_min: Minimum pH to consider
-        ph_max: Maximum pH to consider
-        precision: pKa precision factor
-        label_states: Whether to label protonated SMILES with target state
-        max_variants: Maximum number of variants per input compound
-        validate_output: Whether to validate generated SMILES
+        ph_min: Minimum pH to consider (bounded 0-14)
+        ph_max: Maximum pH to consider (bounded 0-14)
+        precision: pKa precision factor (positive)
+        label_states: Whether to label protonated SMILES with target state (explicit)
+        max_variants: Maximum number of variants per input compound (bounded)
+        validate_output: Whether to validate generated SMILES (explicit)
         **kwargs: Additional arguments for SMILESProcessor
 
     Returns:
         Generator of protonated SMILES strings
     """
+    assert isinstance(ph_min, (int, float))
+    assert isinstance(ph_max, (int, float))
+    assert isinstance(precision, (int, float))
+    assert isinstance(label_states, bool)
+    assert isinstance(max_variants, int)
+    assert isinstance(validate_output, bool)
+
     protonator = Protonate(
         smiles_input=smiles_input,
-        ph_min=ph_min,
-        ph_max=ph_max,
-        precision=precision,
+        ph_min=float(ph_min),
+        ph_max=float(ph_max),
+        precision=float(precision),
         label_states=label_states,
         max_variants=max_variants,
         validate_output=validate_output,
@@ -559,32 +833,44 @@ def protonate_smiles_batch(
     max_variants: int = 128,
     validate_output: bool = True,
 ) -> dict[str, list[str] | dict[str, int]]:
-    """Protonate a batch of SMILES and return results with statistics.
+    """
+    Protonate a batch of SMILES and return results with statistics.
 
     Args:
-        smiles_list: List of SMILES strings to protonate
-        ph_min: Minimum pH to consider
-        ph_max: Maximum pH to consider
-        precision: pKa precision factor
-        label_states: Whether to label protonated SMILES with target state
-        max_variants: Maximum number of variants per input compound
-        validate_output: Whether to validate generated SMILES
+        smiles_list: List of SMILES strings to protonate (non-empty)
+        ph_min: Minimum pH to consider (bounded 0-14)
+        ph_max: Maximum pH to consider (bounded 0-14)
+        precision: pKa precision factor (positive)
+        label_states: Whether to label protonated SMILES with target state (explicit)
+        max_variants: Maximum number of variants per input compound (bounded)
+        validate_output: Whether to validate generated SMILES (explicit)
 
     Returns:
         Dictionary with 'results' (list of protonated SMILES) and 'stats'
     """
+    assert isinstance(smiles_list, list)
+    assert len(smiles_list) > 0
+    assert isinstance(ph_min, (int, float))
+    assert isinstance(ph_max, (int, float))
+    assert isinstance(precision, (int, float))
+    assert isinstance(label_states, bool)
+    assert isinstance(max_variants, int)
+    assert isinstance(validate_output, bool)
+
     results = []
     protonator = Protonate(
         smiles_input=smiles_list,
-        ph_min=ph_min,
-        ph_max=ph_max,
-        precision=precision,
+        ph_min=float(ph_min),
+        ph_max=float(ph_max),
+        precision=float(precision),
         label_states=label_states,
         max_variants=max_variants,
         validate_output=validate_output,
     )
 
     for result in protonator.stream_all():
+        assert isinstance(result, str)
+        assert len(result) > 0
         results.append(result)
 
     return {"results": results, "stats": protonator.get_stats()}

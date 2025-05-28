@@ -6,7 +6,7 @@ from loguru import logger
 from rdkit import Chem
 
 from dimorphite_dl import data  # type: ignore
-from dimorphite_dl.protonate.site import SubstructureDatum, PKaDatum
+from dimorphite_dl.protonate.site import PKaDatum, SubstructureDatum
 
 
 class PKaData:
