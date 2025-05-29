@@ -1,9 +1,9 @@
 import pytest
 from conftest import compare_smiles  # type: ignore
 
+from dimorphite_dl.io import SMILESRecord
 from dimorphite_dl.protonate import protonate_smiles
-
-KWARGS_DEFAULT = {"precision": 0.5, "label_states": True}
+from dimorphite_dl.protonate.run import Protonate
 
 
 # Every molecule should be protonated
@@ -55,11 +55,12 @@ KWARGS_DEFAULT = {"precision": 0.5, "label_states": True}
     ],
 )
 def test_very_acidic_single(smiles_input, smiles_correct):
-    kwargs = KWARGS_DEFAULT
-    kwargs["ph_min"] = -10000000
-    kwargs["ph_max"] = -10000000
+    ph_min = -10000000
+    ph_max = -10000000
 
-    output = list(protonate_smiles(smiles_input, **kwargs))
+    output = list(
+        protonate_smiles(smiles_input, ph_min=ph_min, ph_max=ph_max, precision=0.5)
+    )
     assert len(output) == 1
     smiles_output = output[0]
 
@@ -113,55 +114,223 @@ def test_very_acidic_single(smiles_input, smiles_correct):
     ],
 )
 def test_very_basic(smiles_input, smiles_correct):
-    kwargs = KWARGS_DEFAULT
-    kwargs["ph_min"] = 10000000
-    kwargs["ph_max"] = 10000000
+    ph_min = 10000000
+    ph_max = 10000000
 
-    output = list(protonate_smiles(smiles_input, **kwargs))
+    output = list(
+        protonate_smiles(smiles_input, ph_min=ph_min, ph_max=ph_max, precision=0.5)
+    )
     assert len(output) == 1
     smiles_output = output[0]
 
     compare_smiles(smiles_output, smiles_correct)
 
 
-def test_avg_pka(
-    kwargs_default,
-    smiles_groups,
-    smiles_phosphates,
-    average_pkas_groups,
-    average_pkas_phosphates,
-):
-    kwargs = kwargs_default
+@pytest.mark.parametrize(
+    ("smiles_input", "smiles_correct_sorted"),
+    [
+        ("O=P(O)(O)OCCCC", ["CCCCOP(=O)([O-])O", "CCCCOP(=O)([O-])[O-]"]),  # Phosphate
+        (
+            "CC(P(O)(O)=O)C",
+            ["CC(C)P(=O)([O-])O", "CC(C)P(=O)([O-])[O-]"],
+        ),  # Phosphonate
+    ],
+)
+def test_very_basic_multiple(smiles_input, smiles_correct_sorted):
+    ph_min = 10000000
+    ph_max = 10000000
 
-    for smi, protonated, deprotonated, category in smiles_groups:
-        avg_pka = average_pkas_groups[category]
+    output = list(
+        protonate_smiles(smiles_input, ph_min=ph_min, ph_max=ph_max, precision=0.5)
+    )
+    smiles_output_sorted = tuple(sorted(output))
+    smiles_correct_sorted = tuple(sorted(smiles_correct_sorted))
+    for smiles_output, smiles_correct in zip(
+        smiles_output_sorted, smiles_correct_sorted
+    ):
+        compare_smiles(smiles_output, smiles_correct)
 
-        kwargs["ph_min"] = avg_pka
-        kwargs["ph_max"] = avg_pka
 
-        check_tests(smi, kwargs, [protonated, deprotonated], ["BOTH"])
+@pytest.mark.parametrize(
+    ("smiles_input", "smiles_protonated", "smiles_deprotonated", "pka_avg"),
+    [
+        ["C#CCO", "C#CCO", "C#CC[O-]", 14.780384615384616],  # alcohol
+        ["C(=O)N", "NC=O", "[NH-]C=O", 12.00611111111111],  # amide
+        [
+            "CC(=O)NOC(C)=O",
+            "CC(=O)NOC(C)=O",
+            "CC(=O)[N-]OC(C)=O",
+            3.4896,
+        ],  # Amide_electronegative
+        [
+            "COC(=N)N",
+            "COC(N)=[NH2+]",
+            "COC(=N)N",
+            10.035538461538462,
+        ],  # AmidineGuanidine2"
+        [
+            "Brc1ccc(C2NCCS2)cc1",
+            "Brc1ccc(C2[NH2+]CCS2)cc1",
+            "Brc1ccc(C2NCCS2)cc1",
+            8.159107682388349,
+        ],  # Amines_primary_secondary_tertiary
+        [
+            "CC(=O)[n+]1ccc(N)cc1",
+            "CC(=O)[n+]1ccc([NH3+])cc1",
+            "CC(=O)[n+]1ccc(N)cc1",
+            3.899298673194805,
+        ],  # Anilines_primary
+        [
+            "CCNc1ccccc1",
+            "CC[NH2+]c1ccccc1",
+            "CCNc1ccccc1",
+            4.335408163265306,
+        ],  # Anilines_secondary
+        [
+            "Cc1ccccc1N(C)C",
+            "Cc1ccccc1[NH+](C)C",
+            "Cc1ccccc1N(C)C",
+            4.16690685045614,
+        ],  # Anilines_tertiary
+        [
+            "BrC1=CC2=C(C=C1)NC=C2",
+            "Brc1ccc2[nH]ccc2c1",
+            "Brc1ccc2[n-]ccc2c1",
+            14.52875,
+        ],  # Indole_pyrrole
+        [
+            "O=c1cc[nH]cc1",
+            "O=c1cc[nH]cc1",
+            "O=c1cc[n-]cc1",
+            7.17,
+        ],  # Aromatic_nitrogen_protonated
+        ["C-N=[N+]=[N@H]", "CN=[N+]=N", "CN=[N+]=[N-]", 4.65],  # Azide
+        [
+            "BrC(C(O)=O)CBr",
+            "O=C(O)C(Br)CBr",
+            "O=C([O-])C(Br)CBr",
+            3.456652971502591,
+        ],  # Carboxyl
+        [
+            "NC(NN=O)=N",
+            "NC(=[NH2+])NN=O",
+            "N=C(N)NN=O",
+            12.025333333333334,
+        ],  # AmidineGuanidine1
+        [
+            "C(F)(F)(F)C(=O)NC(=O)C",
+            "CC(=O)NC(=O)C(F)(F)F",
+            "CC(=O)[N-]C(=O)C(F)(F)F",
+            2.466666666666667,
+        ],  # Imide
+        ["O=C(C)NC(C)=O", "CC(=O)NC(C)=O", "CC(=O)[N-]C(C)=O", 10.23],  # Imide2
+        [
+            "CC(C)(C)C(N(C)O)=O",
+            "CN(O)C(=O)C(C)(C)C",
+            "CN([O-])C(=O)C(C)(C)C",
+            9.301904761904762,
+        ],  # N-hydroxyamide
+        ["C[N+](O)=O", "C[N+](=O)O", "C[N+](=O)[O-]", -1000.0],  # Nitro
+        ["C1CC1OO", "OOC1CC1", "[O-]OC1CC1", 11.978235294117647],  # Peroxide2
+        ["C(=O)OO", "O=COO", "O=CO[O-]", 8.738888888888889],  # Peroxide1
+        [
+            "Brc1cc(O)cc(Br)c1",
+            "Oc1cc(Br)cc(Br)c1",
+            "[O-]c1cc(Br)cc(Br)c1",
+            7.065359866910526,
+        ],  # Phenol
+        [
+            "CC(=O)c1ccc(S)cc1",
+            "CC(=O)c1ccc(S)cc1",
+            "CC(=O)c1ccc([S-])cc1",
+            4.978235294117647,
+        ],  # Phenyl_Thiol
+        [
+            "C=CCOc1ccc(C(=O)O)cc1",
+            "C=CCOc1ccc(C(=O)O)cc1",
+            "C=CCOc1ccc(C(=O)[O-])cc1",
+            3.463441968255319,
+        ],  # Phenyl_carboxyl
+        [
+            "COP(=O)(O)OC",
+            "COP(=O)(O)OC",
+            "COP(=O)([O-])OC",
+            2.7280434782608696,
+        ],  # Phosphate_diester
+        ["CP(C)(=O)O", "CP(C)(=O)O", "CP(C)(=O)[O-]", 2.9745],  # Phosphinic_acid
+        [
+            "CC(C)OP(C)(=O)O",
+            "CC(C)OP(C)(=O)O",
+            "CC(C)OP(C)(=O)[O-]",
+            2.0868,
+        ],  # Phosphonate_ester
+        [
+            "CC1(C)OC(=O)NC1=O",
+            "CC1(C)OC(=O)NC1=O",
+            "CC1(C)OC(=O)[N-]C1=O",
+            6.4525,
+        ],  # Ringed_imide1
+        [
+            "O=C(N1)C=CC1=O",
+            "O=C1C=CC(=O)N1",
+            "O=C1C=CC(=O)[N-]1",
+            8.681666666666667,
+        ],  # Ringed_imide2
+        ["O=S(OC)(O)=O", "COS(=O)(=O)O", "COS(=O)(=O)[O-]", -2.36],  # Sulfate
+        [
+            "COc1ccc(S(=O)O)cc1",
+            "COc1ccc(S(=O)O)cc1",
+            "COc1ccc(S(=O)[O-])cc1",
+            1.7933333333333332,
+        ],  # Sulfinic_acid
+        [
+            "CS(N)(=O)=O",
+            "CS(N)(=O)=O",
+            "CS([NH-])(=O)=O",
+            7.9160326086956525,
+        ],  # Sulfonamide
+        [
+            "CC(=O)CSCCS(O)(=O)=O",
+            "CC(=O)CSCCS(=O)(=O)O",
+            "CC(=O)CSCCS(=O)(=O)[O-]",
+            -1.8184615384615386,
+        ],  # Sulfonate
+        ["CC(=O)S", "CC(=O)S", "CC(=O)[S-]", 0.678267],  # Thioic_acid
+        ["C(C)(C)(C)(S)", "CC(C)(C)S", "CC(C)(C)[S-]", 9.12448275862069],  # Thiol
+        [
+            "Brc1cc[nH+]cc1",
+            "Brc1cc[nH+]cc1",
+            "Brc1ccncc1",
+            4.3535441240733945,
+        ],  # Aromatic_nitrogen_unprotonated
+        [
+            "C=C(O)c1c(C)cc(C)cc1C",
+            "C=C(O)c1c(C)cc(C)cc1C",
+            "C=C([O-])c1c(C)cc(C)cc1C",
+            8.871850714285713,
+        ],  # Vinyl_alcohol
+        [
+            "CC(=O)ON",
+            "CC(=O)O[NH3+]",
+            "CC(=O)ON",
+            4.035714285714286,
+        ],  # Primary_hydroxyl_amine
+    ],
+)
+def test_pka_average(smiles_input, smiles_protonated, smiles_deprotonated, pka_avg):
+    """Test that when the pH is equal to the average pKa, the protonation
+    state is always both"""
 
-    for smi, protonated, mix, deprotonated, category in smiles_phosphates:
-        avg_pka = average_pkas_phosphates[category][0]
-        kwargs["ph_min"] = avg_pka
-        kwargs["ph_max"] = avg_pka
-
-        check_tests(smi, kwargs, [mix, protonated], ["BOTH"])
-
-        avg_pka = average_pkas_phosphates[category][1]
-        kwargs["ph_min"] = avg_pka
-        kwargs["ph_max"] = avg_pka
-
-        check_tests(smi, kwargs, [mix, deprotonated], ["DEPROTONATED", "DEPROTONATED"])
-
-        avg_pka = 0.5 * (
-            average_pkas_phosphates[category][0] + average_pkas_phosphates[category][1]
-        )
-        kwargs["ph_min"] = avg_pka
-        kwargs["ph_max"] = avg_pka
-        kwargs["precision"] = 5  # Should give all three
-
-        check_tests(smi, kwargs, [mix, deprotonated, protonated], ["BOTH", "BOTH"])
+    output = list(
+        protonate_smiles(smiles_input, ph_min=pka_avg, ph_max=pka_avg, precision=0.5)
+    )
+    assert len(output) == 2
+    smiles_output_sorted = tuple(sorted(output))
+    smiles_correct_sorted = tuple(sorted((smiles_protonated, smiles_deprotonated)))
+    for smiles_output, smiles_correct in zip(
+        smiles_output_sorted, smiles_correct_sorted
+    ):
+        compare_smiles(smiles_output, smiles_correct)
 
 
 def test_no_carbanion():
@@ -172,7 +341,7 @@ def test_no_carbanion():
 
     if "[C-]" in "".join(output).upper():
         msg = "Processing " + smi + " produced a molecule with a carbanion!"
-        raise Exception(msg)
+        raise RuntimeError(msg)
     else:
         print("(CORRECT) No carbanion: " + smi)
 
@@ -183,7 +352,7 @@ def test_max_variants():
     output = list(protonate_smiles(smi))
     if len(output) != 128:
         msg = "Processing " + smi + " produced more than 128 variants!"
-        raise Exception(msg)
+        raise RuntimeError(msg)
     else:
         print("(CORRECT) Produced 128 variants: " + smi)
 

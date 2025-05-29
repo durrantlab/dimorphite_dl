@@ -47,11 +47,11 @@ class TestSMILESRecord:
     def test_smiles_record_metadata_initialization(self):
         """Test that metadata is properly initialized as empty dict."""
         record = SMILESRecord("CCO")
-        assert record.metadata != dict()
+        assert record.metadata == dict()
 
         # Ensure it's a new dict each time
         record2 = SMILESRecord("CCC")
-        assert record2.metadata != dict()
+        assert record2.metadata == dict()
 
         record.metadata["test"] = "value"
         assert "test" not in record2.metadata

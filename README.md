@@ -22,6 +22,9 @@
     <a href="https://doi.org/10.5281/zenodo.15486131">
         <img src="https://zenodo.org/badge/DOI/10.5281/zenodo.15486131.svg" alt="DOI">
     </a>
+    <a href="https://archive.softwareheritage.org/browse/origin/?origin_url=https://doi.org/10.5281/zenodo.15486131">
+        <img src="https://archive.softwareheritage.org/badge/origin/https://doi.org/10.5281/zenodo.15486131/" alt="Archived | https://doi.org/10.5281/zenodo.15486131"/>
+    </a>
 </p>
 
 Dimorphite-DL adds hydrogen atoms to molecular representations, as appropriate
