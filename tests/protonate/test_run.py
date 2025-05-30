@@ -1,9 +1,7 @@
 import pytest
 from conftest import compare_smiles  # type: ignore
 
-from dimorphite_dl.io import SMILESRecord
 from dimorphite_dl.protonate import protonate_smiles
-from dimorphite_dl.protonate.run import Protonate
 
 
 # Every molecule should be protonated
@@ -58,9 +56,7 @@ def test_very_acidic_single(smiles_input, smiles_correct):
     ph_min = -10000000
     ph_max = -10000000
 
-    output = list(
-        protonate_smiles(smiles_input, ph_min=ph_min, ph_max=ph_max, precision=0.5)
-    )
+    output = protonate_smiles(smiles_input, ph_min=ph_min, ph_max=ph_max, precision=0.5)
     assert len(output) == 1
     smiles_output = output[0]
 
@@ -350,11 +346,8 @@ def test_max_variants():
     # Make sure max number of variants is limited (old bug).
     smi = "CCCC[C@@H](C(=O)N)NC(=O)[C@@H](NC(=O)[C@@H](NC(=O)[C@@H](NC(=O)[C@H](C(C)C)NC(=O)[C@@H](NC(=O)[C@H](Cc1c[nH]c2c1cccc2)NC(=O)[C@@H](NC(=O)[C@@H](Cc1ccc(cc1)O)N)CCC(=O)N)C)C)Cc1nc[nH]c1)Cc1ccccc1"
     output = list(protonate_smiles(smi))
-    if len(output) != 128:
-        msg = "Processing " + smi + " produced more than 128 variants!"
-        raise RuntimeError(msg)
-    else:
-        print("(CORRECT) Produced 128 variants: " + smi)
+
+    assert len(output) == 128, f"Should produce 128 mol, but produced {len(output)}"
 
 
 def test_atp_nad():

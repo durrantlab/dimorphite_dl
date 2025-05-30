@@ -1,5 +1,3 @@
-from typing import Generator
-
 import copy
 
 from loguru import logger
@@ -11,7 +9,7 @@ from dimorphite_dl.protonate.site import ProtonationSite
 
 def protonate_site(
     mols: list[Mol], site: ProtonationSite, ph_min, ph_max, precision
-) -> Generator[Mol]:
+) -> list[Mol]:
     """Protonate a specific site in a list of molecules.
 
     Args:
@@ -23,18 +21,21 @@ def protonate_site(
     """
     if not mols:
         logger.warning("No molecules provided for protonation")
+        return []
+
+    mols_protonated = []
 
     logger.debug("Protonating site: {}", site.name)
 
     for idx_atom, state in site.get_unique_states(ph_min, ph_max, precision):
         try:
-            gen_mols = set_protonation_charge(
+            mols_charged = set_protonation_charge(
                 mols, idx_atom, state.get_charges(), site.name
             )
-            for mol in gen_mols:
-                yield mol
+            mols_protonated.extend(mols_charged)
         except Exception as e:
             logger.error("Error protonating site {}: {}", idx_atom, str(e))
+    return mols_protonated
 
 
 def set_protonation_charge(
@@ -51,12 +52,9 @@ def set_protonation_charge(
     Returns:
         List of processed molecule objects
     """
-    if not mols:
-        return []
-
-    output = []
     is_special_nitrogen = "*" in prot_site_name
 
+    mols_charged = []
     for charge in charges:
         nitrogen_charge = charge + 1
 
@@ -69,15 +67,13 @@ def set_protonation_charge(
                 processed_mol = _apply_charge_to_molecule(
                     mol, idx, charge, nitrogen_charge
                 )
-                if processed_mol is not None:
-                    output.append(processed_mol)
             except Exception as e:
                 logger.warning(
                     "Error processing molecule with charge {}: {}", charge, str(e)
                 )
                 continue
-
-    return output
+            mols_charged.append(processed_mol)
+    return mols_charged
 
 
 def _apply_charge_to_molecule(

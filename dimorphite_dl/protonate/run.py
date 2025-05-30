@@ -18,6 +18,7 @@ from dimorphite_dl.mol import MoleculeRecord
 from dimorphite_dl.protonate.change import protonate_site
 from dimorphite_dl.protonate.data import PKaData
 from dimorphite_dl.protonate.detect import ProtonationSiteDetector
+from dimorphite_dl.protonate.site import ProtonationSite
 
 
 class ProtonationError(Exception):
@@ -222,9 +223,6 @@ class Protonate:
             StopIteration: When no more input SMILES available
         """
         if self._smiles_stream is None:
-            logger.info(
-                "Processing complete. Final stats: {}", self._format_statistics()
-            )
             raise StopIteration("No SMILES stream available")
 
         try:
@@ -382,8 +380,8 @@ class Protonate:
         return None
 
     def _generate_protonated_variants(
-        self, mol_record: MoleculeRecord, sites: list
-    ) -> Generator[Chem.Mol]:
+        self, mol_record: MoleculeRecord, sites: list[ProtonationSite]
+    ) -> list[Chem.Mol]:
         """
         Generate protonated molecular variants from detected sites.
 
@@ -399,39 +397,18 @@ class Protonate:
         assert mol_record.mol is not None
         assert len(sites) > 0
 
-        protonated_molecules = [mol_record.mol]
-
+        mols_protonated_variants = [mol_record.mol]
         for site_index, site in enumerate(sites):
-            try:
-                gen_mol = self._protonate_single_site(
-                    protonated_molecules, site, mol_record.smiles_original, site_index
-                )
-
-                n_mols = 0
-                for mol in gen_mol:
-                    n_mols += 1
-                    if n_mols > self.max_variants:
-                        logger.warning(
-                            "Limited variants to {} for '{}' at site {}",
-                            self.max_variants,
-                            mol_record.smiles_original,
-                            site_index + 1,
-                        )
-                        break
-                    yield mol
-
-            except Exception as error:
-                logger.warning(
-                    "Error processing site {} for '{}': {}",
-                    site_index + 1,
-                    mol_record.smiles_original,
-                    str(error),
-                )
-                continue
+            mols_protonated_variants = self._protonate_single_site(
+                mols_protonated_variants, site, mol_record.smiles_original, site_index
+            )
+            if len(mols_protonated_variants) > self.max_variants:
+                mols_protonated_variants = mols_protonated_variants[: self.max_variants]
+        return mols_protonated_variants
 
     def _protonate_single_site(
         self, molecules: list[Chem.Mol], site, original_smiles: str, site_index: int
-    ) -> Generator[Chem.Mol]:
+    ) -> list[Chem.Mol]:
         """
         Apply protonation to a single site across all molecules.
 
@@ -454,9 +431,7 @@ class Protonate:
             new_molecules = protonate_site(
                 molecules, site, self.ph_min, self.ph_max, self.precision
             )
-
-            for mol_new in new_molecules:
-                yield mol_new
+            return list(new_molecules)
 
         except Exception as error:
             logger.warning(
@@ -465,8 +440,7 @@ class Protonate:
                 original_smiles,
                 str(error),
             )
-            for mol in molecules:  # Return original molecules as fallback
-                yield mol
+            return molecules
 
     def _convert_molecules_to_smiles(
         self, molecules: list[Chem.Mol], original_smiles: str
@@ -771,7 +745,7 @@ def protonate_smiles(
     max_variants: int = 128,
     validate_output: bool = True,
     **kwargs,
-) -> Generator[str, None, None]:
+) -> list[str]:
     """
     Convenience function to protonate SMILES with explicit parameters.
 
@@ -806,56 +780,4 @@ def protonate_smiles(
         **kwargs,
     )
 
-    return protonator.stream_all()
-
-
-def protonate_smiles_batch(
-    smiles_list: list[str],
-    ph_min: float = 6.4,
-    ph_max: float = 8.4,
-    precision: float = 1.0,
-    label_states: bool = False,
-    max_variants: int = 128,
-    validate_output: bool = True,
-) -> dict[str, list[str] | dict[str, int]]:
-    """
-    Protonate a batch of SMILES and return results with statistics.
-
-    Args:
-        smiles_list: List of SMILES strings to protonate (non-empty)
-        ph_min: Minimum pH to consider (bounded 0-14)
-        ph_max: Maximum pH to consider (bounded 0-14)
-        precision: pKa precision factor (positive)
-        label_states: Whether to label protonated SMILES with target state (explicit)
-        max_variants: Maximum number of variants per input compound (bounded)
-        validate_output: Whether to validate generated SMILES (explicit)
-
-    Returns:
-        Dictionary with 'results' (list of protonated SMILES) and 'stats'
-    """
-    assert isinstance(smiles_list, list)
-    assert len(smiles_list) > 0
-    assert isinstance(ph_min, (int, float))
-    assert isinstance(ph_max, (int, float))
-    assert isinstance(precision, (int, float))
-    assert isinstance(label_states, bool)
-    assert isinstance(max_variants, int)
-    assert isinstance(validate_output, bool)
-
-    results = []
-    protonator = Protonate(
-        smiles_input=smiles_list,
-        ph_min=float(ph_min),
-        ph_max=float(ph_max),
-        precision=float(precision),
-        label_states=label_states,
-        max_variants=max_variants,
-        validate_output=validate_output,
-    )
-
-    for result in protonator.stream_all():
-        assert isinstance(result, str)
-        assert len(result) > 0
-        results.append(result)
-
-    return {"results": results, "stats": protonator.get_stats()}
+    return protonator.to_list()
