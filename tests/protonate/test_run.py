@@ -139,6 +139,7 @@ def test_very_basic_multiple(smiles_input, smiles_correct_sorted):
     output = list(
         protonate_smiles(smiles_input, ph_min=ph_min, ph_max=ph_max, precision=0.5)
     )
+    assert len(output) == 2
     smiles_output_sorted = tuple(sorted(output))
     smiles_correct_sorted = tuple(sorted(smiles_correct_sorted))
     for smiles_output, smiles_correct in zip(
@@ -350,68 +351,51 @@ def test_max_variants():
     assert len(output) == 128, f"Should produce 128 mol, but produced {len(output)}"
 
 
-def test_atp_nad():
-    # Make sure ATP and NAD work at different pHs (because can't test
-    # Internal_phosphate_polyphos_chain and
-    # Initial_phosphate_like_in_ATP_ADP with monoprotic examples.
-    specific_examples = [
-        [
-            "O=P(O)(OP(O)(OP(O)(OCC1OC(C(C1O)O)N2C=NC3=C2N=CN=C3N)=O)=O)O",  # input, ATP
-            (
-                0.5,
-                "[NH3+]c1[nH+]c[nH+]c2c1[nH+]cn2C1OC(COP(=O)(O)OP(=O)(O)OP(=O)(O)O)C(O)C1O",
-            ),
-            (
-                1.0,
-                "[NH3+]c1[nH+]c[nH+]c2c1[nH+]cn2C1OC(COP(=O)(O)OP(=O)([O-])OP(=O)(O)O)C(O)C1O",
-            ),
-            (
-                2.6,
-                "[NH3+]c1[nH+]c[nH+]c2c1[nH+]cn2C1OC(COP(=O)([O-])OP(=O)([O-])OP(=O)([O-])O)C(O)C1O",
-            ),
-            (
-                7.0,
-                "Nc1ncnc2c1ncn2C1OC(COP(=O)([O-])OP(=O)([O-])OP(=O)([O-])[O-])C(O)C1O",
-            ),
-        ],
-        [
-            "O=P(O)(OP(O)(OCC1C(O)C(O)C(N2C=NC3=C(N)N=CN=C32)O1)=O)OCC(O4)C(O)C(O)C4[N+]5=CC=CC(C(N)=O)=C5",  # input, NAD
-            (
-                0.5,
-                "NC(=O)c1ccc[n+](C2OC(COP(=O)(O)OP(=O)(O)OCC3OC(n4cnc5c([NH3+])ncnc54)C(O)C3O)C(O)C2O)c1",
-            ),
-            (
-                2.5,
-                "NC(=O)c1ccc[n+](C2OC(COP(=O)([O-])OP(=O)([O-])OCC3OC(n4cnc5c([NH3+])ncnc54)C(O)C3O)C(O)C2O)c1",
-            ),
-            (
-                7.4,
-                "NC(=O)c1ccc[n+](C2OC(COP(=O)([O-])OP(=O)([O-])OCC3OC(n4cnc5c(N)ncnc54)C(O)C3O)C(O)C2O)c1",
-            ),
-        ],
-    ]
-    for example in specific_examples:
-        smi = str(example[0])
-        for ph, expected_output in example[1:]:
-            ph = float(ph)
-            output = list(protonate_smiles(smi, ph_min=ph, ph_max=ph, precision=0.0))
-            if output[0].strip() == expected_output:
-                print(
-                    "(CORRECT) "
-                    + smi
-                    + " at pH "
-                    + str(ph)
-                    + " is "
-                    + output[0].strip()
-                )
-            else:
-                msg = (
-                    smi
-                    + " at pH "
-                    + str(ph)
-                    + " should be "
-                    + expected_output
-                    + ", but it is "
-                    + output[0].strip()
-                )
-                raise Exception(msg)
+@pytest.mark.parametrize(
+    ("smiles_input", "ph", "smiles_correct"),
+    [
+        (
+            "O=P(O)(OP(O)(OP(O)(OCC1OC(C(C1O)O)N2C=NC3=C2N=CN=C3N)=O)=O)O",
+            0.5,
+            "[NH3+]c1[nH+]c[nH+]c2c1[nH+]cn2C1OC(COP(=O)(O)OP(=O)(O)OP(=O)(O)O)C(O)C1O",
+        ),
+        (
+            "O=P(O)(OP(O)(OP(O)(OCC1OC(C(C1O)O)N2C=NC3=C2N=CN=C3N)=O)=O)O",
+            1.0,
+            "[NH3+]c1[nH+]c[nH+]c2c1[nH+]cn2C1OC(COP(=O)(O)OP(=O)([O-])OP(=O)(O)O)C(O)C1O",
+        ),
+        (
+            "O=P(O)(OP(O)(OP(O)(OCC1OC(C(C1O)O)N2C=NC3=C2N=CN=C3N)=O)=O)O",
+            2.6,
+            "[NH3+]c1[nH+]c[nH+]c2c1[nH+]cn2C1OC(COP(=O)([O-])OP(=O)([O-])OP(=O)([O-])O)C(O)C1O",
+        ),
+        (
+            "O=P(O)(OP(O)(OP(O)(OCC1OC(C(C1O)O)N2C=NC3=C2N=CN=C3N)=O)=O)O",
+            7.0,
+            "Nc1ncnc2c1ncn2C1OC(COP(=O)([O-])OP(=O)([O-])OP(=O)([O-])[O-])C(O)C1O",
+        ),
+        (
+            "O=P(O)(OP(O)(OCC1C(O)C(O)C(N2C=NC3=C(N)N=CN=C32)O1)=O)OCC(O4)C(O)C(O)C4[N+]5=CC=CC(C(N)=O)=C5",
+            0.5,
+            "NC(=O)c1ccc[n+](C2OC(COP(=O)(O)OP(=O)(O)OCC3OC(n4cnc5c([NH3+])ncnc54)C(O)C3O)C(O)C2O)c1",
+        ),
+        (
+            "O=P(O)(OP(O)(OCC1C(O)C(O)C(N2C=NC3=C(N)N=CN=C32)O1)=O)OCC(O4)C(O)C(O)C4[N+]5=CC=CC(C(N)=O)=C5",
+            2.5,
+            "NC(=O)c1ccc[n+](C2OC(COP(=O)([O-])OP(=O)([O-])OCC3OC(n4cnc5c([NH3+])ncnc54)C(O)C3O)C(O)C2O)c1",
+        ),
+        (
+            "O=P(O)(OP(O)(OCC1C(O)C(O)C(N2C=NC3=C(N)N=CN=C32)O1)=O)OCC(O4)C(O)C(O)C4[N+]5=CC=CC(C(N)=O)=C5",
+            7.4,
+            "NC(=O)c1ccc[n+](C2OC(COP(=O)([O-])OP(=O)([O-])OCC3OC(n4cnc5c(N)ncnc54)C(O)C3O)C(O)C2O)c1",
+        ),
+    ],
+)
+def test_multiple_ph(smiles_input, ph, smiles_correct):
+    output = protonate_smiles(
+        smiles_input, ph_min=ph, ph_max=ph, precision=0.0, validate_output=True
+    )
+    print(output)
+    assert len(output) == 1
+
+    compare_smiles(output[0], smiles_correct)

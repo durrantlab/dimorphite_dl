@@ -11,7 +11,9 @@ TEST_DIR = os.path.dirname(__file__)
 
 def compare_smiles(smiles1, smiles2):
     detected_can = Chem.MolToSmiles(Chem.MolFromSmiles(smiles1), isomericSmiles=True)
+    assert isinstance(detected_can, str)
     expected_can = Chem.MolToSmiles(Chem.MolFromSmiles(smiles2), isomericSmiles=True)
+    assert isinstance(expected_can, str)
     assert detected_can == expected_can, f"got {smiles1}, expected {smiles2}"
 
 

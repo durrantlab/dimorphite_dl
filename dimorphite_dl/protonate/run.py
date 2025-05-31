@@ -413,6 +413,11 @@ class Protonate:
             mols_protonated_variants = self._protonate_single_site(
                 mols_protonated_variants, site, mol_record.smiles_original, site_index
             )
+            logger.debug(
+                "After processing {}, have {} molecules",
+                site.name,
+                len(mols_protonated_variants),
+            )
             if len(mols_protonated_variants) > self.max_variants:
                 mols_protonated_variants = mols_protonated_variants[: self.max_variants]
         return mols_protonated_variants

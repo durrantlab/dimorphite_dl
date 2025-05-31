@@ -4,7 +4,7 @@ from loguru import logger
 from rdkit import Chem
 from rdkit.Chem import Mol
 
-from dimorphite_dl.protonate.site import ProtonationSite
+from dimorphite_dl.protonate.site import ProtonationSite, ProtonationState
 
 
 def protonate_site(
@@ -23,19 +23,48 @@ def protonate_site(
         logger.warning("No molecules provided for protonation")
         return []
 
-    mols_protonated = []
-
     logger.debug("Protonating site: {}", site.name)
 
-    for idx_atom, state in site.get_unique_states(ph_min, ph_max, precision):
-        try:
-            mols_charged = set_protonation_charge(
-                mols, idx_atom, state.get_charges(), site.name
+    unique_states = list(site.get_unique_states(ph_min, ph_max, precision))
+
+    current_mols = mols
+
+    for idx_atom, state in unique_states:
+        charges = state.get_charges()
+
+        # If the state is not BOTH, we apply its single charge to each
+        # molecule in current_mols without creating branches.
+        if state != ProtonationState.BOTH:
+            logger.debug(
+                "Site {} atom {} has exclusive state {}; applying to all molecules",
+                site.name,
+                idx_atom,
+                state.to_str(),
             )
-            mols_protonated.extend(mols_charged)
-        except Exception as e:
-            logger.error("Error protonating site {}: {}", idx_atom, str(e))
-    return mols_protonated
+            processed = set_protonation_charge(
+                current_mols, idx_atom, charges, site.name
+            )
+            current_mols = processed
+
+        else:
+            logger.debug(
+                "Site {} atom {} is BOTH; branching into {} variants per molecule",
+                site.name,
+                idx_atom,
+                charges,
+            )
+
+            branched = []
+            for mol in current_mols:
+                try:
+                    variants = set_protonation_charge(
+                        [mol], idx_atom, charges, site.name
+                    )
+                    branched.extend(variants)
+                except Exception as e:
+                    logger.error("Error protonating site {}: {}", idx_atom, str(e))
+            current_mols = branched
+    return current_mols
 
 
 def set_protonation_charge(
