@@ -359,7 +359,7 @@ class MoleculeRecord:
         Returns:
             Prepared RDKit mol object or None if preparation fails
         """
-        logger.debug("Preparing molecule for analysis")
+        logger.info("Preparing molecule for analysis")
 
         self.process_azides()
         self.neutralize()

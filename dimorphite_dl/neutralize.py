@@ -113,7 +113,6 @@ class MoleculeNeutralizer:
         logger.debug("After adding hydrogens: {}", Chem.MolToSmiles(mol))
         # Run neutralization
         mol = self.registry.neutralize(mol)
-        logger.debug("After neutralizing: {}", Chem.MolToSmiles(mol))
         # Remove explicit Hs
         mol = Chem.RemoveHs(mol)
         logger.debug("After removing hydrogens: {}", Chem.MolToSmiles(mol))

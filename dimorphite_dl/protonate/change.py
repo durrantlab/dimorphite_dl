@@ -159,6 +159,24 @@ def _set_nitrogen_properties(
     atom: Chem.Atom, charge: int, bond_order_total: int
 ) -> None:
     """Set properties for nitrogen atoms based on charge and bonding."""
+    atom_idx = atom.GetIdx()
+    is_aromatic = atom.GetIsAromatic()
+    degree = atom.GetDegree()
+    logger.debug(
+        "Setting N properties: index={}, charge={}, bond_order={}, aromatic={}, degree={}",
+        atom_idx,
+        charge,
+        bond_order_total,
+        is_aromatic,
+        degree,
+    )
+
+    # Don't protonate aromatic nitrogens that already have 3 neighbors
+    # This handles cases like the N9 in adenine that's connected to a sugar
+    if is_aromatic and degree == 3 and charge > 0:
+        logger.debug("N is aromatic, with a degree of 3, cannot set positive charge")
+        # This nitrogen is already saturated, don't change it
+        return
     atom.SetFormalCharge(charge)
 
     # Set explicit hydrogens based on charge and bond order

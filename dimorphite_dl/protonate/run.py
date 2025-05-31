@@ -42,21 +42,33 @@ class ProtonationResult:
         assert isinstance(self.states, str)
         assert len(self.smiles) > 0  # SMILES cannot be empty
 
-    def to_string(self, include_states: bool = False) -> str:
+    def to_string(
+        self,
+        include_identifier: bool = False,
+        include_states: bool = False,
+        separator: str = ",",
+    ) -> str:
         """
         Convert result to output string format.
 
         Args:
-            include_states: Whether to include state information (explicit)
+            include_identifier: Whether to include the identifier.
+            include_states: Whether to include state information.
+            separator: What to separate additional information with.
 
         Returns:
             Formatted string representation
         """
+        assert isinstance(include_identifier, bool)
         assert isinstance(include_states, bool)
+        assert isinstance(separator, str)
 
+        output = self.smiles
+        if include_identifier and self.identifier != "":
+            output += separator + self.identifier
         if include_states and len(self.states) > 0:
-            return f"{self.smiles}\t{self.identifier}\t{self.states}"
-        return f"{self.smiles}\t{self.identifier}"
+            output += separator + self.states
+        return output
 
 
 @dataclass
@@ -100,6 +112,7 @@ class Protonate:
         ph_min: float = 6.4,
         ph_max: float = 8.4,
         precision: float = 1.0,
+        label_identifiers: bool = False,
         label_states: bool = False,
         max_variants: int = 128,
         validate_output: bool = True,
@@ -110,10 +123,13 @@ class Protonate:
 
         Args:
             smiles_input: SMILES string, file path, or iterable of SMILES
-            ph_min: Minimum pH to consider (bounded)
-            ph_max: Maximum pH to consider (bounded)
-            precision: pKa precision factor (positive)
-            label_states: Whether to label protonated SMILES with target state (explicit)
+            ph_min: Minimum pH to consider.
+            ph_max: Maximum pH to consider.
+            precision: pKa precision factor.
+            label_identifiers: When returning SMILES, format the string to
+                include any identifier.
+            label_states: When returning SMILES, format the string to include
+                states.
             max_variants: Maximum number of variants per input compound (bounded)
             validate_output: Whether to validate generated SMILES (explicit)
             **smiles_processor_kwargs: Additional arguments for SMILESProcessor
@@ -128,6 +144,7 @@ class Protonate:
         assert max_variants > 0 and max_variants <= 10000, (
             f"max_variants must be 1-10000, got: {max_variants}"
         )
+        assert isinstance(label_identifiers, bool)
         assert isinstance(label_states, bool)
         assert isinstance(validate_output, bool)
 
@@ -135,6 +152,7 @@ class Protonate:
         self.ph_min = ph_min
         self.ph_max = ph_max
         self.precision = precision
+        self.label_identifiers = label_identifiers
         self.label_states = label_states
         self.max_variants = max_variants
         self.validate_output = validate_output
@@ -198,7 +216,7 @@ class Protonate:
         # Return queued results first
         if len(self.current_results_queue) > 0:
             result = self.current_results_queue.pop(0)
-            return result.to_string(include_states=self.label_states)
+            return result.to_string(self.label_identifiers, self.label_states)
 
         # Process next input SMILES if queue is empty
         next_smiles_record = self._get_next_smiles_record()
@@ -207,7 +225,7 @@ class Protonate:
         # Return first result from newly populated queue
         if len(self.current_results_queue) > 0:
             result = self.current_results_queue.pop(0)
-            return result.to_string(include_states=self.label_states)
+            return result.to_string(self.label_identifiers, self.label_states)
         else:
             # If no results generated, try next record
             return self.__next__()
@@ -232,9 +250,6 @@ class Protonate:
             return smiles_record
 
         except StopIteration:
-            logger.info(
-                "Processing complete. Final stats: {}", self._format_statistics()
-            )
             raise StopIteration("No more SMILES to process")
 
     def _process_single_smiles_record(self, smiles_record: SMILESRecord) -> None:
@@ -251,7 +266,6 @@ class Protonate:
         self.stats.molecules_processed += 1
 
         try:
-            mol_record.prepare_for_protonation()
             # Find protonation sites
             mol_record, protonation_sites = self._detect_protonation_sites(mol_record)
 
@@ -312,9 +326,6 @@ class Protonate:
 
             if site_count > 0:
                 self.stats.molecules_with_sites += 1
-                logger.debug(
-                    "Found {} protonation sites for '{}'", site_count, mol_record.smiles
-                )
             else:
                 logger.debug("No protonation sites found for '{}'", mol_record.smiles)
 
@@ -741,6 +752,7 @@ def protonate_smiles(
     ph_min: float = 6.4,
     ph_max: float = 8.4,
     precision: float = 1.0,
+    label_identifiers: bool = False,
     label_states: bool = False,
     max_variants: int = 128,
     validate_output: bool = True,
@@ -751,12 +763,15 @@ def protonate_smiles(
 
     Args:
         smiles_input: SMILES string, file path, or iterable of SMILES
-        ph_min: Minimum pH to consider (bounded 0-14)
-        ph_max: Maximum pH to consider (bounded 0-14)
-        precision: pKa precision factor (positive)
-        label_states: Whether to label protonated SMILES with target state (explicit)
-        max_variants: Maximum number of variants per input compound (bounded)
-        validate_output: Whether to validate generated SMILES (explicit)
+        ph_min: Minimum pH to consider
+        ph_max: Maximum pH to consider
+        precision: pKa precision factor
+        include_states: When returning SMILES, format the string to include
+            states.
+        label_identifiers: When returning SMILES, format the string to
+            include any identifier.
+        max_variants: Maximum number of variants per input compound
+        validate_output: Whether to validate generated SMILES
         **kwargs: Additional arguments for SMILESProcessor
 
     Returns:
@@ -765,6 +780,7 @@ def protonate_smiles(
     assert isinstance(ph_min, (int, float))
     assert isinstance(ph_max, (int, float))
     assert isinstance(precision, (int, float))
+    assert isinstance(label_identifiers, bool)
     assert isinstance(label_states, bool)
     assert isinstance(max_variants, int)
     assert isinstance(validate_output, bool)
@@ -774,6 +790,7 @@ def protonate_smiles(
         ph_min=float(ph_min),
         ph_max=float(ph_max),
         precision=float(precision),
+        label_identifiers=label_identifiers,
         label_states=label_states,
         max_variants=max_variants,
         validate_output=validate_output,

@@ -57,11 +57,7 @@ class PKaData:
                         lines.append(stripped)
                         valid_count += 1
 
-                logger.debug(
-                    "Loaded {} valid SMARTS patterns from {} total lines",
-                    valid_count,
-                    line_count,
-                )
+                logger.info("Loaded {} valid SMARTS patterns", valid_count)
                 return lines
 
         except FileNotFoundError:

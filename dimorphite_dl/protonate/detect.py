@@ -3,7 +3,7 @@ This module provides functionality to detect protonation sites in molecules
 using substructure matching with comprehensive error handling and validation.
 """
 
-from typing import Generator
+from typing import Generator, Iterator
 
 import copy
 
@@ -91,8 +91,9 @@ class ProtonationSiteDetector:
                         continue
                 sites_found.append(site)
 
-            sites_count = len(sites_found)
-            self._stats_sites_found += sites_count
+            sites_count = 0
+            for site in sites_found:
+                sites_count += len(site.pkas)
 
             logger.info(
                 "Found {} protonation site(s) for '{}'", sites_count, mol_record.smiles
@@ -122,9 +123,7 @@ class ProtonationSiteDetector:
         assert mol is not None
         assert mol.GetNumAtoms() > 0
 
-        protonation_sites = []
         total_matches_found = 0
-        n_sites = 0
 
         for substructure_data in self._iterate_available_substructures():
             if substructure_data.mol is None:
@@ -143,23 +142,18 @@ class ProtonationSiteDetector:
 
             total_matches_found += n_matches
             self._stats_substructures_matched += 1
-
-            logger.debug(
-                "Found {} match(es) for substructure '{}'",
-                n_matches,
-                substructure_data.name,
-            )
+            n_sites = 0
 
             for site in self._create_sites_from_matches(
                 mol, matches, substructure_data
             ):
-                n_sites += 1
+                n_sites += len(site.pkas)
                 if n_sites >= self.max_sites_per_molecule:
                     break
 
-                mol = self._protect_matched_atoms_in_molecule(mol, matches)
-
                 yield site
+
+            mol = self._protect_matched_atoms_in_molecule(mol, matches)
 
     def _iterate_available_substructures(
         self,
@@ -210,9 +204,7 @@ class ProtonationSiteDetector:
             all_matches = list(mol.GetSubstructMatches(substructure_data.mol))
             total_matches = len(all_matches)
             logger.debug(
-                "Found {} total match(es) for '{}'",
-                total_matches,
-                substructure_data.name,
+                "Found {} '{}' group(s)", total_matches, substructure_data.name
             )
 
             unprotected_matches = self._filter_matches_by_protection_status(
@@ -221,7 +213,7 @@ class ProtonationSiteDetector:
             unprotected_count = len(unprotected_matches)
 
             logger.debug(
-                "{}/{} matches were unprotected for '{}'",
+                "{}/{} matches were unprotected",
                 unprotected_count,
                 total_matches,
                 substructure_data.name,
@@ -304,7 +296,7 @@ class ProtonationSiteDetector:
         mol: Chem.Mol,
         matches: list[tuple[int, ...]],
         substructure_data: SubstructureDatum,
-    ) -> Generator[ProtonationSite]:
+    ) -> Iterator[ProtonationSite]:
         """
         Create ProtonationSite objects from matches.
 

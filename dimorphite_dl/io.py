@@ -262,9 +262,8 @@ class SMILESProcessor:
 
     def _validate_smiles_syntax(self, smiles: str) -> bool:
         """SMILES syntax validation using RDKit."""
-        logger.debug("Processing {}", smiles)
+        logger.info("Processing {}", smiles)
         try:
-            logger.debug("Validating...")
             rdMolStandardize.ValidateSmiles(smiles)
             logger.debug("SMILES is valid")
             return True
