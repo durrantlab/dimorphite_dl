@@ -350,15 +350,21 @@ def test_max_variants():
             7.0,
             "Nc1ncnc2c1ncn2C1OC(COP(=O)([O-])OP(=O)([O-])OP(=O)([O-])[O-])C(O)C1O",
         ),
+        # Changed output NC(=O)c1ccc[n+](C2OC(COP(=O)(O)OP(=O)(O)OCC3OC(n4cnc5c([NH3+])ncnc54)C(O)C3O)C(O)C2O)c1
+        # to             NC(=O)c1ccc[n+](C2OC(COP(=O)(O)OP(=O)(O)OCC3OC(n4c[nH+]c5c([NH3+])[nH+]c[nH+]c54)C(O)C3O)C(O)C2O)c1
         (
             "O=P(O)(OP(O)(OCC1C(O)C(O)C(N2C=NC3=C(N)N=CN=C32)O1)=O)OCC(O4)C(O)C(O)C4[N+]5=CC=CC(C(N)=O)=C5",
             0.5,
-            "NC(=O)c1ccc[n+](C2OC(COP(=O)(O)OP(=O)(O)OCC3OC(n4cnc5c([NH3+])ncnc54)C(O)C3O)C(O)C2O)c1",
+            "NC(=O)c1ccc[n+](C2OC(COP(=O)(O)OP(=O)(O)OCC3OC(n4c[nH+]c5c([NH3+])[nH+]c[nH+]c54)C(O)C3O)C(O)C2O)c1",
         ),
+        # Changed output NC(=O)c1ccc[n+](C2OC(COP(=O)([O-])OP(=O)([O-])OCC3OC(n4cnc5c([NH3+])ncnc54)C(O)C3O)C(O)C2O)c1
+        # to             NC(=O)c1ccc[n+](C2OC(COP(=O)([O-])OP(=O)([O-])OCC3OC(n4c[nH+]c5c([NH3+])[nH+]c[nH+]c54)C(O)C3O)C(O)C2O)c1
+        # Old version of dimorphite would inconsistently handle failed protonation by sometimes referring to
+        # the last successful site OR the last successful site TYPE.
         (
             "O=P(O)(OP(O)(OCC1C(O)C(O)C(N2C=NC3=C(N)N=CN=C32)O1)=O)OCC(O4)C(O)C(O)C4[N+]5=CC=CC(C(N)=O)=C5",
             2.5,
-            "NC(=O)c1ccc[n+](C2OC(COP(=O)([O-])OP(=O)([O-])OCC3OC(n4cnc5c([NH3+])ncnc54)C(O)C3O)C(O)C2O)c1",
+            "NC(=O)c1ccc[n+](C2OC(COP(=O)([O-])OP(=O)([O-])OCC3OC(n4c[nH+]c5c([NH3+])[nH+]c[nH+]c54)C(O)C3O)C(O)C2O)c1",
         ),
         (
             "O=P(O)(OP(O)(OCC1C(O)C(O)C(N2C=NC3=C(N)N=CN=C32)O1)=O)OCC(O4)C(O)C(O)C4[N+]5=CC=CC(C(N)=O)=C5",
@@ -371,7 +377,6 @@ def test_multiple_ph(smiles_input, ph, smiles_correct):
     output = protonate_smiles(
         smiles_input, ph_min=ph, ph_max=ph, precision=0.0, validate_output=True
     )
-    print(output)
     assert len(output) == 1
 
     compare_smiles(output[0], smiles_correct)

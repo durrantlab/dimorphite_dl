@@ -205,6 +205,10 @@ def _set_nitrogen_properties(
         degree,
     )
 
+    # Handling niche cases of aromatics often detected on NADP
+    if charge == 1 and bond_order_total == 4.0 and is_aromatic and degree == 3:
+        return
+
     atom.SetFormalCharge(charge)
 
     # Set explicit hydrogens based on charge and bond order

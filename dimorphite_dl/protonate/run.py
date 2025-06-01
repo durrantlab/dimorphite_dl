@@ -413,37 +413,17 @@ class Protonate:
         mols_validated: list[Chem.Mol] = [mol_record.mol]
         max_variants = self.max_variants
 
-        # The first group’s name and a shallow‐list backup for “before that group”
-        current_name = sites[0].name
-        group_backup = mols_validated.copy()
-
-        i = 0
-        n_sites = len(sites)
-        while i < n_sites:
-            site = sites[i]
-
-            # If this site.name is different, begin a new group and snapshot current state
-            if site.name != current_name:
-                current_name = site.name
-                # Shallow copy is enough: the Mol objects themselves are never mutated
-                group_backup = mols_validated.copy()
-
+        for i, site in enumerate(sites):
             # Try protonating *all* currently validated molecules at this one site
             # (no need to wrap in list(...); mols_validated is already a list)
             mols_tmp = self._protonate_single_site(
                 mols_validated, site, mol_record.smiles_original, i
             )
 
-            if not mols_tmp:
-                # Entire group failed: roll back to group_backup,
-                # then skip ahead past all remaining sites with the same name
-                mols_validated = group_backup
-
-                j = i + 1
-                while j < n_sites and sites[j].name == current_name:
-                    j += 1
-                i = j
-                continue
+            # Something failed and we want to exit and return previously validated
+            # molecules.
+            if len(mols_tmp) == 0:
+                break
 
             # Site succeeded → keep its output
             mols_validated = mols_tmp
@@ -452,8 +432,6 @@ class Protonate:
             if len(mols_validated) > max_variants:
                 mols_validated = mols_validated[:max_variants]
                 break
-
-            i += 1
 
         return mols_validated
 
@@ -482,7 +460,7 @@ class Protonate:
             new_molecules = protonate_site(
                 molecules, site, self.ph_min, self.ph_max, self.precision
             )
-            return list(new_molecules)
+            return new_molecules
         except Exception as error:
             logger.warning(
                 "Failed to protonate site {} for '{}': {}",
