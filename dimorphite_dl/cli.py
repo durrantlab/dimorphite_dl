@@ -21,7 +21,7 @@ def run_cli() -> None:
         metavar="MAX",
         type=float,
         default=8.4,
-        help="Maximum pH to consider",
+        help="Maximum pH to consider (default: 8.4)",
     )
     parser.add_argument(
         "--precision",

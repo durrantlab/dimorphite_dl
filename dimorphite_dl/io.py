@@ -5,7 +5,7 @@ Provides unified streaming interface for processing SMILES from various sources
 with comprehensive error handling, validation, and memory optimization.
 """
 
-from typing import Any, Generator, TextIO
+from typing import Any, TextIO
 
 import gzip
 import os
@@ -71,7 +71,7 @@ class SMILESProcessor:
 
     def stream(
         self, input_data: str | Iterable[str] | Iterator[str]
-    ) -> Generator[SMILESRecord, None, None]:
+    ) -> Iterator[SMILESRecord]:
         """
         Stream SMILES records from various input types.
 
@@ -104,7 +104,7 @@ class SMILESProcessor:
 
     def stream_batches(
         self, input_data: str | Iterable[str], batch_size: int | None = None
-    ) -> Generator[list[SMILESRecord], None, None]:
+    ) -> Iterator[list[SMILESRecord]]:
         """
         Stream SMILES records in batches for efficient processing.
 
@@ -127,9 +127,7 @@ class SMILESProcessor:
         if batch:  # Yield remaining records
             yield batch
 
-    def _handle_string_input(
-        self, input_str: str
-    ) -> Generator[SMILESRecord, None, None]:
+    def _handle_string_input(self, input_str: str) -> Iterator[SMILESRecord]:
         """Handle string input - either file path or single SMILES."""
         if self._is_file_path(input_str):
             yield from self._stream_from_file(input_str)
@@ -139,9 +137,7 @@ class SMILESProcessor:
             if record:
                 yield record
 
-    def _handle_iterable_input(
-        self, iterable: Iterable[str]
-    ) -> Generator[SMILESRecord, None, None]:
+    def _handle_iterable_input(self, iterable: Iterable[str]) -> Iterator[SMILESRecord]:
         """Handle iterable input (list, generator, etc.).
 
         This will skip empty lines.
@@ -173,7 +169,7 @@ class SMILESProcessor:
                     f"Non-string item at position {line_num}: {type(line)}"
                 )
 
-    def _stream_from_file(self, filepath: str) -> Generator[SMILESRecord, None, None]:
+    def _stream_from_file(self, filepath: str) -> Iterator[SMILESRecord]:
         """Stream SMILES from file with format auto-detection."""
         logger.debug("Streaming from {}", filepath)
         path = pathlib.Path(filepath)
@@ -193,7 +189,7 @@ class SMILESProcessor:
 
     def _stream_from_file_object(
         self, file_obj: TextIO, path: pathlib.Path
-    ) -> Generator[SMILESRecord, None, None]:
+    ) -> Iterator[SMILESRecord]:
         """Stream from file object based on file extension."""
         suffix = path.suffix.lower().replace(".gz", "")
 
@@ -203,9 +199,7 @@ class SMILESProcessor:
             logger.warning(f"Unknown file format {suffix}, treating as text")
             yield from self._stream_from_text(file_obj)
 
-    def _stream_from_text(
-        self, file_obj: TextIO
-    ) -> Generator[SMILESRecord, None, None]:
+    def _stream_from_text(self, file_obj: TextIO) -> Iterator[SMILESRecord]:
         """Stream SMILES from plain text file."""
         for line_num, line in enumerate(file_obj, 1):
             line = line.strip()
@@ -303,15 +297,13 @@ class SMILESProcessor:
 
 
 # Convenience functions
-def stream_smiles(
-    input_data: str | Iterable[str], **kwargs
-) -> Generator[SMILESRecord, None, None]:
+def stream_smiles(input_data: str | Iterable[str], **kwargs) -> Iterator[SMILESRecord]:
     """Convenience function for streaming SMILES."""
     processor = SMILESProcessor(**kwargs)
     yield from processor.stream(input_data)
 
 
-def process_smiles_file(filepath: str, **kwargs) -> Generator[SMILESRecord, None, None]:
+def process_smiles_file(filepath: str, **kwargs) -> Iterator[SMILESRecord]:
     """Convenience function for processing SMILES files."""
     processor = SMILESProcessor(**kwargs)
     yield from processor.stream(filepath)

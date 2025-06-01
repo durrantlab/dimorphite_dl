@@ -8,7 +8,6 @@ aspect of the protonation workflow with comprehensive error handling.
 
 from typing import Generator, Iterable, Iterator
 
-import copy
 from dataclasses import dataclass
 
 from loguru import logger

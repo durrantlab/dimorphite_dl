@@ -23,14 +23,21 @@ class NeutralizationReaction:
     Represents a single neutralization reaction defined by a pair of SMARTS strings
     """
 
-    def __init__(self, reactant_smarts: str, product_smarts: str):
-        self.reactant_smarts = reactant_smarts
-        self.product_smarts = product_smarts
-        self._pattern = Chem.MolFromSmarts(reactant_smarts)
-        self._rxn = AllChem.ReactionFromSmarts(f"{reactant_smarts}>>{product_smarts}")
+    def __init__(self, smarts_reactant: str, smarts_product: str):
+        """
+        Args:
+            smarts_reactant: SMARTS for detecting the reactants of a defined
+                neutralization reaction.
+            smarts_product: SMARTS for what the detected `smarts_reactant` should
+                be transformed to.
+        """
+        self.smarts_reactant = smarts_reactant
+        self.smarts_product = smarts_product
+        self._pattern = Chem.MolFromSmarts(smarts_reactant)
+        self._rxn = AllChem.ReactionFromSmarts(f"{smarts_reactant}>>{smarts_product}")
 
     def __str__(self) -> str:
-        return f"{self.reactant_smarts} >> {self.product_smarts}"
+        return f"{self.smarts_reactant} >> {self.smarts_product}"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -93,7 +100,7 @@ class ReactionRegistry:
 
 class MoleculeNeutralizer:
     """
-    High-level class to take SMILES, handle preprocessing (like azides), add Hs,
+    High-level class to take SMILES, handle preprocessing, add Hs,
     run neutralization, and return a clean SMILES.
     """
 

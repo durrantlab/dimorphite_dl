@@ -5,8 +5,6 @@ using substructure matching with comprehensive error handling and validation.
 
 from typing import Generator, Iterator
 
-import copy
-
 from loguru import logger
 from rdkit import Chem
 
@@ -453,7 +451,11 @@ def _generate_single_canonical_smiles(mol: Chem.Mol) -> str | None:
 
 
 # Convenience functions for backward compatibility
-def find(mol_record: MoleculeRecord) -> tuple[MoleculeRecord, list[ProtonationSite]]:
+def find(
+    mol_record: MoleculeRecord,
+    validate_sites: bool = True,
+    max_sites_per_molecule: int = 50,
+) -> tuple[MoleculeRecord, list[ProtonationSite]]:
     """
     Convenience function for finding protonation sites with default settings.
 
@@ -464,31 +466,11 @@ def find(mol_record: MoleculeRecord) -> tuple[MoleculeRecord, list[ProtonationSi
         Tuple of (updated_mol_record, list_of_protonation_sites)
     """
     assert isinstance(mol_record, MoleculeRecord)
-
-    detector = ProtonationSiteDetector(validate_sites=True, max_sites_per_molecule=50)
-    return detector.find_sites(mol_record)
-
-
-def find_with_options(
-    mol_record: MoleculeRecord, validate_sites: bool = True, max_sites: int = 50
-) -> tuple[MoleculeRecord, list[ProtonationSite]]:
-    """
-    Convenience function for finding protonation sites with explicit options.
-
-    Args:
-        mol_record: MoleculeRecord to analyze
-        validate_sites: Whether to validate detected sites (explicit)
-        max_sites: Maximum sites to detect per molecule (bounded)
-
-    Returns:
-        Tuple of (updated_mol_record, list_of_protonation_sites)
-    """
-    assert isinstance(mol_record, MoleculeRecord)
     assert isinstance(validate_sites, bool)
-    assert isinstance(max_sites, int)
-    assert max_sites > 0
+    assert isinstance(max_sites_per_molecule, int)
+    assert max_sites_per_molecule > 0
 
     detector = ProtonationSiteDetector(
-        validate_sites=validate_sites, max_sites_per_molecule=max_sites
+        validate_sites=validate_sites, max_sites_per_molecule=max_sites_per_molecule
     )
     return detector.find_sites(mol_record)

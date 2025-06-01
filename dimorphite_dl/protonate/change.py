@@ -8,16 +8,24 @@ from dimorphite_dl.protonate.site import ProtonationSite, ProtonationState
 
 
 def protonate_site(
-    mols: list[Mol], site: ProtonationSite, ph_min, ph_max, precision
+    mols: list[Mol],
+    site: ProtonationSite,
+    ph_min: float,
+    ph_max: float,
+    precision: float,
 ) -> list[Mol]:
     """Protonate a specific site in a list of molecules.
 
     Args:
-        mols: List of molecule objects
-        site: ProtonationSite object with protonation information
+        mols: List of molecule objects.
+        site: ProtonationSite object with protonation information.
+        ph_min: Minimum pH to expose the site to.
+        ph_max: Maximum pH to expose the site to.
+        precision: pKa standard deviation prefactor to consider.
 
     Returns:
-        List of appropriately protonated molecule objects
+        List of appropriately protonated molecule objects. If there is any issue,
+            this will return an empty list.
     """
     if not mols:
         logger.warning("No molecules provided for protonation")
@@ -76,13 +84,14 @@ def set_protonation_charge(
     """Set atomic charge on a specific site for a set of molecules.
 
     Args:
-        mols: List of input molecule objects
-        idx: Index of the atom to modify
-        charges: List of charges to assign at this site
-        prot_site_name: Name of the protonation site
+        mols: List of input molecule objects.
+        idx: Index of the atom to modify.
+        charges: List of charges to assign at this site.
+        prot_site_name: Name of the protonation site.
 
     Returns:
-        List of processed molecule objects
+        List of processed molecule objects. If anything goes wrong, then we return
+            an empty list.
     """
     is_special_nitrogen = "*" in prot_site_name
 
@@ -107,6 +116,7 @@ def set_protonation_charge(
                 logger.warning(
                     "Error processing molecule with charge {}: {}", charge, str(e)
                 )
+                return []
     return mols_charged
 
 
@@ -177,6 +187,7 @@ def _apply_charge_to_molecule(
         # Special case for aromatic nitrogen deprotonation
         mol_smiles = Chem.MolToSmiles(mol_copy)
         if "[nH-]" in mol_smiles:
+            logger.debug("Detected [nH-]; setting number of Hs to zero for this atom")
             atom.SetNumExplicitHs(0)
 
         # Update property cache
@@ -210,6 +221,7 @@ def _set_nitrogen_properties(
         return
 
     atom.SetFormalCharge(charge)
+    logger.debug("Set formal charge to {}", charge)
 
     # Set explicit hydrogens based on charge and bond order
     h_count_map = {
@@ -232,11 +244,27 @@ def _set_other_element_properties(
     atom: Chem.Atom, charge: int, element: int, bond_order_total: float
 ) -> None:
     """Set properties for non-nitrogen atoms."""
+    atom_idx = atom.GetIdx()
+    is_aromatic = atom.GetIsAromatic()
+    degree = atom.GetDegree()
+    logger.trace(
+        "Setting {} properties: index={}, charge={}, bond_order={}, aromatic={}, degree={}",
+        element,
+        atom_idx,
+        charge,
+        bond_order_total,
+        is_aromatic,
+        degree,
+    )
+
     atom.SetFormalCharge(charge)
+    logger.debug("Set formal charge to {}", charge)
 
     # Special handling for oxygen and sulfur
     if element in (8, 16):  # O and S
         if charge == 0 and bond_order_total == 1:
             atom.SetNumExplicitHs(1)
+            logger.debug("Set explicit hydrogens for this atom to 1")
         elif charge == -1 and bond_order_total == 1:
             atom.SetNumExplicitHs(0)
+            logger.debug("Set explicit hydrogens for this atom to 0")

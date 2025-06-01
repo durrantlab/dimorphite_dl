@@ -27,15 +27,15 @@
     </a>
 </p>
 
-Dimorphite-DL adds hydrogen atoms to molecular representations, as appropriate
-for a user-specified pH range. It is a fast, accurate, accessible, and modular
-open-source program for enumerating small-molecule ionization states.
+Dimorphite-DL is a fast, accurate, accessible, and modular open-source program designed for enumerating small-molecule ionization states.
+It specifically adds or removes hydrogen atoms from molecular representations to achieve the appropriate protonation state for a user-specified pH range.
 
-Users can provide SMILES strings from the command line or via an .smi file.
+Accurate protonation states are crucial in cheminformatics and computational drug discovery, as a molecule's ionization state significantly impacts its physicochemical properties, biological activity, and interactions with targets.
+Dimorphite-DL addresses this by providing a robust solution for preparing molecules for various downstream applications like docking, molecular dynamics, and virtual screening.
 
 ## Installation
 
-You can install the latest released version on [PyPI](https://pypi.org/) using the following command.
+You can install the latest released version on [PyPI](https://pypi.org/project/dimorphite-dl/) using the following command.
 
 ```bash
 pip install dimorphite_dl
@@ -49,83 +49,85 @@ pip install https://github.com/durrantlab/dimorphite_dl.git
 
 ## Usage
 
-```
-usage: dimorphite_dl [-h] [--ph_min MIN] [--ph_max MAX]
-                        [--precision PRE] [--smiles SMI]
-                        [--smiles_file FILE] [--output_file FILE]
-                        [--label_states] [--test]
+### CLI
 
-Dimorphite 1.2.5: Creates models of appropriately protonated small moleucles.
-Apache 2.0 License. Copyright 2020 Jacob D. Durrant.
-
-optional arguments:
-  -h, --help           show this help message and exit
-  --ph_min MIN         minimum pH to consider (default: 6.4)
-  --ph_max MAX         maximum pH to consider (default: 8.4)
-  --precision PRE  pKa precision factor (number of standard devations,
-                       default: 1.0)
-  --smiles SMI         SMILES string to protonate
-  --smiles_file FILE   file that contains SMILES strings to protonate
-  --output_file FILE   output file to write protonated SMILES (optional)
-  --label_states       label protonated SMILES with target state (i.e.,
-                       "DEPROTONATED", "PROTONATED", or "BOTH").
-  --test               run unit tests (for debugging)
-```
-
-The default pH range is 6.4 to 8.4, considered biologically relevant pH.
-
-## Examples
+The command-line interface provides straightforward access to Dimorphite-DL's functionalities.
 
 ```bash
-dimorphite_dl --smiles_file sample_molecules.smi
-dimorphite_dl --smiles "CCC(=O)O" --ph_min -3.0 --ph_max -2.0
-dimorphite_dl --smiles "CCCN" --ph_min -3.0 --ph_max -2.0 --output_file output.smi
-dimorphite_dl --smiles_file sample_molecules.smi --precision 2.0 --label_states
-dimorphite_dl --test
+dimorphite_dl [-h] [--ph_min MIN] [--ph_max MAX] [--precision PRE] [--output_file FILE] [--max_variants MXV] [--label_states] [--silent] SMI
+
+dimorphite_dl v1.2.5
 ```
 
-## Advanced
+**Positional Arguments:**
 
-It is also possible to access Dimorphite-DL from another Python script, rather
-than from the command line. Here's an example:
+- `SMI`: SMILES string or path to a file containing SMILES strings to protonate.
+
+**Options:**
+
+- `--ph_min MIN`: Minimum pH to consider (default: 6.4).
+- `--ph_max MAX`: Maximum pH to consider (default: 8.4).
+- `--precision PRE`: pKa precision factor, representing the number of standard deviations from the mean pKa to consider when determining ionization states (default: 1.0).
+- `--output_file FILE`: Optional path to a file to write the protonated SMILES results.
+- `--max_variants MXV`: Limits the number of protonation variants generated per input compound (default: 128).
+- `--label_states`: If set, output SMILES will be labeled with their target ionization state ("DEPROTONATED", "PROTONATED", or "BOTH").
+- `--silent`: Suppresses all messages printed to the screen.
+
+#### Examples
+
+**Protonate molecules from a file:**
+
+```bash
+dimorphite_dl sample_molecules.smi
+```
+
+**Protonate a single SMILES string within a specific pH range:**
+
+```bash
+dimorphite_dl --ph_min -3.0 --ph_max -2.0 "CCC(=O)O"
+```
+
+**Protonate a SMILES string and save output to a file:**
+
+```bash
+dimorphite_dl --ph_min -3.0 --ph_max -2.0 --output_file output.smi "CCCN"
+```
+
+**Protonate molecules from a file with increased pKa precision and state labels:**
+
+```bash
+dimorphite_dl --precision 2.0 --label_states sample_molecules.smi
+```
+
+### Scripting
+
+Dimorphite-DL can be easily integrated into your Python scripts.
+The primary function for this is `protonate_smiles` from `dimorphite_dl.protonate`.
 
 ```python
-from rdkit import Chem
-import dimorphite_dl
+from dimorphite_dl.protonate import protonate_smiles
 
-# Using the dimorphite_dl.run() function, you can run Dimorphite-DL exactly as
-# you would from the command line. Here's an example:
-dimorphite_dl.cli.run(
-   smiles="CCCN",
-   ph_min=-3.0,
-   ph_max=-2.0,
-   output_file="output.smi"
+# Protonate a single SMILES string with custom pH range and precision
+protonated_mol_1: list[str] = protonate_smiles(
+    "CCC(=O)O", ph_min=6.8, ph_max=7.9, precision=0.5
 )
-print("Output of first test saved to output.smi...")
+print(f"Protonated 'CCC(=O)O': {protonated_mol_1}")
 
-# Using the dimorphite_dl.run_with_mol_list() function, you can also pass a
-# list of RDKit Mol objects. The first argument is always the list.
-smiles = ["C[C@](F)(Br)CC(O)=O", "CCCCCN"]
-mols = [Chem.MolFromSmiles(s) for s in smiles]
-for i, mol in enumerate(mols):
-    mol.SetProp("msg","Orig SMILES: " + smiles[i])
+# Protonate a list of SMILES strings
+protonated_mol_list: list[str] = protonate_smiles(["CCC(=O)O", "CCCN"])
+print(f"Protonated list: {protonated_mol_list}")
 
-protonated_mols = dimorphite_dl.cli.run_with_mol_list(
-    mols,
-    ph_min=5.0,
-    ph_max=9.0,
+# Protonate molecules from a SMILES file
+# Make sure '~/example.smi' exists and contains SMILES strings
+# protonated_from_file: list[str] = protonate_smiles("~/example.smi")
+# print(f"Protonated from file: {protonated_from_file}")
+
+# Example with labeling states and limiting variants
+protonated_labeled: list[str] = protonate_smiles(
+    "C1CCCCC1C(=O)O", ph_min=7.0, ph_max=7.4, label_states=True, max_variants=5
 )
-print([Chem.MolToSmiles(m) for m in protonated_mols])
-
-# Note that properties are preserved.
-print([m.GetProp("msg") for m in protonated_mols])
+print(f"Protonated with labels: {protonated_labeled}")
 ```
-
-## Caveats
-
-Dimorphite-DL deprotonates indoles and pyrroles around pH 14.5. But these
-substructures can also be protonated around pH -3.5. Dimorphite does not
-perform the protonation.
 
 ## Development
 
@@ -146,9 +148,8 @@ pixi shell
 
 If you use Dimorphite-DL in your research, please cite:
 
-Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An
-open-source program for enumerating the ionization states of drug-like small
-molecules. J Cheminform 11:14. doi: [10.1186/s13321-019-0336-9](https://doi.org/10.1186/s13321-019-0336-9).
+Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An open-source program for enumerating the ionization states of drug-like small
+molecules. *J Cheminform 11*:14. doi: [10.1186/s13321-019-0336-9](https://doi.org/10.1186/s13321-019-0336-9).
 
 ## License
 

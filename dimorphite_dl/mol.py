@@ -1,12 +1,5 @@
 """
-Enhanced MoleculeRecord class for handling SMILES strings and RDKit mol objects.
-
-This class consolidates all molecule-related operations including:
-- SMILES validation and conversion
-- RDKit mol object management
-- Neutralization
-- Hydrogen handling
-- Error handling and logging
+Class for handling SMILES strings and RDKit mol objects.
 """
 
 from typing import Any
@@ -40,10 +33,8 @@ class MoleculeRecord:
         Raises:
             ValueError: If smiles is not a valid string
         """
-        if not isinstance(smiles, str):
-            raise ValueError(f"SMILES must be a string, got {type(smiles)}")
-        if not isinstance(identifier, str):
-            raise ValueError(f"Identifier must be a string, got {type(identifier)}")
+        assert isinstance(smiles, str)
+        assert isinstance(identifier, str)
 
         smiles = smiles.strip()
         if not smiles:
