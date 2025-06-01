@@ -8,6 +8,7 @@ aspect of the protonation workflow with comprehensive error handling.
 
 from typing import Generator, Iterable, Iterator
 
+import copy
 from dataclasses import dataclass
 
 from loguru import logger
@@ -158,7 +159,7 @@ class Protonate:
         self.validate_output = validate_output
 
         logger.info(
-            "Initializing protonation with pH {:.1f}-{:.1f}, precision: {:.1f}, max_variants: {}",
+            "Initializing protonation with pH {:.1f} to {:.1f}, precision: {:.1f}, max_variants: {}",
             ph_min,
             ph_max,
             precision,
@@ -394,33 +395,67 @@ class Protonate:
         self, mol_record: MoleculeRecord, sites: list[ProtonationSite]
     ) -> list[Chem.Mol]:
         """
-        Generate protonated molecular variants from detected sites.
+        Generate protonated variants, rolling back an entire “site.name” group if any one site in that group fails.
 
         Args:
-            mol_record: MoleculeRecord with detected sites
-            sites: List of protonation sites
+            mol_record: MoleculeRecord with detected sites (mol_record.mol != None)
+            sites: List of ProtonationSite instances, in detection order
 
         Returns:
-            List of protonated RDKit mol objects
+            A list of RDKit Mol objects. If an entire group (same site.name) fails, we fall back
+            to the molecules that existed before that group began.
         """
         assert isinstance(mol_record, MoleculeRecord)
-        assert isinstance(sites, list)
+        assert isinstance(sites, list) and len(sites) > 0
         assert mol_record.mol is not None
-        assert len(sites) > 0
 
-        mols_protonated_variants = [mol_record.mol]
-        for site_index, site in enumerate(sites):
-            mols_protonated_variants = self._protonate_single_site(
-                mols_protonated_variants, site, mol_record.smiles_original, site_index
+        # Start with the original molecule
+        mols_validated: list[Chem.Mol] = [mol_record.mol]
+        max_variants = self.max_variants
+
+        # The first group’s name and a shallow‐list backup for “before that group”
+        current_name = sites[0].name
+        group_backup = mols_validated.copy()
+
+        i = 0
+        n_sites = len(sites)
+        while i < n_sites:
+            site = sites[i]
+
+            # If this site.name is different, begin a new group and snapshot current state
+            if site.name != current_name:
+                current_name = site.name
+                # Shallow copy is enough: the Mol objects themselves are never mutated
+                group_backup = mols_validated.copy()
+
+            # Try protonating *all* currently validated molecules at this one site
+            # (no need to wrap in list(...); mols_validated is already a list)
+            mols_tmp = self._protonate_single_site(
+                mols_validated, site, mol_record.smiles_original, i
             )
-            logger.debug(
-                "After processing {}, have {} molecules",
-                site.name,
-                len(mols_protonated_variants),
-            )
-            if len(mols_protonated_variants) > self.max_variants:
-                mols_protonated_variants = mols_protonated_variants[: self.max_variants]
-        return mols_protonated_variants
+
+            if not mols_tmp:
+                # Entire group failed: roll back to group_backup,
+                # then skip ahead past all remaining sites with the same name
+                mols_validated = group_backup
+
+                j = i + 1
+                while j < n_sites and sites[j].name == current_name:
+                    j += 1
+                i = j
+                continue
+
+            # Site succeeded → keep its output
+            mols_validated = mols_tmp
+
+            # Cap at max_variants once we exceed it
+            if len(mols_validated) > max_variants:
+                mols_validated = mols_validated[:max_variants]
+                break
+
+            i += 1
+
+        return mols_validated
 
     def _protonate_single_site(
         self, molecules: list[Chem.Mol], site, original_smiles: str, site_index: int
@@ -448,7 +483,6 @@ class Protonate:
                 molecules, site, self.ph_min, self.ph_max, self.precision
             )
             return list(new_molecules)
-
         except Exception as error:
             logger.warning(
                 "Failed to protonate site {} for '{}': {}",
@@ -456,7 +490,7 @@ class Protonate:
                 original_smiles,
                 str(error),
             )
-            return molecules
+            return []
 
     def _convert_molecules_to_smiles(
         self, molecules: list[Chem.Mol], original_smiles: str
@@ -542,7 +576,6 @@ class Protonate:
         if len(smiles_list) == 0:
             return []
 
-        logger.debug("Validating {} SMILES for '{}'", len(smiles_list), original_smiles)
         validated_smiles = []
 
         for smiles in smiles_list:
@@ -559,7 +592,7 @@ class Protonate:
         validated_count = len(validated_smiles)
         original_count = len(smiles_list)
         logger.debug(
-            "Validated {}/{} SMILES for '{}'",
+            "{}/{} SMILES were valid for '{}'",
             validated_count,
             original_count,
             original_smiles,

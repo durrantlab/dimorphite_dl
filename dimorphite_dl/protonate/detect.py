@@ -340,6 +340,7 @@ class ProtonationSiteDetector:
         for match in matches:
             assert isinstance(match, tuple)
             atom_indices = list(match)
+            logger.debug("Protecting atoms: {}", match)
             mol = MoleculeRecord.protect_atoms(mol, atom_indices)
 
         return mol

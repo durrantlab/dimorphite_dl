@@ -25,7 +25,7 @@ def compare_smarts(smarts1, smarts2):
 
 @pytest.fixture(scope="session", autouse=True)
 def turn_on_logging():
-    enable_logging(10)
+    enable_logging(0)
 
 
 # Pytest fixtures for reusable test data

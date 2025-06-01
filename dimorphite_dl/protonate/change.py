@@ -44,6 +44,8 @@ def protonate_site(
             processed = set_protonation_charge(
                 current_mols, idx_atom, charges, site.name
             )
+            if len(processed) == 0:
+                return []
             current_mols = processed
 
         else:
@@ -63,6 +65,7 @@ def protonate_site(
                     branched.extend(variants)
                 except Exception as e:
                     logger.error("Error protonating site {}: {}", idx_atom, str(e))
+                    return []
             current_mols = branched
     return current_mols
 
@@ -96,12 +99,14 @@ def set_protonation_charge(
                 processed_mol = _apply_charge_to_molecule(
                     mol, idx, charge, nitrogen_charge
                 )
+                if processed_mol is not None:
+                    mols_charged.append(processed_mol)
+                else:
+                    return []
             except Exception as e:
                 logger.warning(
                     "Error processing molecule with charge {}: {}", charge, str(e)
                 )
-                continue
-            mols_charged.append(processed_mol)
     return mols_charged
 
 
@@ -191,7 +196,7 @@ def _set_nitrogen_properties(
     atom_idx = atom.GetIdx()
     is_aromatic = atom.GetIsAromatic()
     degree = atom.GetDegree()
-    logger.debug(
+    logger.trace(
         "Setting N properties: index={}, charge={}, bond_order={}, aromatic={}, degree={}",
         atom_idx,
         charge,
@@ -200,12 +205,6 @@ def _set_nitrogen_properties(
         degree,
     )
 
-    # Don't protonate aromatic nitrogens that already have 3 neighbors
-    # This handles cases like the N9 in adenine that's connected to a sugar
-    if is_aromatic and degree == 3 and charge > 0:
-        logger.debug("N is aromatic, with a degree of 3, cannot set positive charge")
-        # This nitrogen is already saturated, don't change it
-        return
     atom.SetFormalCharge(charge)
 
     # Set explicit hydrogens based on charge and bond order
@@ -219,8 +218,9 @@ def _set_nitrogen_properties(
         (-1, 2): 0,  # Negative charge
     }
 
-    h_count = h_count_map.get((charge, bond_order_total), -1)
+    h_count = h_count_map.get((int(charge), int(bond_order_total)), -1)
     if h_count != -1:
+        logger.debug("Setting hydrogen count to {}", h_count)
         atom.SetNumExplicitHs(h_count)
 
 

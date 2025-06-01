@@ -107,6 +107,8 @@ def test_very_acidic_single(smiles_input, smiles_correct):
         ("Brc1cc[nH+]cc1", "Brc1ccncc1"),  # Aromatic_nitrogen_unprotonated
         ("C=C(O)c1c(C)cc(C)cc1C", "C=C([O-])c1c(C)cc(C)cc1C"),  # Vinyl_alcohol
         ("CC(=O)ON", "CC(=O)ON"),  # Primary_hydroxyl_amine
+        ("O=P(O)(O)OCCCC", "CCCCOP(=O)([O-])[O-]"),  # Phosphate
+        ("CC(P(O)(O)=O)C", "CC(C)P(=O)([O-])[O-]"),  # Phosphonate
     ],
 )
 def test_very_basic(smiles_input, smiles_correct):
@@ -120,32 +122,6 @@ def test_very_basic(smiles_input, smiles_correct):
     smiles_output = output[0]
 
     compare_smiles(smiles_output, smiles_correct)
-
-
-@pytest.mark.parametrize(
-    ("smiles_input", "smiles_correct_sorted"),
-    [
-        ("O=P(O)(O)OCCCC", ["CCCCOP(=O)([O-])O", "CCCCOP(=O)([O-])[O-]"]),  # Phosphate
-        (
-            "CC(P(O)(O)=O)C",
-            ["CC(C)P(=O)([O-])O", "CC(C)P(=O)([O-])[O-]"],
-        ),  # Phosphonate
-    ],
-)
-def test_very_basic_multiple(smiles_input, smiles_correct_sorted):
-    ph_min = 10000000
-    ph_max = 10000000
-
-    output = list(
-        protonate_smiles(smiles_input, ph_min=ph_min, ph_max=ph_max, precision=0.5)
-    )
-    assert len(output) == 2
-    smiles_output_sorted = tuple(sorted(output))
-    smiles_correct_sorted = tuple(sorted(smiles_correct_sorted))
-    for smiles_output, smiles_correct in zip(
-        smiles_output_sorted, smiles_correct_sorted
-    ):
-        compare_smiles(smiles_output, smiles_correct)
 
 
 @pytest.mark.parametrize(
