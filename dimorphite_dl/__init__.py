@@ -12,7 +12,7 @@ from .mol import MoleculeRecord
 
 __all__ = ["MoleculeRecord"]
 
-__version__ = "1.2.5"
+__version__ = "2.0.0"
 
 logger.disable("dimorphite_dl")
 
