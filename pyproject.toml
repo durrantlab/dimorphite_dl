@@ -38,7 +38,7 @@ Issues = "https://github.com/durrantlab/dimorphite_dl/issues"
 Changelog = "https://github.com/durrantlab/dimorphite_dl/blob/main/CHANGELOG.md"
 
 [project.scripts]
-dimorphite_dl = "dimorphite_dl.cli:main"
+dimorphite_dl = "dimorphite_dl.cli:run_cli"
 
 [build-system]
 requires = ["setuptools"]

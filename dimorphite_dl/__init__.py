@@ -8,6 +8,10 @@ from ast import literal_eval
 
 from loguru import logger
 
+from .mol import MoleculeRecord
+
+__all__ = ["MoleculeRecord"]
+
 __version__ = "1.2.5"
 
 logger.disable("dimorphite_dl")

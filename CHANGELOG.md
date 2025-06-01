@@ -4,6 +4,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Fallback mechanism now uses the previous successful site protonation.
+  In previous versions, sometimes only the last successful protonation site type was returned.
+  If the third phosphate protonation failed, then it would fallback to the last successful protonation before the first phosphate.
+  Now, we would return the second phosphate protonation.
+- Major refactor of practically everything.
+
 ## [1.2.5] - 2025-05-21
 
 ### Changed
@@ -29,15 +37,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Fixed a bug that affected how Dimorphite-DL deals with new protonation
     states that yield invalid SMILES strings.
-  - Previously, it simply returned the original input SMILES in these rare
+    - Previously, it simply returned the original input SMILES in these rare
     cases (better than nothing). Now, it instead returns the last valid SMILES
     produced, not necessarily the original SMILES.
-  - Consider `O=C(O)N1C=CC=C1` at pH 3.5 as an example.
-    - Dimorphite-DL first deprotonates the carboxyl group, producing
+    - Consider `O=C(O)N1C=CC=C1` at pH 3.5 as an example.
+        - Dimorphite-DL first deprotonates the carboxyl group, producing
       `O=C([O-])n1cccc1` (a valid SMILES).
-    - It then attempts to protonate the aromatic nitrogen, producing
+        - It then attempts to protonate the aromatic nitrogen, producing
       `O=C([O-])[n+]1cccc1`, an invalid SMILES.
-    - Previously, it would output the original SMILES, `O=C(O)N1C=CC=C1`. Now
+        - Previously, it would output the original SMILES, `O=C(O)N1C=CC=C1`. Now
       it outputs the last valid SMILES, `O=C([O-])n1cccc1`.
 
 ## [1.2.3]
@@ -96,4 +104,3 @@ The original version described in:
 Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An
 open-source program for enumerating the ionization states of drug-like small
 molecules. J Cheminform 11:14. doi:10.1186/s13321-019-0336-9.
-
