@@ -5,7 +5,6 @@ import importlib.resources as pkg_resources
 from loguru import logger
 from rdkit import Chem
 
-from dimorphite_dl import smarts  # type: ignore
 from dimorphite_dl.protonate.site import PKaDatum, SubstructureDatum
 
 
@@ -43,7 +42,9 @@ class PKaData:
         logger.trace("Loading substructure data from site_substructures.smarts")
 
         try:
-            with pkg_resources.open_text(smarts, "site_substructures.smarts") as f:
+            with pkg_resources.open_text(
+                "dimorphite_dl.smarts", "site_substructures.smarts"
+            ) as f:
                 lines = []
                 line_count = 0
                 valid_count = 0
