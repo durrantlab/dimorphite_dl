@@ -6,8 +6,7 @@ and generating protonated variants. Each function is focused on a specific
 aspect of the protonation workflow with comprehensive error handling.
 """
 
-from typing import Generator, Iterable, Iterator
-
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
 from loguru import logger
@@ -704,7 +703,7 @@ class Protonate:
             f"fallbacks: {self.stats.fallback_used}"
         )
 
-    def stream_all(self) -> Generator[str, None, None]:
+    def stream_all(self) -> Iterator[str]:
         """
         Stream all protonated SMILES as a generator.
 
@@ -790,7 +789,7 @@ def protonate_smiles(
         **kwargs: Additional arguments for SMILESProcessor
 
     Returns:
-        Generator of protonated SMILES strings
+        Iterator of protonated SMILES strings
     """
     assert isinstance(ph_min, (int, float))
     assert isinstance(ph_max, (int, float))

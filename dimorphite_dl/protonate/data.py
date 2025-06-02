@@ -1,6 +1,5 @@
-from typing import Generator
-
 import importlib.resources as pkg_resources
+from collections.abc import Iterator
 
 from loguru import logger
 from rdkit import Chem
@@ -147,6 +146,6 @@ class PKaData:
         return pka_data
 
     @classmethod
-    def get_substructures(cls) -> Generator[SubstructureDatum]:
+    def get_substructures(cls) -> Iterator[SubstructureDatum]:
         for substruct in cls._data:
             yield substruct

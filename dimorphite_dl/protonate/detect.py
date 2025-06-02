@@ -3,7 +3,7 @@ This module provides functionality to detect protonation sites in molecules
 using substructure matching with comprehensive error handling and validation.
 """
 
-from typing import Generator, Iterator
+from collections.abc import Iterator
 
 from loguru import logger
 from rdkit import Chem
@@ -106,9 +106,7 @@ class ProtonationSiteDetector:
             )
             raise ProtonationSiteDetectionError(f"Detection failed: {error}") from error
 
-    def _detect_all_sites_in_molecule(
-        self, mol: Chem.Mol
-    ) -> Generator[ProtonationSite]:
+    def _detect_all_sites_in_molecule(self, mol: Chem.Mol) -> Iterator[ProtonationSite]:
         """
         Detect all protonation sites in the prepared molecule.
 
@@ -153,9 +151,7 @@ class ProtonationSiteDetector:
 
             mol = self._protect_matched_atoms_in_molecule(mol, matches)
 
-    def _iterate_available_substructures(
-        self,
-    ) -> Generator[SubstructureDatum, None, None]:
+    def _iterate_available_substructures(self) -> Iterator[SubstructureDatum]:
         """
         Get available substructure patterns for matching.
 

@@ -6,8 +6,7 @@ including state enumerations, pKa data, and site information.
 Each class has clear responsibilities and comprehensive validation.
 """
 
-from typing import Generator
-
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -223,7 +222,7 @@ class ProtonationSite:
 
     def get_states(
         self, ph_min: float, ph_max: float, precision: float
-    ) -> Generator[tuple[int, ProtonationState], None, None]:
+    ) -> Iterator[tuple[int, ProtonationState]]:
         """
         Generate protonation states for all pKa data at this site.
 
