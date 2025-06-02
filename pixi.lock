@@ -2627,8 +2627,8 @@ packages:
   timestamp: 1744798629464
 - pypi: .
   name: dimorphite-dl
-  version: 1.2.5
-  sha256: f0575d431c469e423fd5e9339702496111100896dfc75dbf8773f5db814cd2c2
+  version: 2.0.0
+  sha256: b52889f864268947f3dcc64c71166506602901be0b17b90deb49d9089d1ce520
   requires_dist:
   - loguru>=0.7.2,<0.8
   - rdkit>=2020.3.3,<2026

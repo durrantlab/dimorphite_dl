@@ -2,8 +2,7 @@ import argparse
 
 from loguru import logger
 
-from dimorphite_dl import __version__
-from dimorphite_dl.protonate import protonate_smiles
+from dimorphite_dl import __version__, protonate_smiles
 
 
 def run_cli() -> None:

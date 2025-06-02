@@ -1,6 +1,6 @@
 import pytest
 
-from dimorphite_dl import MoleculeRecord
+from dimorphite_dl.mol import MoleculeRecord
 
 
 @pytest.mark.parametrize(

@@ -5,7 +5,7 @@ import importlib.resources as pkg_resources
 from loguru import logger
 from rdkit import Chem
 
-from dimorphite_dl.protonate import smarts  # type: ignore
+from dimorphite_dl import smarts  # type: ignore
 from dimorphite_dl.protonate.site import PKaDatum, SubstructureDatum
 
 

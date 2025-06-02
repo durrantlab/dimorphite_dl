@@ -8,9 +8,9 @@ from ast import literal_eval
 
 from loguru import logger
 
-from .mol import MoleculeRecord
+from .protonate.run import protonate_smiles
 
-__all__ = ["MoleculeRecord"]
+__all__ = ["protonate_smiles"]
 
 __version__ = "2.0.0"
 

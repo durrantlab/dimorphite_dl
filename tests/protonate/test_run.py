@@ -1,7 +1,7 @@
 import pytest
 from conftest import compare_smiles  # type: ignore
 
-from dimorphite_dl.protonate import protonate_smiles
+from dimorphite_dl import protonate_smiles
 
 
 # Every molecule should be protonated

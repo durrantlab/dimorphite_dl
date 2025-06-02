@@ -2,7 +2,7 @@ import pytest
 from conftest import compare_smarts, compare_smiles  # type: ignore
 from rdkit import Chem
 
-from dimorphite_dl import MoleculeRecord
+from dimorphite_dl.mol import MoleculeRecord
 from dimorphite_dl.protonate.detect import ProtonationSiteDetector
 
 

@@ -105,7 +105,7 @@ Dimorphite-DL can be easily integrated into your Python scripts.
 The primary function for this is `protonate_smiles` from `dimorphite_dl.protonate`.
 
 ```python
-from dimorphite_dl.protonate import protonate_smiles
+from dimorphite_dl import protonate_smiles
 
 # Protonate a single SMILES string with custom pH range and precision
 protonated_mol_1: list[str] = protonate_smiles(

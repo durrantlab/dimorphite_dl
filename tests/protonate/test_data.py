@@ -2,7 +2,7 @@
 Tests for loading protonation site data
 """
 
-from dimorphite_dl.protonate import PKaData
+from dimorphite_dl.protonate.data import PKaData
 
 
 def test_data_init():
