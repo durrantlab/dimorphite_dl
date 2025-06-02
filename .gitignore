@@ -3,6 +3,7 @@ __pycache__
 .venv
 .env
 dist/
+**/_version.py
 
 # Jupyter Notebook
 **/.ipynb_checkpoints

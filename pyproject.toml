@@ -7,7 +7,7 @@ maintainers = [
 ]
 description = "Adds hydrogen atoms to molecular representations as specified by pH"
 name = "dimorphite_dl"
-version = "2.0.0"
+dynamic = ["version"]
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -41,12 +41,17 @@ Changelog = "https://github.com/durrantlab/dimorphite_dl/blob/main/CHANGELOG.md"
 dimorphite_dl = "dimorphite_dl.cli:run_cli"
 
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=61.0", "setuptools-scm>=8", "wheel"]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["dimorphite_dl*"]
 
 [tool.setuptools.package-data]
-dimorphite_dl = ["data/*.smarts"]
+dimorphite_dl = ["smarts/*.smarts"]
+
+[tool.setuptools_scm]
+write_to = "dimorphite_dl/_version.py"
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-timestamp"
 

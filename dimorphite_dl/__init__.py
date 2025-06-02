@@ -12,7 +12,10 @@ from .protonate.run import protonate_smiles
 
 __all__ = ["protonate_smiles"]
 
-__version__ = "2.0.0"
+try:
+    from ._version import version as __version__
+except ImportError:
+    __version__ = "unknown"
 
 logger.disable("dimorphite_dl")
 

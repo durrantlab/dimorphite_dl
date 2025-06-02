@@ -6,7 +6,6 @@ channels = ["conda-forge"]
 name = "dimorphite_dl"
 description = "Adds hydrogen atoms to molecular representations as specified by pH"
 platforms = ["win-64", "linux-64", "osx-64"]
-version = "2.0.0"
 license = "Apache-2.0"
 readme = "README.md"
 
@@ -53,7 +52,7 @@ tests = { cmd = [
     "--failed-first",
 ]}
 coverage = { cmd = ["coverage", "report"] }
-cleanup-build = { cmd = ["rm", "-rf", "./build"] }
+cleanup-build = { cmd = ["rm", "-rf", "./build", "./dist"] }
 build = { cmd = ["python3", "-m", "build"], depends-on = ["cleanup-build"]}
 publish-test = { cmd = ["twine", "upload", "--repository", "testpypi", "dist/*"] }
 publish = { cmd = ["twine", "upload", "dist/*"] }
@@ -62,7 +61,8 @@ publish = { cmd = ["twine", "upload", "dist/*"] }
 build = ">=1.2.2.post1,<2"
 mypy-extensions = ">=1.0.0"
 black = { version = ">=23.10.0", extras = ["jupyter"] }
-pyrefly = ">=0.16.1, <0.17"
+pyrefly = ">=0.16.0, <0.17"
+setuptools-scm = ">=8.0.0"
 
 [feature.docs.dependencies]
 mkdocs = ">=1.6.1,<2"
