@@ -68,6 +68,38 @@ pixi run -e dev coverage
 
 Review the generated coverage reports to address any gaps in testing.
 
+## Bumping Version
+
+Releasing a new version of `dimorphite_dl` requires updating version information, documenting changes, and creating a corresponding release tag. Follow these steps precisely to ensure consistency and traceability:
+
+1. **Update the changelog:**
+   Document all notable changes since the previous release in the `CHANGELOG.md` file. Follow a consistent and clear format to help users understand what has changed.
+
+3. **Commit the changes:**
+   Stage and commit the version bump and changelog update using a clear and standardized message, for example:
+
+   ```bash
+   git add .
+   git commit -m "bump: v1.2.5"
+   ```
+
+4. **Tag the commit:**
+   Create a version tag that follows the `v<version>` format:
+
+   ```bash
+   git tag v1.2.5
+   git push origin main --tags
+   ```
+
+5. **Create a GitHub release:**
+   Navigate to the [GitHub Releases](https://github.com/durrantlab/dimorphite_dl/releases) page and draft a new release:
+
+   -   Tag version: `v1.2.5`
+   -   Release title: `v1.2.5`
+   -   Description: Copy the relevant changelog section or summarize the key changes.
+
+   Attach the built package files from the `dist/` directory, if desired.
+
 ## Building the Package
 
 Prepare `dimorphite_dl` for publishing or distribution by building the package.
@@ -78,47 +110,6 @@ pixi run build
 ```
 
 Upon completion, inspect the `dist` directory for the generated distribution files, which are ready for publication.
-
-## Bumping Version
-
-Releasing a new version of `dimorphite_dl` requires updating version information, documenting changes, and creating a corresponding release tag. Follow these steps precisely to ensure consistency and traceability:
-
-1.  **Update version identifiers:**
-   Change the version number in all of the following files:
-
-   -   `pyproject.toml`
-   -   `pixi.toml`
-   -   `dimorphite_dl/__init__.py` (update the `__version__` string)
-
-   Ensure that the version is consistent across all files.
-
-2.  **Update the changelog:**
-   Document all notable changes since the previous release in the `CHANGELOG.md` file. Follow a consistent and clear format to help users understand what has changed.
-
-3.  **Commit the changes:**
-   Stage and commit the version bump and changelog update using a clear and standardized message, for example:
-
-   ```bash
-   git add .
-   git commit -m "bump: v1.2.5"
-   ```
-
-4.  **Tag the commit:**
-   Create a version tag that follows the `v<version>` format:
-
-   ```bash
-   git tag v1.2.5
-   git push origin main --tags
-   ```
-
-5.  **Create a GitHub release:**
-   Navigate to the [GitHub Releases](https://github.com/durrantlab/dimorphite_dl/releases) page and draft a new release:
-
-   -   Tag version: `v1.2.5`
-   -   Release title: `v1.2.5`
-   -   Description: Copy the relevant changelog section or summarize the key changes.
-
-   Attach the built package files from the `dist/` directory, if desired.
 
 ## Publishing to PyPI
 
