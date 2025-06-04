@@ -54,13 +54,7 @@ pip install https://github.com/durrantlab/dimorphite_dl.git
 
 ### CLI
 
-The command-line interface provides straightforward access to Dimorphite-DL's functionalities.
-
-```bash
-dimorphite_dl [-h] [--ph_min MIN] [--ph_max MAX] [--precision PRE] [--output_file FILE] [--max_variants MXV] [--label_states] [--silent] SMI
-
-dimorphite_dl v1.2.5
-```
+The command-line interface (`dimorphite_dl`) provides straightforward access to Dimorphite-DL's functionalities.
 
 **Positional Arguments:**
 
@@ -74,29 +68,31 @@ dimorphite_dl v1.2.5
 - `--output_file FILE`: Optional path to a file to write the protonated SMILES results.
 - `--max_variants MXV`: Limits the number of protonation variants generated per input compound (default: 128).
 - `--label_states`: If set, output SMILES will be labeled with their target ionization state ("DEPROTONATED", "PROTONATED", or "BOTH").
-- `--silent`: Suppresses all messages printed to the screen.
+- `--log_level`: Enable logging and set the level.
+  Can be `none`, `debug`, `info`, `warning`, `error`, or `critical`.
+  Defaults to no logging.
 
 #### Examples
 
-**Protonate molecules from a file:**
+Protonate molecules from a file:
 
 ```bash
 dimorphite_dl sample_molecules.smi
 ```
 
-**Protonate a single SMILES string within a specific pH range:**
+Protonate a single SMILES string within a specific pH range:
 
 ```bash
 dimorphite_dl --ph_min -3.0 --ph_max -2.0 "CCC(=O)O"
 ```
 
-**Protonate a SMILES string and save output to a file:**
+Protonate a SMILES string and save output to a file:
 
 ```bash
 dimorphite_dl --ph_min -3.0 --ph_max -2.0 --output_file output.smi "CCCN"
 ```
 
-**Protonate molecules from a file with increased pKa precision and state labels:**
+Protonate molecules from a file with increased pKa precision and state labels:
 
 ```bash
 dimorphite_dl --precision 2.0 --label_states sample_molecules.smi

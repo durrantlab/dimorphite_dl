@@ -2,7 +2,10 @@ import argparse
 
 from loguru import logger
 
-from dimorphite_dl import __version__, protonate_smiles
+from dimorphite_dl import __version__, protonate_smiles, enable_logging
+
+
+LOG_LEVEL_TO_INT = {"debug": 10, "info": 20, "warning": 30, "error": 40, "critical": 50}
 
 
 def run_cli() -> None:
@@ -49,13 +52,18 @@ def run_cli() -> None:
         + '(i.e., "DEPROTONATED", "PROTONATED", or "BOTH").',
     )
     parser.add_argument(
-        "--silent", action="store_true", help="do not print any messages to the screen"
+        "--log_level",
+        choices=["none", "debug", "info", "warning", "error", "critical"],
+        default="none",
+        help="Enable and set logging level. Defaults to none (i.e., no logging)",
     )
     parser.add_argument(
         "smiles", metavar="SMI", type=str, help="SMILES or path to SMILES to protonate"
     )
 
     args = parser.parse_args()
+    if args.log_level != "none":
+        enable_logging(LOG_LEVEL_TO_INT[args.log_level])
 
     if args.output_file is not None:
         logger.info("Writing smiles to {}", args.output_file)
