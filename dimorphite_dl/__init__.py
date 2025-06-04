@@ -31,6 +31,7 @@ def enable_logging(
     stdout_set: bool = True,
     file_path: str | None = None,
     log_format: str = LOG_FORMAT,
+    colorize: bool = True,
 ) -> None:
     r"""Enable logging.
 
@@ -45,12 +46,17 @@ def enable_logging(
                 "sink": sys.stdout,
                 "level": level_set,
                 "format": log_format,
-                "colorize": True,
+                "colorize": colorize,
             }
         )
     if isinstance(file_path, str):
         config["handlers"].append(
-            {"sink": file_path, "level": level_set, "format": log_format, "False": True}
+            {
+                "sink": file_path,
+                "level": level_set,
+                "format": log_format,
+                "colorize": colorize,
+            }
         )
     # https://loguru.readthedocs.io/en/stable/api/logger.html#loguru._logger.Logger.configure
     logger.configure(**config)
