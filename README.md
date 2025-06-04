@@ -129,6 +129,14 @@ protonated_labeled: list[str] = protonate_smiles(
 print(f"Protonated with labels: {protonated_labeled}")
 ```
 
+## Known issues
+
+Dimorphite_dl is designed to handle the vast majority of ionizable functional groups accurately, but there are some edge cases where the current SMARTS patterns and pKa assignments may not behave as expected.
+The following are known limitations that users should be aware of when working with specific molecular substructures:
+
+- **Tertiary Amides**: Tertiary amides (e.g., N-acetylpiperidine `CC(=O)N1CCCCC1`) are incorrectly treated as basic amines (pKa ~8) instead of neutral species because current amide SMARTS patterns require an N-H bond.
+- **Indoles and Pyrroles**: These heterocycles are correctly deprotonated around pH 14.5 but are not protonated at very low pH (~-3.5) where they would be expected to protonate under extremely acidic conditions.
+
 ## Development
 
 We use [pixi](https://pixi.sh/latest/) to manage Python environments and simplify the developer workflow.
