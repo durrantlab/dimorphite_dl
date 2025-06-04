@@ -13,6 +13,9 @@
     <a href="https://github.com/durrantlab/dimorphite_dl/releases">
         <img src="https://img.shields.io/github/v/release/durrantlab/dimorphite_dl" alt="GitHub release (latest by date)">
     </a>
+    <a href="https://pypistats.org/packages/dimorphite-dl">
+        <img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/dimorphite-dl?style=flat&label=PyPI%20downloads&link=https%3A%2F%2Fpypistats.org%2Fpackages%2Fdimorphite-dl">
+    </a>
     <a href="https://github.com/durrantlab/dimorphite_dl/blob/main/LICENSE" target="_blank">
         <img src="https://img.shields.io/github/license/durrantlab/dimorphite_dl" alt="License">
     </a>
