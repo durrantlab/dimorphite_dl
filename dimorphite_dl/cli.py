@@ -2,8 +2,7 @@ import argparse
 
 from loguru import logger
 
-from dimorphite_dl import __version__, protonate_smiles, enable_logging
-
+from dimorphite_dl import __version__, enable_logging, protonate_smiles
 
 LOG_LEVEL_TO_INT = {"debug": 10, "info": 20, "warning": 30, "error": 40, "critical": 50}
 

@@ -253,6 +253,7 @@ class MoleculeRecord:
             Mol object without explicit hydrogens or None if failed
         """
         if mol is None:
+            logger.info("No molecule was provided")
             return None
 
         logger.debug("Removing hydrogens from molecule")

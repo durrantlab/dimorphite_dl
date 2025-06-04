@@ -327,6 +327,13 @@ def test_max_variants():
     assert len(output) == 128, f"Should produce 128 mol, but produced {len(output)}"
 
 
+@pytest.mark.parametrize(("smiles"), [r"CCC(C)=C(Cl)C/C(I)=C(\C)F"])
+def test_no_protonation_sites(smiles):
+    output = protonate_smiles(smiles)
+    assert len(output) == 1
+    compare_smiles(output[0], smiles)
+
+
 @pytest.mark.parametrize(
     ("smiles_input", "ph", "smiles_correct"),
     [

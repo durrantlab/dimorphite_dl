@@ -370,7 +370,6 @@ class Protonate:
             Clean SMILES string or None if generation failed
         """
         assert isinstance(mol_record, MoleculeRecord)
-
         try:
             if mol_record.mol is not None:
                 mol_without_hs = MoleculeRecord.remove_hydrogens(mol_record.mol)
@@ -378,7 +377,8 @@ class Protonate:
                     clean_smiles = Chem.MolToSmiles(
                         mol_without_hs, isomericSmiles=True, canonical=True
                     )
-                    if clean_smiles and len(clean_smiles) > 0:
+                    if clean_smiles:
+                        logger.info("Returning cleaned SMILES: {}", clean_smiles)
                         return clean_smiles
         except Exception as error:
             logger.warning(
