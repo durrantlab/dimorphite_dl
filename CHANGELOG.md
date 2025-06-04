@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `colorize` keyword argument for `enable_logging` for logs to not use ANSI color codes.
 
+### Fixed
+
+- Determining if a provided input string was a SMILES or path to file.
+  `CCC(C)=C(Cl)C/C(I)=C(\C)F` was incorrectly classified as a file.
+
 ## [2.0.1] - 2025-06-03
 
 ### Changed

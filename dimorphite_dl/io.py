@@ -271,12 +271,34 @@ class SMILESProcessor:
         if len(s) > 1000:
             return False
 
-        return bool(
+        # Check if it has any file path indicators
+        has_path_indicators = (
             os.path.exists(s)
             or os.path.sep in s
             or (os.path.altsep and os.path.altsep in s)
             or s.endswith((".smiles", ".smi", ".txt", ".csv", ".sdf", ".gz"))
         )
+
+        if not has_path_indicators:
+            return False
+
+        # If it looks like a path, try to validate it as a real file path
+        try:
+            path = pathlib.Path(s)
+            # If the path exists, it's definitely a file
+            if path.exists():
+                return True
+            # If the parent directory exists, it could be a valid file path
+            if path.parent.exists():
+                return True
+            # If it has a valid file extension and reasonable structure, assume it's a path
+            if path.suffix in {".smiles", ".smi", ".txt", ".csv", ".sdf", ".gz"}:
+                return True
+        except (OSError, ValueError):
+            # If we can't even create a Path object, it's probably not a file path
+            return False
+
+        return False
 
     def _handle_error(self, message: str):
         """Handle errors based on skip_invalid setting."""
