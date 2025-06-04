@@ -1,0 +1,35 @@
+{
+  "upload_type": "software",
+  "title": "Dimorphite-DL",
+  "creators": [
+    {
+      "name": "Ropp, Patrick J.",
+    },
+    {
+      "name": "Kaminsky, Jesse C.",
+      "orcid": "0000-0001-5796-2874"
+    },
+    {
+      "name": "Yablonski, Sara",
+    },
+    {
+      "name": "Spiegel, Jacob O.",
+      "orcid": "0000-0002-8496-6915",
+    },
+    {
+      "name": "Maldonado, Alex M.",
+      "orcid": "0000-0003-3280-062X",
+      "affiliation": "Department of Biological Sciences, University of Pittsburgh"
+    },
+    {
+      "name": "Durrant, Jacob D.",
+      "orcid": "0000-0002-5808-4097",
+      "affiliation": "Department of Biological Sciences, University of Pittsburgh"
+    },
+  ],
+  "access_right": "open",
+  "license": {
+    "id": "apache-2.0",
+  },
+  "language": "eng",
+}
