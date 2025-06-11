@@ -1,4 +1,4 @@
-import importlib.resources as pkg_resources
+from importlib.resources import files, as_file
 from collections.abc import Iterator
 
 from loguru import logger
@@ -39,23 +39,20 @@ class PKaData:
             IOError: If there are issues reading the file.
         """
         logger.trace("Loading substructure data from site_substructures.smarts")
-
+        resource = files("dimorphite_dl.smarts") / "site_substructures.smarts"
         try:
-            with pkg_resources.open_text(
-                "dimorphite_dl.smarts", "site_substructures.smarts"
-            ) as f:
-                lines = []
-                line_count = 0
-                valid_count = 0
+            with as_file(resource) as path:
+                with open(path, "r") as f:
+                    lines = []
+                    valid_count = 0
 
-                for line in f:
-                    line_count += 1
-                    stripped = line.strip()
+                    for line in f:
+                        stripped = line.strip()
 
-                    # Skip empty lines and comments
-                    if stripped and not stripped.startswith("#"):
-                        lines.append(stripped)
-                        valid_count += 1
+                        # Skip empty lines and comments
+                        if stripped and not stripped.startswith("#"):
+                            lines.append(stripped)
+                            valid_count += 1
 
                 logger.info("Loaded {} valid SMARTS patterns", valid_count)
                 return lines
