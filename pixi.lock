@@ -2282,7 +2282,7 @@ packages:
   version: 8.2.1
   sha256: 61a3265b914e850b85317d0b3109c7f8cd35a670f963866005d6ef1d5175a12b
   requires_dist:
-  - colorama ; sys_platform == 'win32'
+  - colorama ; platform_system == 'Windows'
   requires_python: '>=3.10'
 - conda: https://conda.anaconda.org/conda-forge/noarch/click-8.2.1-pyh707e725_0.conda
   sha256: 8aee789c82d8fdd997840c952a586db63c6890b00e88c4fb6e80a38edd5f51c0
@@ -2636,7 +2636,7 @@ packages:
   timestamp: 1744798629464
 - pypi: .
   name: dimorphite-dl
-  version: 2.0.1.dev2+gab2d3d6.d20250602014621
+  version: 2.0.2.dev8+g4a87c3e
   sha256: b2d12d0853468fb145cdf4ff112b1f8ee3ca4f5fb6c4b3489ad7aab9dcc89b0f
   requires_dist:
   - loguru>=0.7.2,<0.8

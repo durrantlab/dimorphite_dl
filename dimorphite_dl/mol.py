@@ -81,18 +81,10 @@ class MoleculeRecord:
         conversion_info = self.to_mol_silenced(self.smiles)
 
         if conversion_info["mol"] is None:
-            error_msg = conversion_info["stderr_content"].strip()
-            if error_msg:
-                logger.warning(
-                    "RDKit failed to parse SMILES '{}'. RDKit error: {}",
-                    self.smiles,
-                    error_msg,
-                )
-            else:
-                logger.warning(
-                    "RDKit failed to parse SMILES '{}' (no specific error message)",
-                    self.smiles,
-                )
+            logger.warning(
+                "RDKit failed to parse SMILES '{}' (no specific error message)",
+                self.smiles,
+            )
             return None
 
         mol = conversion_info["mol"]
@@ -382,47 +374,18 @@ class MoleculeRecord:
             smiles: SMILES string to convert
 
         Returns:
-            Dictionary with 'mol' (RDKit Mol or None) and 'stderr_content' (string)
+            Dictionary with 'mol' (RDKit Mol or None)
         """
         logger.debug("Converting SMILES to RDKit mol: {}", smiles)
 
-        # Set up stderr capture
-        stderr_fileno = sys.stderr.fileno()
-        stderr_save = os.dup(stderr_fileno)
-        stderr_pipe = os.pipe()
-
         try:
-            # Redirect stderr to pipe
-            os.dup2(stderr_pipe[1], stderr_fileno)
-            os.close(stderr_pipe[1])
-
             # Convert SMILES to mol (this may write to stderr)
             mol = Chem.MolFromSmiles(smiles)
-
-            # Read captured stderr
-            os.close(stderr_fileno)
-            stderr_content = os.read(stderr_pipe[0], 1024).decode(
-                "utf-8", errors="ignore"
-            )
-
         except Exception as e:
             logger.error("Error during SMILES conversion: {}", str(e))
             mol = None
-            stderr_content = f"Exception during conversion: {str(e)}"
 
-        finally:
-            # Restore stderr
-            try:
-                os.close(stderr_pipe[0])
-            except Exception:
-                pass
-            try:
-                os.dup2(stderr_save, stderr_fileno)
-                os.close(stderr_save)
-            except Exception:
-                pass
-
-        return {"mol": mol, "stderr_content": stderr_content}
+        return {"mol": mol}
 
     def copy(self) -> "MoleculeRecord":
         """
