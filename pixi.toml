@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = [
     "durrantlab <durrantj@pitt.edu>",
 ]
@@ -19,8 +19,8 @@ docs = ["docs"]
 [tasks]
 
 [dependencies]
-python = "==3.13"
-rdkit = ">=2020.3.3,<2026"
+python = ">=3.13"
+rdkit = ">=2020.3.3"
 
 [feature.dev.dependencies]
 isort = ">=5.12.0"
@@ -31,10 +31,10 @@ pytest-cov = ">=4.1.0"
 coverage = ">=7.3.1"
 pytest-html = ">=4.0.1"
 colorama = ">=0.4.6"
-basedpyright = ">=1.29.1,<2"
-ruff = ">=0.11.10,<0.12"
-twine = ">=6.1.0,<7"
-ipykernel = ">=6.29.5,<7"
+basedpyright = ">=1.29.1"
+ruff = ">=0.11.10"
+twine = ">=6.1.0"
+ipykernel = ">=6.29.5"
 
 [feature.dev.tasks]
 mdlint = { cmd = ["markdownlint-cli2", '"**/*.{md,markdown}"', "--fix", "--config", ".markdownlint.yaml", "||", "true"] }
@@ -58,29 +58,28 @@ publish-test = { cmd = ["twine", "upload", "--repository", "testpypi", "dist/*"]
 publish = { cmd = ["twine", "upload", "dist/*"] }
 
 [feature.dev.pypi-dependencies]
-build = ">=1.2.2.post1,<2"
+build = ">=1.2.2.post1"
 mypy-extensions = ">=1.0.0"
 black = { version = ">=23.10.0", extras = ["jupyter"] }
-pyrefly = ">=0.16.0, <0.17"
 setuptools-scm = ">=8.0.0"
 
 [feature.docs.dependencies]
 mkdocs = ">=1.6.1,<2"
 mkdocs-material = ">=9.6.5,<10"
-mkdocstrings = ">=0.28.2,<0.29"
-mkdocstrings-python = ">=1.16.2,<2"
-pymdown-extensions = ">=10.14.3,<11"
+mkdocstrings = ">=0.28.2"
+mkdocstrings-python = ">=1.16.2"
+pymdown-extensions = ">=10.14.3"
 mkdocs-table-reader-plugin = ">=3.1.0,<4"
-mkdocs-gen-files = ">=0.4.0,<0.5"
+mkdocs-gen-files = ">=0.4.0"
 mkdocs-macros-plugin = ">=1.3.7,<2"
-mkdocs-jupyter = ">=0.25.1,<0.26"
-mkdocs-glightbox = ">=0.4.0,<0.5"
+mkdocs-jupyter = ">=0.25.1"
+mkdocs-glightbox = ">=0.4.0"
 mkdocs-git-revision-date-localized-plugin = ">=1.2.9,<2"
 
 [feature.docs.pypi-dependencies]
-material-plausible-plugin = ">=0.2.0,<0.3"
-mkdocs-print-site-plugin = ">=2.6.0,<3"
-mkdocs-awesome-nav = ">=3.0.0,<4"
+material-plausible-plugin = ">=0.2.0"
+mkdocs-print-site-plugin = ">=2.6.0"
+mkdocs-awesome-nav = ">=3.0.0"
 
 [feature.docs.tasks]
 docs = { cmd = ["rm", "-rf", "./public/", "&&", "mkdocs", "build", "-d", "public/"] }
