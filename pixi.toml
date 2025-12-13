@@ -5,7 +5,7 @@ authors = [
 channels = ["conda-forge"]
 name = "dimorphite_dl"
 description = "Adds hydrogen atoms to molecular representations as specified by pH"
-platforms = ["win-64", "linux-64", "osx-64"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 license = "Apache-2.0"
 readme = "README.md"
 
