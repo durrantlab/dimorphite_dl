@@ -26,7 +26,19 @@ import sys
 try:
     # Only needed by type checkers; the annotations below are type comments so
     # the module still parses under Python 2.
-    from typing import List, Tuple
+    from typing import List, Tuple, TypedDict
+
+    # One parsed line of site_substructures.smarts. prot_states_for_pH holds
+    # [site index within the pattern, target state] pairs.
+    SiteSubstruct = TypedDict(
+        "SiteSubstruct",
+        {
+            "name": str,
+            "smart": str,
+            "mol": "Chem.Mol",
+            "prot_states_for_pH": List[List[str]],
+        },
+    )
 except ImportError:
     pass
 
@@ -608,18 +620,20 @@ class Protonate(object):
         # name).
         tag = " ".join(data)
 
-        # sites is a list of (atom index, "PROTONATED|DEPROTONATED|BOTH").
-        # Note that the second entry indicates what state the site SHOULD be
-        # in (not the one it IS in per the SMILES string). It's calculated
-        # based on the probablistic distributions obtained during training.
-        sites = ProtSubstructFuncs.get_prot_sites_and_target_states(smi, self.subs)
-
-        # This is the same parse the site indices came from, so they line up
-        # with its atom ordering.
+        # The sites are found on this Mol and applied to it, so their indices
+        # cannot drift out of step with the atom ordering.
         mol = UtilFuncs.convert_smiles_str_to_mol(smi)
         if mol is None:
+            UtilFuncs.eprint("ERROR:   ", smi)
+            sites = []
             new_smis = [smi]
         else:
+            # sites is a list of (atom index, "PROTONATED|DEPROTONATED|BOTH",
+            # site name). Note that the second entry indicates what state the
+            # site SHOULD be in (not the one it IS in per the SMILES string).
+            # It's calculated based on the probablistic distributions obtained
+            # during training.
+            sites = ProtSubstructFuncs.get_prot_sites_and_target_states(mol, self.subs)
             new_smis = [
                 smi_and_mol[0]
                 for smi_and_mol in ProtSubstructFuncs.protonate_sites(
@@ -730,24 +744,31 @@ class ProtSubstructFuncs:
         return protonation_state
 
     @staticmethod
-    def get_prot_sites_and_target_states(smi, subs):
+    def get_prot_sites_and_target_states(mol, subs):
+        # type: (Chem.Mol, List[SiteSubstruct]) -> List[Tuple[int, str, str]]
         """For a single molecule, find all possible matches in the protonation
         R-group list, subs. Items that are higher on the list will be matched
         first, to the exclusion of later items.
 
-        :param string smi: A SMILES string.
-        :param list subs: Substructure information.
-        :return: A list of protonation sites and their pKa bin. ('PROTONATED',
-            'BOTH', or  'DEPROTONATED')
+        Args:
+            mol: The molecule to search. It is not modified, and the returned
+                indices refer to its atoms.
+            subs: Substructure information, as loaded by
+                load_protonation_substructs_calc_state_for_ph.
+
+        Returns:
+            (atom index, 'PROTONATED' | 'BOTH' | 'DEPROTONATED', site name)
+            tuples.
+
+        Raises:
+            ValueError: If a pattern's site is a hydrogen that mol does not
+                contain as an atom. That is an error in the SMARTS file.
         """
 
-        # Convert the Smiles string (smi) to an RDKit Mol Obj
-        mol = UtilFuncs.convert_smiles_str_to_mol(smi)
-
-        # Check Conversion worked
-        if mol is None:
-            UtilFuncs.eprint("ERROR:   ", smi)
-            return []
+        # The patterns need explicit Hs. AddHs appends them after the existing
+        # atoms, so any index below num_atoms names the same atom in mol.
+        num_atoms = mol.GetNumAtoms()
+        smi = Chem.MolToSmiles(mol, isomericSmiles=True)
 
         # Try to Add hydrogens. if failed return []
         try:
@@ -783,6 +804,12 @@ class ProtSubstructFuncs:
                     for site in prot:
                         proton = int(site[0])
                         category = site[1]
+                        if match[proton] >= num_atoms:
+                            raise ValueError(
+                                "Site %d of the %s pattern is a hydrogen added "
+                                "by AddHs, so it has no atom to charge in %s."
+                                % (proton, item["name"], smi)
+                            )
                         site_idxs.append(match[proton])
                         new_site = (match[proton], category, item["name"])
 
@@ -1104,7 +1131,7 @@ def run_with_mol_list(mol_lst, **kwargs):
     # that a list of Mol objects can be used directly. Intead, convert this
     # list of mols to smiles and pass that. Not memory efficient, but it will
     # work.
-    protonated_smiles = []
+    input_smiles = []
     for m in mol_lst:
         # Chem.MolFromSmiles returns None for bad SMILES. Skip these with a
         # warning, as the command line does, rather than raising an opaque
@@ -1112,9 +1139,12 @@ def run_with_mol_list(mol_lst, **kwargs):
         if m is None:
             UtilFuncs.eprint("WARNING: Skipping None entry in mol_lst.")
             continue
-        smiles = Chem.MolToSmiles(m, isomericSmiles=True)
-        kwargs["smiles"] = smiles
-        protonated_smiles.extend([s.split("\t")[0] for s in main(kwargs)])
+        input_smiles.append(Chem.MolToSmiles(m, isomericSmiles=True))
+
+    # One main() call reads the molecules as lines of a single input, so the
+    # SMARTS file is loaded and compiled once rather than once per molecule.
+    kwargs["smiles"] = "\n".join(input_smiles)
+    protonated_smiles = [s.split("\t")[0] for s in main(kwargs)]
 
     # Now convert the list of protonated smiles strings back to RDKit Mol
     # objects.

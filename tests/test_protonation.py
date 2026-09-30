@@ -2,6 +2,7 @@
 group, alone and in combination."""
 
 import os
+from io import StringIO
 from typing import Callable, Dict, List, Tuple, Union
 
 import pytest
@@ -651,6 +652,88 @@ def test_many_both_sites_capped(
     assert max(input_sizes) <= max_variants
 
     assert "Limited number of variants" in capsys.readouterr().err
+
+
+def load_input_mol(smiles: str) -> Chem.Mol:
+    """Reads one SMILES string the way Protonate does (neutralized and
+    canonicalized), so site tests see the molecule the sites are found on.
+
+    Args:
+        smiles: The input SMILES string.
+
+    Returns:
+        The Mol that Protonate would search for sites.
+    """
+
+    smi = dimorphite_dl.LoadSMIFile(StringIO(smiles)).next()["smiles"]
+    return dimorphite_dl.UtilFuncs.convert_smiles_str_to_mol(smi)
+
+
+@pytest.mark.parametrize(
+    "smiles",
+    [group[0] for group in SINGLE_SITE_GROUPS + PHOSPHORUS_GROUPS],
+    ids=[group_id(group) for group in SINGLE_SITE_GROUPS + PHOSPHORUS_GROUPS],
+)
+def test_every_site_is_an_atom_of_the_input_mol(smiles: str) -> None:
+    """Checks that no shipped pattern puts a site on a hydrogen that AddHs
+    created. Sites are found on the H-added copy but charged on the Mol
+    without those Hs, so such a site would name an atom that is not there."""
+
+    mol = load_input_mol(smiles)
+    subs = (
+        dimorphite_dl.ProtSubstructFuncs.load_protonation_substructs_calc_state_for_ph()
+    )
+    sites = dimorphite_dl.ProtSubstructFuncs.get_prot_sites_and_target_states(mol, subs)
+
+    assert sites != [], smiles
+    for idx, _, name in sites:
+        assert idx < mol.GetNumAtoms(), (name, idx)
+        assert mol.GetAtomWithIdx(idx).GetAtomicNum() != 1, (name, idx)
+
+
+def test_site_on_added_hydrogen_raises() -> None:
+    """Checks that a pattern whose site is an AddHs hydrogen raises instead
+    of charging whatever atom happens to have that index."""
+
+    smarts = "[OX2]-[#1]"
+    subs: List[dimorphite_dl.SiteSubstruct] = [
+        {
+            "name": "Hydroxyl_hydrogen",
+            "smart": smarts,
+            "mol": Chem.MolFromSmarts(smarts),
+            "prot_states_for_pH": [["1", "BOTH"]],
+        }
+    ]
+
+    with pytest.raises(ValueError, match="Hydroxyl_hydrogen"):
+        dimorphite_dl.ProtSubstructFuncs.get_prot_sites_and_target_states(
+            Chem.MolFromSmiles("CCO"), subs
+        )
+
+
+@pytest.mark.parametrize(
+    "group",
+    SINGLE_SITE_GROUPS + PHOSPHORUS_GROUPS,
+    ids=[group_id(group) for group in SINGLE_SITE_GROUPS + PHOSPHORUS_GROUPS],
+)
+def test_output_does_not_depend_on_input_charge_state(group: List[str]) -> None:
+    """Checks that each group gives the same states and labels whether it is
+    written neutral, protonated, or deprotonated. neutralize_mol handles only
+    the charged forms it has a rule for, so a missing rule shows up here as a
+    charged input that keeps its charge or loses its site."""
+
+    smiles = group[0]
+    expected = sorted(
+        [normalize_smiles(line[0])] + line[1:]
+        for line in protonate(smiles, 7.0, EVERY_SITE_BOTH_PRECISION)
+    )
+
+    for charged_form in group[1:-1]:
+        output = sorted(
+            [normalize_smiles(line[0])] + line[1:]
+            for line in protonate(charged_form, 7.0, EVERY_SITE_BOTH_PRECISION)
+        )
+        assert output == expected, charged_form
 
 
 @pytest.mark.parametrize(

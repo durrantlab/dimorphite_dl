@@ -103,6 +103,68 @@ def test_run_with_mol_list_skips_none_entries(
     assert "Skipping None entry" in capsys.readouterr().err
 
 
+def test_run_with_mol_list_loads_substructures_once(
+    monkeypatch: pytest.MonkeyPatch,
+    canonical_smiles: Callable[[str], str],
+) -> None:
+    """Checks that the SMARTS file is read and compiled once per call rather
+    than once per molecule, and that the outputs keep the input order."""
+
+    original = (
+        dimorphite_dl.ProtSubstructFuncs.load_protonation_substructs_calc_state_for_ph
+    )
+    calls: List[int] = []
+
+    def counting_load(
+        min_ph: float, max_ph: float, pka_std_range: float
+    ) -> List[dimorphite_dl.SiteSubstruct]:
+        """Counts loads of the substructure file.
+
+        Args:
+            min_ph: The lower bound on the pH range.
+            max_ph: The upper bound on the pH range.
+            pka_std_range: The pKa precision factor.
+
+        Returns:
+            The original function's result.
+        """
+
+        calls.append(1)
+        return original(min_ph, max_ph, pka_std_range)
+
+    monkeypatch.setattr(
+        dimorphite_dl.ProtSubstructFuncs,
+        "load_protonation_substructs_calc_state_for_ph",
+        staticmethod(counting_load),
+    )
+
+    mols = dimorphite_dl.run_with_mol_list(
+        [
+            Chem.MolFromSmiles("CCC(=O)O"),
+            Chem.MolFromSmiles("CCCC"),
+            Chem.MolFromSmiles("CCCN"),
+        ],
+        min_ph=VERY_BASIC_PH,
+        max_ph=VERY_BASIC_PH,
+    )
+
+    output = [Chem.MolToSmiles(m, isomericSmiles=True) for m in mols]
+    assert output == [
+        canonical_smiles("CCC(=O)[O-]"),
+        canonical_smiles("CCCC"),
+        canonical_smiles("CCCN"),
+    ]
+    assert len(calls) == 1
+
+
+def test_run_with_mol_list_empty_list() -> None:
+    """Checks that an empty list, or one with only None entries, still
+    returns an empty list now that the inputs are joined into one."""
+
+    assert dimorphite_dl.run_with_mol_list([]) == []
+    assert dimorphite_dl.run_with_mol_list([None]) == []
+
+
 def test_protonate_does_not_modify_args() -> None:
     """Checks that a caller can reuse its args dict. Protonate used to add
     smiles_file to it, so a second call raised because both smiles and
