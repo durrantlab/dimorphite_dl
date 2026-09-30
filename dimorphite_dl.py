@@ -19,6 +19,7 @@ strings.
 
 from __future__ import print_function
 import copy
+import math
 import os
 import argparse
 import sys
@@ -29,16 +30,20 @@ try:
     from typing import List, Tuple, TypedDict
 
     # One parsed line of site_substructures.smarts. prot_states_for_pH holds
-    # [site index within the pattern, target state] pairs.
+    # (site index within the pattern, target state, mean pKa) triples.
     SiteSubstruct = TypedDict(
         "SiteSubstruct",
         {
             "name": str,
             "smart": str,
             "mol": "Chem.Mol",
-            "prot_states_for_pH": List[List[str]],
+            "prot_states_for_pH": List[Tuple[str, str, float]],
         },
     )
+
+    # (atom index, target state, site name, mean pKa) for one site on a
+    # molecule.
+    ProtSite = Tuple[int, str, str, float]
 except ImportError:
     pass
 
@@ -61,6 +66,11 @@ except ImportError:
 # RuntimeError. Those mean "skip this input". Anything else is a bug in this
 # module and should propagate rather than be reported as a bad SMILES.
 RDKIT_ERRORS = (ValueError, RuntimeError)
+
+# The charges each target state is enumerated with, in the order the variants
+# are generated. The charge is relative to the site's protonated form; see
+# set_protonation_charge for how nitrogen shifts it.
+STATE_TO_CHARGE = {"DEPROTONATED": [-1], "PROTONATED": [0], "BOTH": [-1, 0]}
 
 # Caps the protonation states kept per input molecule. Each BOTH site doubles
 # the count, so without a cap a molecule with 20 such sites would need about a
@@ -195,8 +205,8 @@ class ArgParseFuncs:
             metavar="MXV",
             type=int,
             default=DEFAULT_MAX_VARIANTS,
-            help="limit number of variants per input compound (default: %d)"
-            % DEFAULT_MAX_VARIANTS,
+            help="limit number of variants per input compound, keeping the most "
+            + "probable (default: %d)" % DEFAULT_MAX_VARIANTS,
         )
         parser.add_argument(
             "--smiles", metavar="SMI", type=str, help="SMILES string to protonate"
@@ -392,6 +402,22 @@ class UtilFuncs:
         )
 
         return mol if sanitize_string.name == "SANITIZE_NONE" else None
+
+    @staticmethod
+    def log10_one_plus_pow10(x):
+        # type: (float) -> float
+        """Computes log10(1 + 10**x) without evaluating 10**x, which
+        overflows for the extreme pKa values in the SMARTS file (e.g., Nitro's
+        -1000).
+
+        Args:
+            x: The exponent.
+
+        Returns:
+            log10(1 + 10**x).
+        """
+
+        return max(x, 0.0) + math.log10(1.0 + 10.0 ** -abs(x))
 
     @staticmethod
     def convert_smiles_str_to_mol(smiles_str):
@@ -634,10 +660,13 @@ class Protonate(object):
             # It's calculated based on the probablistic distributions obtained
             # during training.
             sites = ProtSubstructFuncs.get_prot_sites_and_target_states(mol, self.subs)
+            # States kept under max_variants are ranked at the middle of the
+            # pH range.
+            mid_ph = (self.args["min_ph"] + self.args["max_ph"]) / 2.0
             new_smis = [
                 smi_and_mol[0]
                 for smi_and_mol in ProtSubstructFuncs.protonate_sites(
-                    mol, sites, self.args["max_variants"]
+                    mol, sites, self.args["max_variants"], mid_ph
                 )
             ]
 
@@ -700,7 +729,7 @@ class ProtSubstructFuncs:
                             mean, std, min_ph, max_ph
                         )
 
-                        prot.append([site, protonation_state])
+                        prot.append((site, protonation_state, mean))
 
                     sub["prot_states_for_pH"] = prot
                     subs.append(sub)
@@ -745,7 +774,7 @@ class ProtSubstructFuncs:
 
     @staticmethod
     def get_prot_sites_and_target_states(mol, subs):
-        # type: (Chem.Mol, List[SiteSubstruct]) -> List[Tuple[int, str, str]]
+        # type: (Chem.Mol, List[SiteSubstruct]) -> List[ProtSite]
         """For a single molecule, find all possible matches in the protonation
         R-group list, subs. Items that are higher on the list will be matched
         first, to the exclusion of later items.
@@ -757,8 +786,8 @@ class ProtSubstructFuncs:
                 load_protonation_substructs_calc_state_for_ph.
 
         Returns:
-            (atom index, 'PROTONATED' | 'BOTH' | 'DEPROTONATED', site name)
-            tuples.
+            (atom index, 'PROTONATED' | 'BOTH' | 'DEPROTONATED', site name,
+            mean pKa) tuples.
 
         Raises:
             ValueError: If a pattern's site is a hydrogen that mol does not
@@ -811,7 +840,7 @@ class ProtSubstructFuncs:
                                 % (proton, item["name"], smi)
                             )
                         site_idxs.append(match[proton])
-                        new_site = (match[proton], category, item["name"])
+                        new_site = (match[proton], category, item["name"], site[2])
 
                         if not new_site in protonation_sites:
                             # Because sites must be unique.
@@ -844,8 +873,43 @@ class ProtSubstructFuncs:
         return protonation_sites
 
     @staticmethod
-    def protonate_sites(mol, sites, max_variants):
-        # type: (Chem.Mol, List[Tuple[int, str, str]], int) -> List[Tuple[str, Chem.Mol]]
+    def charge_log_probabilities(target_prot_state, pka, ph):
+        # type: (str, float, float) -> List[float]
+        """Scores each charge a site is enumerated with, so that truncation
+        can keep the likeliest states rather than the first ones generated.
+
+        Uses the Henderson-Hasselbalch fraction at the site's mean pKa. A
+        site with only one charge shifts every state's score equally, so it
+        scores 0 rather than a large constant that would cost precision.
+
+        Args:
+            target_prot_state: 'PROTONATED', 'DEPROTONATED', or 'BOTH'.
+            pka: The site's mean pKa.
+            ph: The pH to score at.
+
+        Returns:
+            log10 of the fraction in each charge state, in the order of
+            STATE_TO_CHARGE[target_prot_state].
+        """
+
+        charges = STATE_TO_CHARGE[target_prot_state]
+        if len(charges) == 1:
+            return [0.0]
+
+        # Protonated fraction: 1 / (1 + 10**(pH - pKa)). Deprotonated
+        # fraction: 1 / (1 + 10**(pKa - pH)).
+        return [
+            (
+                -UtilFuncs.log10_one_plus_pow10(ph - pka)
+                if charge == 0
+                else -UtilFuncs.log10_one_plus_pow10(pka - ph)
+            )
+            for charge in charges
+        ]
+
+    @staticmethod
+    def protonate_sites(mol, sites, max_variants, ph):
+        # type: (Chem.Mol, List[ProtSite], int, float) -> List[Tuple[str, Chem.Mol]]
         """Enumerates the protonation states of every site on one molecule.
 
         Works on Mol objects end to end because the site indices refer to
@@ -856,10 +920,11 @@ class ProtSubstructFuncs:
 
         Args:
             mol: The molecule the site indices were computed from.
-            sites: (idx, target_prot_state, prot_site_name) tuples.
-            max_variants: The most states to keep. Once reached, later sites
-                are still assigned, but only on the states already kept, and
-                a warning is printed.
+            sites: (idx, target_prot_state, prot_site_name, pka) tuples.
+            max_variants: The most states to keep. When there are more, the
+                most probable at ph are kept (ties go to the earlier state),
+                and a warning is printed.
+            ph: The pH at which states are ranked for max_variants.
 
         Returns:
             Unique (canonical SMILES, Mol) pairs, in enumeration order.
@@ -867,6 +932,7 @@ class ProtSubstructFuncs:
 
         input_smi = Chem.MolToSmiles(mol, isomericSmiles=True)
         new_mols = [(input_smi, mol)]
+        log_probs = [0.0]
         truncated = False
         for site in sites:
             # Note that new_mols is a growing list. This is how multiple
@@ -875,21 +941,48 @@ class ProtSubstructFuncs:
                 [m for _, m in new_mols], site
             )
 
+            # protonate_site returns its states charge-major (every parent
+            # with the first charge, then every parent with the next), so the
+            # scores are built in the same order.
+            _, target_prot_state, _, pka = site
+            scores = [
+                charge_score + parent_score
+                for charge_score in ProtSubstructFuncs.charge_log_probabilities(
+                    target_prot_state, pka, ph
+                )
+                for parent_score in log_probs
+            ]
+            assert len(scores) == len(protonated)
+
             # In some cases, the script might generate redundant molecules.
             # Phosphonates, when the pH is between the two pKa values and the
             # stdev value is big enough, for example, will generate two
             # identical BOTH states. Removing them before capping keeps them
-            # from taking the place of distinct states.
+            # from taking the place of distinct states. Both routes lead to
+            # the same molecule, so their probabilities add.
             new_mols = []
-            seen = set()
-            for protonated_mol in protonated:
+            log_probs = []
+            position = {}
+            for protonated_mol, score in zip(protonated, scores):
                 new_smi = Chem.MolToSmiles(protonated_mol, isomericSmiles=True)
-                if new_smi not in seen:
-                    seen.add(new_smi)
+                if new_smi in position:
+                    i = position[new_smi]
+                    log_probs[i] += UtilFuncs.log10_one_plus_pow10(score - log_probs[i])
+                else:
+                    position[new_smi] = len(new_mols)
                     new_mols.append((new_smi, protonated_mol))
+                    log_probs.append(score)
 
             if len(new_mols) > max_variants:
-                new_mols = new_mols[:max_variants]
+                # Scores add across sites, so every one of the best
+                # max_variants complete states descends from one of the best
+                # max_variants partial states, and pruning at each site loses
+                # none of them. (Merged duplicates are the one exception.)
+                # sorted is stable, so ties keep the earlier state.
+                ranked = sorted(range(len(new_mols)), key=lambda i: -log_probs[i])
+                keep = sorted(ranked[:max_variants])
+                new_mols = [new_mols[i] for i in keep]
+                log_probs = [log_probs[i] for i in keep]
                 truncated = True
 
         if truncated:
@@ -902,25 +995,24 @@ class ProtSubstructFuncs:
 
     @staticmethod
     def protonate_site(mols, site):
-        # type: (List[Chem.Mol], Tuple[int, str, str]) -> List[Chem.Mol]
+        # type: (List[Chem.Mol], ProtSite) -> List[Chem.Mol]
         """Given a list of Mol objects, we protonate the site.
 
         :param list mols:  The list of Mol objects.
         :param tuple site: Information about the protonation site.
-                        (idx, target_prot_state, prot_site_name)
-        :return: A list of the appropriately protonated Mol objects.
+                        (idx, target_prot_state, prot_site_name, pka)
+        :return: A list of the appropriately protonated Mol objects, in the
+            order described by set_protonation_charge.
         """
 
         # Decouple the atom index and its target protonation state from the site
         # tuple
-        idx, target_prot_state, prot_site_name = site
+        idx, target_prot_state, prot_site_name, _ = site
 
         # Initialize the output list
         output_mols = []
 
-        state_to_charge = {"DEPROTONATED": [-1], "PROTONATED": [0], "BOTH": [-1, 0]}
-
-        charges = state_to_charge[target_prot_state]
+        charges = STATE_TO_CHARGE[target_prot_state]
 
         # Now make the actual molecules match the target protonation state.
         output_mols = ProtSubstructFuncs.set_protonation_charge(
@@ -940,10 +1032,12 @@ class ProtSubstructFuncs:
         :param list charges:          A list of the charges (ints) to assign at
                                     this site.
         :param string prot_site_name: The name of the protonation site.
-        :return: A list of the processed Mol objects. Where a charge would
-            give a structure RDKit cannot sanitize, that entry is an
-            unmodified copy of its parent instead, so the molecule's other
-            sites are still enumerated.
+        :return: A list of the processed Mol objects, charge-major: every
+            parent with charges[0], then every parent with charges[1], and so
+            on. protonate_sites relies on this order to score them. Where a
+            charge would give a structure RDKit cannot sanitize, that entry
+            is an unmodified copy of its parent instead, so the molecule's
+            other sites are still enumerated.
         """
 
         # Sets up the output list and the Nitrogen charge

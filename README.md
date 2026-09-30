@@ -43,8 +43,8 @@ optional arguments:
   --max_ph MAX         maximum pH to consider (default: 8.4)
   --pka_precision PRE  pKa precision factor (number of standard devations,
                        default: 1.0)
-  --max_variants MXV   limit number of variants per input compound (default:
-                       128)
+  --max_variants MXV   limit number of variants per input compound, keeping
+                       the most probable (default: 128)
   --smiles SMI         SMILES string to protonate
   --smiles_file FILE   file that contains SMILES strings to protonate
   --output_file FILE   output file to write protonated SMILES (optional)

@@ -617,7 +617,7 @@ def test_many_both_sites_capped(
     input_sizes: List[int] = []
 
     def recording_protonate_site(
-        mols: List[Chem.Mol], site: Tuple[int, str, str]
+        mols: List[Chem.Mol], site: Tuple[int, str, str, float]
     ) -> List[Chem.Mol]:
         """Records how many states each site is applied to.
 
@@ -686,7 +686,7 @@ def test_every_site_is_an_atom_of_the_input_mol(smiles: str) -> None:
     sites = dimorphite_dl.ProtSubstructFuncs.get_prot_sites_and_target_states(mol, subs)
 
     assert sites != [], smiles
-    for idx, _, name in sites:
+    for idx, _, name, _ in sites:
         assert idx < mol.GetNumAtoms(), (name, idx)
         assert mol.GetAtomWithIdx(idx).GetAtomicNum() != 1, (name, idx)
 
@@ -701,7 +701,7 @@ def test_site_on_added_hydrogen_raises() -> None:
             "name": "Hydroxyl_hydrogen",
             "smart": smarts,
             "mol": Chem.MolFromSmarts(smarts),
-            "prot_states_for_pH": [["1", "BOTH"]],
+            "prot_states_for_pH": [("1", "BOTH", 7.0)],
         }
     ]
 
@@ -734,6 +734,84 @@ def test_output_does_not_depend_on_input_charge_state(group: List[str]) -> None:
             for line in protonate(charged_form, 7.0, EVERY_SITE_BOTH_PRECISION)
         )
         assert output == expected, charged_form
+
+
+def formal_charge(smiles: str) -> int:
+    """Sums a molecule's formal charges, which for the carboxyl tests is minus
+    the number of deprotonated groups.
+
+    Args:
+        smiles: A valid SMILES string.
+
+    Returns:
+        The molecule's net formal charge.
+    """
+
+    return sum(atom.GetFormalCharge() for atom in Chem.MolFromSmiles(smiles).GetAtoms())
+
+
+@pytest.mark.parametrize(
+    "max_variants, expected",
+    [
+        (1, ["[NH3+]CCCC(=O)[O-]"]),
+        (2, ["[NH3+]CCCC(=O)[O-]", "NCCCC(=O)[O-]"]),
+        (3, ["[NH3+]CCCC(=O)[O-]", "NCCCC(=O)[O-]", "[NH3+]CCCC(=O)O"]),
+    ],
+    ids=["one", "two", "three"],
+)
+def test_max_variants_keeps_most_probable_states(
+    max_variants: int, expected: List[str], canonical_smiles: Callable[[str], str]
+) -> None:
+    """Checks that truncation keeps the likeliest states at the pH. At pH 7
+    the amine (pKa about 8.2) is mostly protonated and the carboxyl (about
+    3.5) mostly deprotonated. Taking the first states generated instead kept
+    the neutral amine, because deprotonated copies are generated first."""
+
+    output = protonate("NCCCC(=O)O", 7.0, EVERY_SITE_BOTH_PRECISION, max_variants)
+
+    assert sorted(line[0] for line in output) == sorted(
+        canonical_smiles(s) for s in expected
+    ), output
+
+
+def test_max_variants_does_not_pin_later_sites() -> None:
+    """Checks that with eight equivalent carboxyls at pH 7 and room for nine
+    states, the cap keeps the fully deprotonated state and all eight singly
+    protonated ones. Taking the first states generated instead pinned every
+    carboxyl after the cap was first reached to its deprotonated form."""
+
+    output = protonate(EIGHT_CARBOXYLS, 7.0, EVERY_SITE_BOTH_PRECISION, 9)
+
+    charges = sorted(formal_charge(line[0]) for line in output)
+    assert charges == [-8] + [-7] * 8, output
+
+
+@pytest.mark.parametrize(
+    "pka, ph", [(7.0, 7.0), (4.0, 7.0), (10.0, 7.0), (-1000.0, 7.4)]
+)
+def test_charge_log_probabilities_are_fractions(pka: float, ph: float) -> None:
+    """Checks that a BOTH site's deprotonated and protonated fractions sum to
+    one, split evenly at the pKa, and do not overflow at Nitro's pKa."""
+
+    deprotonated, protonated = (
+        dimorphite_dl.ProtSubstructFuncs.charge_log_probabilities("BOTH", pka, ph)
+    )
+
+    assert 10**deprotonated + 10**protonated == pytest.approx(1.0)
+    if pka == ph:
+        assert deprotonated == pytest.approx(protonated)
+    else:
+        assert (protonated > deprotonated) == (pka > ph)
+
+
+@pytest.mark.parametrize("state", ["PROTONATED", "DEPROTONATED"])
+def test_single_state_site_does_not_affect_ranking(state: str) -> None:
+    """Checks that a site with only one charge scores zero, since it shifts
+    every state equally."""
+
+    assert dimorphite_dl.ProtSubstructFuncs.charge_log_probabilities(
+        state, 8.0, 7.0
+    ) == [0.0]
 
 
 @pytest.mark.parametrize(
