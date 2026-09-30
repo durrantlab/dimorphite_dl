@@ -1133,6 +1133,10 @@ class ProtSubstructFuncs:
             if "*" in prot_site_name:
                 nitro_charge = nitro_charge - 1  # Undo what was done previously.
 
+            # Reported once per charge, not per parent, since with many BOTH
+            # sites the same failure repeats across every earlier combination.
+            warned = False
+
             for parent_mol in mols:
 
                 # Copy, because the parent is reused for the other charges.
@@ -1174,11 +1178,39 @@ class ProtSubstructFuncs:
                 # SMILES.
                 sanitized = Chem.SanitizeMol(Chem.Mol(mol), catchErrors=True)
                 if sanitized.name != "SANITIZE_NONE":
+                    # The copy keeps the failed state's label and score, so
+                    # without this the missing state is invisible in the output.
+                    if not warned:
+                        ProtSubstructFuncs.warn_unbuildable_state(
+                            parent_mol, idx, charge, prot_site_name
+                        )
+                        warned = True
                     mol = Chem.Mol(parent_mol)
 
                 output.append(mol)
 
         return output
+
+    @staticmethod
+    def warn_unbuildable_state(mol, idx, charge, prot_site_name):
+        # type: (Chem.Mol, int, int, str) -> None
+        """Reports a site state that has no valid structure. The parent is
+        emitted in its place, and --label_states still shows the requested
+        state, so this message is the only sign the state is missing.
+
+        Args:
+            mol: The parent molecule the state was built from.
+            idx: The site's atom index.
+            charge: The requested charge, as in STATE_TO_CHARGE.
+            prot_site_name: The name of the protonation site.
+        """
+
+        state = "deprotonated" if charge < 0 else "protonated"
+        UtilFuncs.eprint(
+            "WARNING: No valid %s state for site %s (atom %d) of %s. "
+            "Keeping the unmodified structure in its place."
+            % (state, prot_site_name, idx, Chem.MolToSmiles(mol))
+        )
 
 
 class ProtectUnprotectFuncs:

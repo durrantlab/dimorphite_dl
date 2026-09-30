@@ -706,6 +706,31 @@ def test_multiple_both_sites_enumerate_every_combination(
     assert all(line[1:] == ["BOTH", "BOTH"] for line in output), output
 
 
+def test_unbuildable_state_is_reported(capsys: pytest.CaptureFixture[str]) -> None:
+    """Checks that a state with no valid structure is reported. The parent
+    is emitted in its place under the requested label, so the pyridone below
+    came out as one BOTH line with nothing saying its protonated form had
+    failed."""
+
+    output = protonate("O=c1cc[nH]cc1", 7.0, EVERY_SITE_BOTH_PRECISION)
+
+    assert [line[1:] for line in output] == [["BOTH"]], output
+    err = capsys.readouterr().err
+    assert err.count("No valid protonated state") == 1, err
+    assert "Aromatic_nitrogen_protonated" in err, err
+
+
+def test_buildable_states_are_not_reported(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Checks that the warning is specific to failed states, so it cannot
+    become noise on ordinary input."""
+
+    protonate("NCCCC(=O)O", 7.0, EVERY_SITE_BOTH_PRECISION)
+
+    assert "No valid" not in capsys.readouterr().err
+
+
 def test_many_both_sites_uncapped(capsys: pytest.CaptureFixture[str]) -> None:
     """Checks that every combination is produced when the cap is not hit, and
     that no truncation warning is printed."""
