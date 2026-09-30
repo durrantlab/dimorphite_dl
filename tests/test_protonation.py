@@ -983,8 +983,22 @@ def test_define_protonation_state_rejects_inverted_intervals(
 
 @pytest.mark.parametrize(
     "params",
-    [{"min_ph": 8.4, "max_ph": 6.4}, {"pka_precision": -1.0}, {"max_variants": 0}],
-    ids=["inverted_ph_range", "negative_precision", "zero_max_variants"],
+    [
+        {"min_ph": 8.4, "max_ph": 6.4},
+        {"pka_precision": -1.0},
+        {"max_variants": 0},
+        {"max_ph": float("nan")},
+        {"min_ph": float("-inf")},
+        {"pka_precision": float("nan")},
+    ],
+    ids=[
+        "inverted_ph_range",
+        "negative_precision",
+        "zero_max_variants",
+        "nan_max_ph",
+        "infinite_min_ph",
+        "nan_precision",
+    ],
 )
 def test_protonate_rejects_invalid_ranges(params: Dict[str, float]) -> None:
     """Checks that bad user parameters are rejected before any protonation."""

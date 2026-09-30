@@ -96,6 +96,12 @@ def main(params=None):
 
     # Add in any parameters in params.
     if params is not None:
+        # return_as_list is library-only, so the parser does not define it.
+        unknown = sorted(set(params) - set(args) - {"return_as_list"})
+        if unknown:
+            msg = "Error: Unrecognized parameter(s): %s" % ", ".join(unknown)
+            UtilFuncs.eprint(msg)
+            raise ValueError(msg)
         for k, v in params.items():
             args[k] = v
 
@@ -275,6 +281,20 @@ class ArgParseFuncs:
             UtilFuncs.eprint(msg)
             raise ValueError(msg)
 
+        # NaN compares False against everything, so it would slip past the
+        # range checks below. Infinite precision is allowed (every site BOTH),
+        # but an infinite pH makes the midpoint pH used for scoring NaN.
+        for key in ["min_ph", "max_ph"]:
+            if not math.isfinite(args[key]):
+                msg = "Error: %s (%s) must be a finite number." % (key, args[key])
+                UtilFuncs.eprint(msg)
+                raise ValueError(msg)
+
+        if math.isnan(args["pka_precision"]):
+            msg = "Error: pka_precision must be a number, not NaN."
+            UtilFuncs.eprint(msg)
+            raise ValueError(msg)
+
         if args["min_ph"] > args["max_ph"]:
             msg = "Error: min_ph (%s) is greater than max_ph (%s)." % (
                 args["min_ph"],
@@ -302,6 +322,22 @@ class ArgParseFuncs:
         if "smiles" in args:
             if isinstance(args["smiles"], str):
                 args["smiles_file"] = StringIO(args["smiles"])
+
+        # main() opens output_file with "w" after this, which would truncate
+        # the input before it is read. samefile also catches symlinks and hard
+        # links.
+        output_file = args.get("output_file")
+        smiles_file = args["smiles_file"]
+        if (
+            output_file is not None
+            and isinstance(smiles_file, (str, os.PathLike))
+            and os.path.exists(smiles_file)
+            and os.path.exists(output_file)
+            and os.path.samefile(smiles_file, output_file)
+        ):
+            msg = "Error: output_file (%s) is the input smiles_file." % output_file
+            UtilFuncs.eprint(msg)
+            raise ValueError(msg)
 
         args["smiles_and_data"] = LoadSMIFile(args["smiles_file"])
 

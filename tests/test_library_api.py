@@ -202,3 +202,29 @@ def test_invalid_arguments_leave_output_file_intact(
         dimorphite_dl.run(output_file=str(output_file), **params)
 
     assert output_file.read_text() == "previous results\n"
+
+
+def test_output_file_same_as_input_is_rejected(tmp_path: Path) -> None:
+    """Checks that naming the input as the output raises instead of
+    truncating the input before it is read, including through a symlink."""
+
+    smi_file = tmp_path / "mols.smi"
+    smi_file.write_text("CCCN\n")
+    link = tmp_path / "link.smi"
+    link.symlink_to(smi_file)
+
+    for output_file in [smi_file, link]:
+        with pytest.raises(ValueError):
+            dimorphite_dl.run(smiles_file=str(smi_file), output_file=str(output_file))
+        assert smi_file.read_text() == "CCCN\n"
+
+
+def test_unrecognized_parameter_is_rejected() -> None:
+    """Checks that a misspelled keyword raises rather than being ignored,
+    which silently ran at the default pH range."""
+
+    with pytest.raises(ValueError, match="min_pH"):
+        dimorphite_dl.run(smiles="CCCN", min_pH=5.0)
+
+    with pytest.raises(ValueError, match="ph_min"):
+        dimorphite_dl.run_with_mol_list([Chem.MolFromSmiles("CCCN")], ph_min=2.0)
