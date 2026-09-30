@@ -32,7 +32,7 @@ Usage
 usage: dimorphite_dl.py [-h] [--min_ph MIN] [--max_ph MAX]
                         [--pka_precision PRE] [--smiles SMI]
                         [--smiles_file FILE] [--output_file FILE]
-                        [--label_states] [--test]
+                        [--label_states]
 
 Dimorphite 1.1: Creates models of appropriately protonated small moleucles.
 Apache 2.0 License. Copyright 2018 Jacob D. Durrant.
@@ -48,7 +48,6 @@ optional arguments:
   --output_file FILE   output file to write protonated SMILES (optional)
   --label_states       label protonated SMILES with target state (i.e.,
                        "DEPROTONATED", "PROTONATED", or "BOTH").
-  --test               run unit tests (for debugging)
 ```
 
 The default pH range is 6.4 to 8.4, considered biologically relevant pH.
@@ -61,7 +60,6 @@ Examples
   python dimorphite_dl.py --smiles "CCC(=O)O" --min_ph -3.0 --max_ph -2.0
   python dimorphite_dl.py --smiles "CCCN" --min_ph -3.0 --max_ph -2.0 --output_file output.smi
   python dimorphite_dl.py --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states
-  python dimorphite_dl.py --test
 ```
 
 Advanced Usage
@@ -93,6 +91,15 @@ protonated_mols = dimorphite_dl.run_with_mol_list(
     max_ph=9.0,
 )
 print([Chem.MolToSmiles(m) for m in protonated_mols])
+```
+
+Testing
+-------
+
+The tests use pytest. From the project root, run:
+
+```
+pytest tests/
 ```
 
 Caveats

@@ -21,9 +21,7 @@ from __future__ import print_function
 import copy
 import os
 import argparse
-import shutil
 import sys
-import tempfile
 
 try:
     # Only needed by type checkers; the annotations below are type comments so
@@ -86,22 +84,18 @@ def main(params=None):
             print(k.rjust(13) + ": " + str(args[k]))
         print("")
 
-    if args["test"]:
-        # Run tests.
-        TestFuncs.test()
-    else:
-        # Run protonation
-        if "output_file" in args and args["output_file"] is not None:
-            # An output file was specified, so write to that.
-            with open(args["output_file"], "w") as file:
-                for protonated_smi in Protonate(args):
-                    file.write(protonated_smi + "\n")
-        elif "return_as_list" in args and args["return_as_list"] == True:
-            return list(Protonate(args))
-        else:
-            # No output file specified. Just print it to the screen.
+    # Run protonation
+    if "output_file" in args and args["output_file"] is not None:
+        # An output file was specified, so write to that.
+        with open(args["output_file"], "w") as file:
             for protonated_smi in Protonate(args):
-                print(protonated_smi)
+                file.write(protonated_smi + "\n")
+    elif "return_as_list" in args and args["return_as_list"] == True:
+        return list(Protonate(args))
+    else:
+        # No output file specified. Just print it to the screen.
+        for protonated_smi in Protonate(args):
+            print(protonated_smi)
 
 
 class MyParser(argparse.ArgumentParser):
@@ -137,8 +131,7 @@ examples:
   python dimorphite_dl.py --smiles_file sample_molecules.smi
   python dimorphite_dl.py --smiles "CCC(=O)O" --min_ph -3.0 --max_ph -2.0
   python dimorphite_dl.py --smiles "CCCN" --min_ph -3.0 --max_ph -2.0 --output_file output.smi
-  python dimorphite_dl.py --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states
-  python dimorphite_dl.py --test"""
+  python dimorphite_dl.py --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states"""
         )
         print("")
 
@@ -202,10 +195,6 @@ class ArgParseFuncs:
             help="label protonated SMILES with target state "
             + '(i.e., "DEPROTONATED", "PROTONATED", or "BOTH").',
         )
-        parser.add_argument(
-            "--test", action="store_true", help="run unit tests (for debugging)"
-        )
-
         return parser
 
     @staticmethod
@@ -222,7 +211,6 @@ class ArgParseFuncs:
             "max_ph": 8.4,
             "pka_precision": 1.0,
             "label_states": False,
-            "test": False,
         }
 
         for key in defaults:
@@ -931,443 +919,6 @@ class ProtectUnprotectFuncs:
         return True
 
 
-class TestFuncs:
-    """A namespace for storing functions that perform tests on the code. To
-    keep things organized."""
-
-    @staticmethod
-    def test():
-        """Tests all the 38 groups."""
-
-        smis = [
-            # [input smiles, pka, protonated, deprotonated, category]
-            ["C#CCO", "C#CCO", "C#CC[O-]", "Alcohol"],
-            ["C(=O)N", "NC=O", "[NH-]C=O", "Amide"],
-            [
-                "CC(=O)NOC(C)=O",
-                "CC(=O)NOC(C)=O",
-                "CC(=O)[N-]OC(C)=O",
-                "Amide_electronegative",
-            ],
-            ["COC(=N)N", "COC(N)=[NH2+]", "COC(=N)N", "AmidineGuanidine2"],
-            [
-                "Brc1ccc(C2NCCS2)cc1",
-                "Brc1ccc(C2[NH2+]CCS2)cc1",
-                "Brc1ccc(C2NCCS2)cc1",
-                "Amines_primary_secondary_tertiary",
-            ],
-            [
-                "CC(=O)[n+]1ccc(N)cc1",
-                "CC(=O)[n+]1ccc([NH3+])cc1",
-                "CC(=O)[n+]1ccc(N)cc1",
-                "Anilines_primary",
-            ],
-            ["CCNc1ccccc1", "CC[NH2+]c1ccccc1", "CCNc1ccccc1", "Anilines_secondary"],
-            [
-                "Cc1ccccc1N(C)C",
-                "Cc1ccccc1[NH+](C)C",
-                "Cc1ccccc1N(C)C",
-                "Anilines_tertiary",
-            ],
-            [
-                "BrC1=CC2=C(C=C1)NC=C2",
-                "Brc1ccc2[nH]ccc2c1",
-                "Brc1ccc2[n-]ccc2c1",
-                "Indole_pyrrole",
-            ],
-            [
-                "BrC1=CNC=C(C1=O)Br",
-                "O=c1c(Br)c[nH+]cc1Br",
-                "O=c1c(Br)c[nH]cc1Br",
-                "Aromatic_nitrogen_protonated",
-            ],
-            ["C-N=[N+]=[N@H]", "CN=[N+]=N", "CN=[N+]=[N-]", "Azide"],
-            ["BrC(C(O)=O)CBr", "O=C(O)C(Br)CBr", "O=C([O-])C(Br)CBr", "Carboxyl"],
-            ["NC(NN=O)=N", "NC(=[NH2+])NN=O", "N=C(N)NN=O", "AmidineGuanidine1"],
-            [
-                "C(F)(F)(F)C(=O)NC(=O)C",
-                "CC(=O)NC(=O)C(F)(F)F",
-                "CC(=O)[N-]C(=O)C(F)(F)F",
-                "Imide",
-            ],
-            ["O=C(C)NC(C)=O", "CC(=O)NC(C)=O", "CC(=O)[N-]C(C)=O", "Imide2"],
-            [
-                "CC(C)(C)C(N(C)O)=O",
-                "CN(O)C(=O)C(C)(C)C",
-                "CN([O-])C(=O)C(C)(C)C",
-                "N-hydroxyamide",
-            ],
-            ["C[N+](O)=O", "C[N+](=O)O", "C[N+](=O)[O-]", "Nitro"],
-            ["O=C1C=C(O)CC1", "O=C1C=C(O)CC1", "O=C1C=C([O-])CC1", "O=C-C=C-OH"],
-            ["C1CC1OO", "OOC1CC1", "[O-]OC1CC1", "Peroxide2"],
-            ["C(=O)OO", "O=COO", "O=CO[O-]", "Peroxide1"],
-            [
-                "Brc1cc(O)cc(Br)c1",
-                "Oc1cc(Br)cc(Br)c1",
-                "[O-]c1cc(Br)cc(Br)c1",
-                "Phenol",
-            ],
-            [
-                "CC(=O)c1ccc(S)cc1",
-                "CC(=O)c1ccc(S)cc1",
-                "CC(=O)c1ccc([S-])cc1",
-                "Phenyl_Thiol",
-            ],
-            [
-                "C=CCOc1ccc(C(=O)O)cc1",
-                "C=CCOc1ccc(C(=O)O)cc1",
-                "C=CCOc1ccc(C(=O)[O-])cc1",
-                "Phenyl_carboxyl",
-            ],
-            ["COP(=O)(O)OC", "COP(=O)(O)OC", "COP(=O)([O-])OC", "Phosphate_diester"],
-            ["CP(C)(=O)O", "CP(C)(=O)O", "CP(C)(=O)[O-]", "Phosphinic_acid"],
-            [
-                "CC(C)OP(C)(=O)O",
-                "CC(C)OP(C)(=O)O",
-                "CC(C)OP(C)(=O)[O-]",
-                "Phosphonate_ester",
-            ],
-            [
-                "CC1(C)OC(=O)NC1=O",
-                "CC1(C)OC(=O)NC1=O",
-                "CC1(C)OC(=O)[N-]C1=O",
-                "Ringed_imide1",
-            ],
-            ["O=C(N1)C=CC1=O", "O=C1C=CC(=O)N1", "O=C1C=CC(=O)[N-]1", "Ringed_imide2"],
-            ["O=S(OC)(O)=O", "COS(=O)(=O)O", "COS(=O)(=O)[O-]", "Sulfate"],
-            [
-                "COc1ccc(S(=O)O)cc1",
-                "COc1ccc(S(=O)O)cc1",
-                "COc1ccc(S(=O)[O-])cc1",
-                "Sulfinic_acid",
-            ],
-            ["CS(N)(=O)=O", "CS(N)(=O)=O", "CS([NH-])(=O)=O", "Sulfonamide"],
-            [
-                "CC(=O)CSCCS(O)(=O)=O",
-                "CC(=O)CSCCS(=O)(=O)O",
-                "CC(=O)CSCCS(=O)(=O)[O-]",
-                "Sulfonate",
-            ],
-            ["CC(=O)S", "CC(=O)S", "CC(=O)[S-]", "Thioic_acid"],
-            ["C(C)(C)(C)(S)", "CC(C)(C)S", "CC(C)(C)[S-]", "Thiol"],
-            [
-                "Brc1cc[nH+]cc1",
-                "Brc1cc[nH+]cc1",
-                "Brc1ccncc1",
-                "Aromatic_nitrogen_unprotonated",
-            ],
-            [
-                "C=C(O)c1c(C)cc(C)cc1C",
-                "C=C(O)c1c(C)cc(C)cc1C",
-                "C=C([O-])c1c(C)cc(C)cc1C",
-                "Vinyl_alcohol",
-            ],
-            ["CC(=O)ON", "CC(=O)O[NH3+]", "CC(=O)ON", "Primary_hydroxyl_amine"],
-        ]
-
-        smis_phos = [
-            [
-                "O=P(O)(O)OCCCC",
-                "CCCCOP(=O)(O)O",
-                "CCCCOP(=O)([O-])O",
-                "CCCCOP(=O)([O-])[O-]",
-                "Phosphate",
-            ],
-            [
-                "CC(P(O)(O)=O)C",
-                "CC(C)P(=O)(O)O",
-                "CC(C)P(=O)([O-])O",
-                "CC(C)P(=O)([O-])[O-]",
-                "Phosphonate",
-            ],
-        ]
-
-        # Load the average pKa values.
-        average_pkas = {
-            l.split()[0].replace("*", ""): float(l.split()[3])
-            for l in open("site_substructures.smarts")
-            if l.split()[0] not in ["Phosphate", "Phosphonate"]
-        }
-        average_pkas_phos = {
-            l.split()[0].replace("*", ""): [float(l.split()[3]), float(l.split()[6])]
-            for l in open("site_substructures.smarts")
-            if l.split()[0] in ["Phosphate", "Phosphonate"]
-        }
-
-        print("Running Tests")
-        print("=============")
-        print("")
-
-        print("Very Acidic (pH -10000000)")
-        print("--------------------------")
-        print("")
-
-        args = {
-            "min_ph": -10000000,
-            "max_ph": -10000000,
-            "pka_precision": 0.5,
-            "smiles": "",
-            "label_states": True,
-        }
-
-        for smi, protonated, deprotonated, category in smis:
-            args["smiles"] = smi
-            TestFuncs.test_check(args, [protonated], ["PROTONATED"])
-
-        for smi, protonated, mix, deprotonated, category in smis_phos:
-            args["smiles"] = smi
-            TestFuncs.test_check(args, [protonated], ["PROTONATED"])
-
-        args["min_ph"] = 10000000
-        args["max_ph"] = 10000000
-
-        print("")
-        print("Very Basic (pH 10000000)")
-        print("------------------------")
-        print("")
-
-        for smi, protonated, deprotonated, category in smis:
-            args["smiles"] = smi
-            TestFuncs.test_check(args, [deprotonated], ["DEPROTONATED"])
-
-        for smi, protonated, mix, deprotonated, category in smis_phos:
-            args["smiles"] = smi
-            TestFuncs.test_check(args, [deprotonated], ["DEPROTONATED"])
-
-        print("")
-        print("pH is Category pKa")
-        print("------------------")
-        print("")
-
-        for smi, protonated, deprotonated, category in smis:
-            avg_pka = average_pkas[category]
-
-            args["smiles"] = smi
-            args["min_ph"] = avg_pka
-            args["max_ph"] = avg_pka
-
-            TestFuncs.test_check(args, [protonated, deprotonated], ["BOTH"])
-
-        for smi, protonated, mix, deprotonated, category in smis_phos:
-            args["smiles"] = smi
-
-            avg_pka = average_pkas_phos[category][0]
-            args["min_ph"] = avg_pka
-            args["max_ph"] = avg_pka
-
-            TestFuncs.test_check(args, [mix, protonated], ["BOTH"])
-
-            avg_pka = average_pkas_phos[category][1]
-            args["min_ph"] = avg_pka
-            args["max_ph"] = avg_pka
-
-            TestFuncs.test_check(
-                args, [mix, deprotonated], ["DEPROTONATED", "DEPROTONATED"]
-            )
-
-            avg_pka = 0.5 * (
-                average_pkas_phos[category][0] + average_pkas_phos[category][1]
-            )
-            args["min_ph"] = avg_pka
-            args["max_ph"] = avg_pka
-            args["pka_precision"] = 5  # Should give all three
-
-            TestFuncs.test_check(
-                args, [mix, deprotonated, protonated], ["BOTH", "BOTH"]
-            )
-
-        print("")
-        print("Multiple Sites")
-        print("--------------")
-        print("")
-
-        TestFuncs.test_multiple_sites()
-
-        print("")
-        print("Library Calls")
-        print("-------------")
-        print("")
-
-        TestFuncs.test_library_ignores_sys_argv()
-
-    @staticmethod
-    def canonical_smiles(smi):
-        # type: (str) -> str
-        """Canonicalizes a SMILES string so expected values can be written in
-        any valid form and still compare equal to Dimorphite-DL's output.
-
-        Args:
-            smi: A valid SMILES string.
-
-        Returns:
-            RDKit's canonical isomeric SMILES for smi.
-        """
-
-        return Chem.MolToSmiles(Chem.MolFromSmiles(smi), isomericSmiles=True)
-
-    @staticmethod
-    def test_multiple_sites():
-        # type: () -> None
-        """Checks molecules with several ionizable groups, where an earlier
-        site's charge can change the canonical atom order that later site
-        indices would otherwise be applied to. The indole case also checks
-        that a deprotonated [nH] does not make the whole molecule disappear.
-        """
-
-        # [input smiles, protonated, deprotonated]
-        smis = [
-            ["NCCCC(=O)O", "[NH3+]CCCC(=O)O", "NCCCC(=O)[O-]"],
-            ["NCc1ccc(O)cc1", "[NH3+]Cc1ccc(O)cc1", "NCc1ccc([O-])cc1"],
-            [
-                "OC(=O)CCC(N)C(=O)O",
-                "OC(=O)CCC([NH3+])C(=O)O",
-                "[O-]C(=O)CCC(N)C(=O)[O-]",
-            ],
-            ["NCc1ccc2[nH]ccc2c1", "[NH3+]Cc1ccc2[nH]ccc2c1", "NCc1ccc2[n-]ccc2c1"],
-        ]
-
-        args = {"pka_precision": 0.5, "smiles": "", "label_states": True}
-
-        for smi, protonated, deprotonated in smis:
-            args["smiles"] = smi
-
-            args["min_ph"] = -10000000
-            args["max_ph"] = -10000000
-            TestFuncs.test_check(
-                args, [TestFuncs.canonical_smiles(protonated)], ["PROTONATED"]
-            )
-
-            args["min_ph"] = 10000000
-            args["max_ph"] = 10000000
-            TestFuncs.test_check(
-                args, [TestFuncs.canonical_smiles(deprotonated)], ["DEPROTONATED"]
-            )
-
-    @staticmethod
-    def test_library_ignores_sys_argv():
-        # type: () -> None
-        """Checks that library calls ignore the host process's sys.argv, which
-        in Jupyter holds "-f kernel.json" and in other scripts may hold their
-        own flags (e.g., --output_file) that would otherwise leak in.
-        """
-
-        expected = [TestFuncs.canonical_smiles("CCC(=O)[O-]")]
-        out_dir = tempfile.mkdtemp()
-        stray_file = os.path.join(out_dir, "stray.smi")
-        host_argvs = [
-            ["dimorphite_dl.py", "-f", "kernel.json"],
-            ["dimorphite_dl.py", "--output_file", stray_file],
-        ]
-
-        saved_argv = sys.argv
-        try:
-            for host_argv in host_argvs:
-                sys.argv = host_argv
-                mols = run_with_mol_list(
-                    [Chem.MolFromSmiles("CCC(=O)O")],
-                    min_ph=10000000,
-                    max_ph=10000000,
-                )
-                output = [Chem.MolToSmiles(m, isomericSmiles=True) for m in mols]
-
-                if output != expected or os.path.exists(stray_file):
-                    msg = (
-                        "run_with_mol_list() with sys.argv = "
-                        + str(host_argv)
-                        + " should return "
-                        + str(expected)
-                        + " and write no file; it returned "
-                        + str(output)
-                    )
-                    print(msg)
-                    raise Exception(msg)
-
-                print("(CORRECT) sys.argv = " + str(host_argv) + " ignored")
-        finally:
-            sys.argv = saved_argv
-            shutil.rmtree(out_dir)
-
-    @staticmethod
-    def test_check(args, expected_output, labels):
-        """Tests most ionizable groups. The ones that can only loose or gain a single proton.
-
-        :param args: The arguments to pass to protonate()
-        :param expected_output: A list of the expected SMILES-strings output.
-        :param labels: The labels. A list containing combo of BOTH, PROTONATED,
-                    DEPROTONATED.
-        :raises Exception: Wrong number of states produced.
-        :raises Exception: Unexpected output SMILES.
-        :raises Exception: Wrong labels.
-        """
-
-        output = list(Protonate(args))
-        output = [o.split() for o in output]
-
-        for l in output:
-            if Chem.MolFromSmiles(l[0]) is None:
-                msg = (
-                    args["smiles"]
-                    + " produced an invalid SMILES string at pH "
-                    + str(args["min_ph"])
-                    + ": "
-                    + l[0]
-                )
-                print(msg)
-                raise Exception(msg)
-
-        num_states = len(expected_output)
-
-        if len(output) != num_states:
-            msg = (
-                args["smiles"][0]
-                + " should have "
-                + str(num_states)
-                + " states at at pH "
-                + str(args["min_ph"])
-                + ": "
-                + str(output)
-            )
-            print(msg)
-            raise Exception(msg)
-
-        if len(set([l[0] for l in output]) - set(expected_output)) != 0:
-            msg = (
-                args["smiles"][0]
-                + " is not "
-                + " AND ".join(expected_output)
-                + " at pH "
-                + str(args["min_ph"])
-                + " - "
-                + str(args["max_ph"])
-                + "; it is "
-                + " AND ".join([l[0] for l in output])
-            )
-            print(msg)
-            raise Exception(msg)
-
-        if len(set([l[1] for l in output]) - set(labels)) != 0:
-            msg = (
-                args["smiles"][0]
-                + " not labeled as "
-                + " AND ".join(labels)
-                + "; it is "
-                + " AND ".join([l[1] for l in output])
-            )
-            print(msg)
-            raise Exception(msg)
-
-        ph_range = sorted(list(set([args["min_ph"], args["max_ph"]])))
-        ph_range_str = "(" + " - ".join("{0:.2f}".format(n) for n in ph_range) + ")"
-        print(
-            "(CORRECT) "
-            + ph_range_str.ljust(10)
-            + " "
-            + args["smiles"][0]
-            + " => "
-            + " AND ".join([l[0] for l in output])
-        )
-
-
 def run(**kwargs):
     """A helpful, importable function for those who want to call Dimorphite-DL
     from another Python script rather than the command line. Note that this
@@ -1393,14 +944,14 @@ def run_with_mol_list(mol_lst, **kwargs):
 
     :param mol_lst: A list of rdkit.Chem.rdchem.Mol objects.
     :type mol_lst: list
-    :raises Exception: If the **kwargs includes "smiles", "smiles_file",
-                       "output_file", or "test" parameters.
+    :raises Exception: If the **kwargs includes "smiles", "smiles_file", or
+                       "output_file" parameters.
     :return: A list of properly protonated rdkit.Chem.rdchem.Mol objects.
     :rtype: list
     """
 
     # Do a quick check to make sure the user input makes sense.
-    for bad_arg in ["smiles", "smiles_file", "output_file", "test"]:
+    for bad_arg in ["smiles", "smiles_file", "output_file"]:
         if bad_arg in kwargs:
             msg = (
                 "You're using Dimorphite-DL's run_with_mol_list(mol_lst, "
