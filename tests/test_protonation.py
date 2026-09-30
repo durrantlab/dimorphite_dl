@@ -18,10 +18,6 @@ VERY_ACIDIC_PH = -10000000.0
 VERY_BASIC_PH = 10000000.0
 DEFAULT_PKA_PRECISION = 0.5
 
-# Expected states that RDKit cannot kekulize but Dimorphite-DL deliberately
-# still emits. Every other output must parse.
-KNOWN_UNPARSEABLE = {"O=c1c(Br)c[nH+]cc1Br"}
-
 SINGLE_SITE_GROUPS = [
     # [input smiles, protonated, deprotonated, category]
     ["C#CCO", "C#CCO", "C#CC[O-]", "Alcohol"],
@@ -58,9 +54,11 @@ SINGLE_SITE_GROUPS = [
         "Brc1ccc2[n-]ccc2c1",
         "Indole_pyrrole",
     ],
+    # N-protonated 4-pyridone has no valid structure (the real cation is
+    # O-protonated), so the protonated state is the neutral pyridone.
     [
         "BrC1=CNC=C(C1=O)Br",
-        "O=c1c(Br)c[nH+]cc1Br",
+        "O=c1c(Br)c[nH]cc1Br",
         "O=c1c(Br)c[nH]cc1Br",
         "Aromatic_nitrogen_protonated",
     ],
@@ -274,7 +272,7 @@ def protonate(
 def normalize_smiles(smiles: str) -> str:
     """Canonicalizes with the installed RDKit, so comparisons do not depend on
     the RDKit version that wrote the expected strings. Unparseable strings
-    (see KNOWN_UNPARSEABLE) cannot be canonicalized and are compared as is.
+    cannot be canonicalized and are compared as is.
 
     Args:
         smiles: A SMILES string, valid or not.
@@ -296,13 +294,14 @@ def check_protonation(
 ) -> List[List[str]]:
     """Asserts that a molecule yields exactly the expected states at a pH.
 
-    Every output outside KNOWN_UNPARSEABLE must also be a parseable SMILES
-    string, so that bad hydrogen bookkeeping (e.g., [nH-]) is caught.
+    Every output must also be a parseable SMILES string, so that bad hydrogen
+    bookkeeping (e.g., [nH-]) is caught.
 
     Args:
         smiles: The input SMILES string.
         ph: Used as both the minimum and maximum pH.
         expected_smiles: The canonical SMILES of every expected state.
+            Repeats count once, since Dimorphite-DL drops duplicate states.
         labels: The allowed labels. Every site's label is checked, not just
             the first.
         pka_precision: Number of standard deviations to consider.
@@ -315,17 +314,12 @@ def check_protonation(
     output = protonate(smiles, ph, pka_precision)
     output_smiles = [line[0] for line in output]
 
-    invalid = [
-        s
-        for s in output_smiles
-        if s not in KNOWN_UNPARSEABLE and Chem.MolFromSmiles(s) is None
-    ]
+    invalid = [s for s in output_smiles if Chem.MolFromSmiles(s) is None]
     assert invalid == [], "invalid SMILES produced: " + str(invalid)
 
-    assert len(output) == len(expected_smiles), output
-    assert set(normalize_smiles(s) for s in output_smiles) <= set(
-        normalize_smiles(s) for s in expected_smiles
-    ), output
+    expected = set(normalize_smiles(s) for s in expected_smiles)
+    assert len(output) == len(expected), output
+    assert set(normalize_smiles(s) for s in output_smiles) <= expected, output
     assert set(label for line in output for label in line[1:]) <= set(labels), output
     return output
 
@@ -488,6 +482,28 @@ def test_shared_context_sites(
     smiles, protonated, deprotonated = molecule
     expected = protonated if state == "PROTONATED" else deprotonated
     check_protonation(smiles, ph, [canonical_smiles(expected)], [state])
+
+
+def test_bracketed_atom_gains_hydrogen_on_protonation() -> None:
+    """Checks that protonating an atom written in brackets adds its H.
+    Bracketed atoms get no implicit Hs, so without this the isotope-labeled
+    amine came out as the invalid [15NH2+]."""
+
+    check_protonation("[15NH2]CC", VERY_ACIDIC_PH, ["CC[15NH3+]"], ["PROTONATED"])
+
+
+def test_invalid_site_state_keeps_other_sites(
+    canonical_smiles: Callable[[str], str],
+) -> None:
+    """Checks that a site with no valid protonated structure stays neutral
+    without undoing the protonation of the molecule's other sites."""
+
+    check_protonation(
+        "O=c1c(Br)c[nH]cc1CN",
+        VERY_ACIDIC_PH,
+        [canonical_smiles("O=c1c(Br)c[nH]cc1C[NH3+]")],
+        ["PROTONATED"],
+    )
 
 
 def test_multiple_both_sites_enumerate_every_combination(

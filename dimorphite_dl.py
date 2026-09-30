@@ -537,8 +537,10 @@ class Protonate(object):
         # single input model.
         self.cur_prot_SMI = []
 
-        # Clean and normalize the args
-        self.args = ArgParseFuncs.clean_args(args)
+        # Clean and normalize the args. clean_args edits the dict in place, so
+        # it gets a copy; otherwise a caller reusing its dict for another
+        # molecule would pass in the smiles_file left over from this call.
+        self.args = ArgParseFuncs.clean_args(dict(args))
 
         # Load the substructures that can be protonated.
         self.subs = ProtSubstructFuncs.load_protonation_substructs_calc_state_for_ph(
@@ -611,9 +613,6 @@ class Protonate(object):
         if mol is None:
             new_smis = [smi]
         else:
-            # Not re-parsed on purpose: some states, such as a protonated
-            # pyridone's O=c...[nH+], cannot be kekulized but are still
-            # reported.
             new_smis = [
                 smi_and_mol[0]
                 for smi_and_mol in ProtSubstructFuncs.protonate_sites(
@@ -907,7 +906,10 @@ class ProtSubstructFuncs:
         :param list charges:          A list of the charges (ints) to assign at
                                     this site.
         :param string prot_site_name: The name of the protonation site.
-        :return: A list of the processed Mol objects.
+        :return: A list of the processed Mol objects. Where a charge would
+            give a structure RDKit cannot sanitize, that entry is an
+            unmodified copy of its parent instead, so the molecule's other
+            sites are still enumerated.
         """
 
         # Sets up the output list and the Nitrogen charge
@@ -952,8 +954,22 @@ class ProtSubstructFuncs:
                 if delta < 0:
                     atom.SetNumExplicitHs(max(0, num_hs + delta))
                     atom.SetNoImplicit(True)
+                elif delta > 0 and atom.GetNoImplicit():
+                    # Bracketed atoms (e.g., [15NH2]) never gain implicit Hs,
+                    # so UpdatePropertyCache would leave the new charge
+                    # without its proton.
+                    atom.SetNumExplicitHs(num_hs + delta)
 
                 mol.UpdatePropertyCache(strict=False)
+
+                # Some states have no valid structure when only this atom is
+                # edited. A 4-pyridone, for example, really protonates on its
+                # oxygen, and its N-protonated ring cannot be kekulized. The
+                # site keeps its parent's state rather than emitting invalid
+                # SMILES.
+                sanitized = Chem.SanitizeMol(Chem.Mol(mol), catchErrors=True)
+                if sanitized.name != "SANITIZE_NONE":
+                    mol = Chem.Mol(parent_mol)
 
                 output.append(mol)
 

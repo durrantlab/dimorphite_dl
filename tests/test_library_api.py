@@ -73,6 +73,38 @@ def test_run_returns_list(canonical_smiles: Callable[[str], str]) -> None:
     assert [line.split()[0] for line in output] == [canonical_smiles("CCC(=O)[O-]")]
 
 
+def test_run_with_mol_list_returns_only_valid_mols(
+    canonical_smiles: Callable[[str], str],
+) -> None:
+    """Checks that a molecule with an unrepresentable protonated state does
+    not put None in the returned list at the default pH range."""
+
+    mols = dimorphite_dl.run_with_mol_list([Chem.MolFromSmiles("BrC1=CNC=C(C1=O)Br")])
+
+    assert all(m is not None for m in mols)
+    output = [Chem.MolToSmiles(m, isomericSmiles=True) for m in mols]
+    assert output == [canonical_smiles("O=c1c(Br)c[nH]cc1Br")]
+
+
+def test_protonate_does_not_modify_args() -> None:
+    """Checks that a caller can reuse its args dict. Protonate used to add
+    smiles_file to it, so a second call raised because both smiles and
+    smiles_file were present."""
+
+    args: Dict[str, Union[str, float]] = {
+        "smiles": "CCCN",
+        "min_ph": 7.0,
+        "max_ph": 7.0,
+    }
+    original = dict(args)
+
+    first = list(dimorphite_dl.Protonate(args))
+    assert args == original
+
+    second = list(dimorphite_dl.Protonate(args))
+    assert second == first
+
+
 @pytest.mark.parametrize(
     "params",
     [{}, {"smiles": "CCCN", "min_ph": 8.4, "max_ph": 6.4}],
