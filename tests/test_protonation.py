@@ -537,6 +537,72 @@ def test_charged_nitro_input_still_handled(
     check_protonation("C[N+](=O)[O-]", ph, [expected], [state])
 
 
+CHARGE_ON_NON_H_NITROGEN = [
+    # [charged input, neutral form, id]
+    ["C[n+]1cc[nH]c1", "Cn1ccnc1", "imidazolium"],
+    ["C[n+]1ccc[nH]1", "Cn1cccn1", "pyrazolium"],
+    ["CC(N)=[N+](C)C", "CC(=N)N(C)C", "amidinium"],
+    ["CN(C)C(N)=[N+](C)C", "CN(C)C(=N)N(C)C", "guanidinium"],
+]
+
+
+@pytest.mark.parametrize(
+    "charged, neutral",
+    [group[:2] for group in CHARGE_ON_NON_H_NITROGEN],
+    ids=[group[2] for group in CHARGE_ON_NON_H_NITROGEN],
+)
+def test_charge_on_non_h_nitrogen_is_neutralized(
+    charged: str, neutral: str, canonical_smiles: Callable[[str], str]
+) -> None:
+    """Checks that a cation drawn with the charge on a nitrogen that has no H
+    is neutralized. Only N+-H lost its proton, so these resonance forms kept
+    their charge and were never matched by the neutral site patterns."""
+
+    record = dimorphite_dl.LoadSMIFile(StringIO(charged)).next()
+    assert record["smiles"] == canonical_smiles(neutral)
+
+
+@pytest.mark.parametrize(
+    "charged, neutral",
+    [group[:2] for group in CHARGE_ON_NON_H_NITROGEN],
+    ids=[group[2] for group in CHARGE_ON_NON_H_NITROGEN],
+)
+@pytest.mark.parametrize(
+    "ph", [VERY_ACIDIC_PH, VERY_BASIC_PH], ids=["very_acidic", "very_basic"]
+)
+def test_charge_on_non_h_nitrogen_matches_neutral_output(
+    charged: str, neutral: str, ph: float
+) -> None:
+    """Checks that the resonance form of the input does not change the
+    output. The charged imidazolium form was emitted at every pH, and at very
+    basic pH its N-H was even removed to give C[n+]1cc[n-]c1."""
+
+    expected = sorted(
+        [normalize_smiles(line[0])] + line[1:]
+        for line in protonate(neutral, ph, DEFAULT_PKA_PRECISION)
+    )
+    output = sorted(
+        [normalize_smiles(line[0])] + line[1:]
+        for line in protonate(charged, ph, DEFAULT_PKA_PRECISION)
+    )
+    assert output == expected
+
+
+@pytest.mark.parametrize(
+    "smiles",
+    ["C[n+]1ccn(C)c1", "CC(N(C)C)=[N+](C)C"],
+    ids=["dimethylimidazolium", "peralkyl_amidinium"],
+)
+def test_fully_substituted_cation_stays_charged(
+    smiles: str, canonical_smiles: Callable[[str], str]
+) -> None:
+    """Checks that the charge-shift rules leave a cation with no N-H alone,
+    since it has no proton to lose and really is permanently charged."""
+
+    record = dimorphite_dl.LoadSMIFile(StringIO(smiles)).next()
+    assert record["smiles"] == canonical_smiles(smiles)
+
+
 THIOLATE_GROUPS = [
     # [input smiles, protonated, deprotonated, id]
     ["CC(C)(C)[S-]", "CC(C)(C)S", "CC(C)(C)[S-]", "Thiol"],

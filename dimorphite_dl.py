@@ -352,6 +352,20 @@ class UtilFuncs:
                 "[H]-[N:1]-[N:2]#[N:3]",
                 "[N:1]=[N+1:2]=[N:3]-[H]",
             ],  # To handle bad azide. R-N-N#N should be R-N=[N+]=N
+            [
+                "[#7+1;H0;!$([#7+]~[O-]):1]=[#6:2]-[#7+0;!H0:3]",
+                "[#7+0:1]-[#6:2]=[#7+1:3]",
+            ],  # To handle amidinium/guanidinium drawn with the charge on a
+            # substituted N. Moving the charge onto the N-H lets the N+-H rule
+            # above remove the proton on the next pass.
+            [
+                "[n+1;H0;!$([n+]~[O-]):1]:[c:2]:[n+0;!H0:3]",
+                "[n+0:1]:[c:2]:[n+1:3]",
+            ],  # Same, for imidazolium-type rings (e.g., C[n+]1cc[nH]c1).
+            [
+                "[n+1;H0;!$([n+]~[O-]):1]:[n+0;!H0:2]",
+                "[n+0:1]:[n+1:2]",
+            ],  # Same, for pyrazolium-type rings (e.g., C[n+]1ccc[nH]1).
         ]
 
         # Add substructures and reactions (initially none)
