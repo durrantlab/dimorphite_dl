@@ -70,6 +70,17 @@ def test_programming_error_is_not_reported_as_bad_smiles(
         list(dimorphite_dl.LoadSMIFile(StringIO("CCCN\n")))
 
 
+def test_path_object_is_read_as_a_filename(tmp_path: Path) -> None:
+    """Checks that a pathlib.Path is opened like a str path. Only str was
+    treated as a filename, so a Path was used as a file object and crashed on
+    readline()."""
+
+    smi_file = tmp_path / "input.smi"
+    smi_file.write_text("CCCN\n")
+
+    assert list(dimorphite_dl.LoadSMIFile(smi_file)) == [{"smiles": "CCCN", "data": []}]
+
+
 def test_smiles_and_smiles_file_together_are_rejected(tmp_path: Path) -> None:
     """Checks that giving both inputs raises instead of silently ignoring the
     file."""

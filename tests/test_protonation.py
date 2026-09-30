@@ -537,6 +537,27 @@ def test_charged_nitro_input_still_handled(
     check_protonation("C[N+](=O)[O-]", ph, [expected], [state])
 
 
+@pytest.mark.parametrize(
+    "charged, neutral",
+    [
+        ("C[S+](C)[O-]", "CS(C)=O"),
+        ("C[S+2](C)([O-])[O-]", "CS(C)(=O)=O"),
+        ("C[P+](C)(C)[O-]", "CP(C)(C)=O"),
+        ("CO[P+]([O-])([O-])[O-]", "COP(=O)(O)O"),
+    ],
+    ids=["sulfoxide", "sulfone", "phosphine_oxide", "phosphate"],
+)
+def test_charge_separated_oxides_are_collapsed(
+    charged: str, neutral: str, canonical_smiles: Callable[[str], str]
+) -> None:
+    """Checks that S+-O- and P+-O- are restored to S=O and P=O. The O- rule
+    protonated these oxygens instead, so DMSO came out as the hydroxysulfonium
+    cation C[S+](C)O at every pH."""
+
+    record = dimorphite_dl.LoadSMIFile(StringIO(charged)).next()
+    assert record["smiles"] == canonical_smiles(neutral)
+
+
 CHARGE_ON_NON_H_NITROGEN = [
     # [charged input, neutral form, id]
     ["C[n+]1cc[nH]c1", "Cn1ccnc1", "imidazolium"],

@@ -319,6 +319,22 @@ class UtilFuncs:
         # Get the reaction data
         rxn_data = [
             [
+                "[#16+2:1]-[Ov1-1:2]",
+                "[#16+1:1]=[O+0:2]",
+            ],  # To handle charge-separated sulfones and sulfonates (e.g.,
+            # C[S+2](C)([O-])[O-]). Must run before the O- rule below, which
+            # would otherwise protonate these oxygens. The resulting S+-O- is
+            # collapsed by the next rule.
+            [
+                "[#16+1:1]-[Ov1-1:2]",
+                "[#16+0:1]=[O+0:2]",
+            ],  # To handle charge-separated sulfoxides (e.g., C[S+](C)[O-]).
+            [
+                "[#15+1:1]-[Ov1-1:2]",
+                "[#15+0:1]=[O+0:2]",
+            ],  # To handle charge-separated phosphine oxides and phosphates
+            # (e.g., C[P+](C)(C)[O-]). The phosphate sites expect P=O.
+            [
                 "[Ov1-1;!$([O-]-[#7+;!$([#7+]=O)]):1]",
                 "[Ov2+0:1]-[H]",
             ],  # To handle O- bonded to only one atom (add hydrogen). The O- of
@@ -481,10 +497,10 @@ class LoadSMIFile(object):
         """Initializes this class.
 
         :param filename: The filename or file object (i.e., StringIO).
-        :type filename: str or StringIO
+        :type filename: str, os.PathLike, or StringIO
         """
 
-        if type(filename) is str:
+        if isinstance(filename, (str, os.PathLike)):
             # It's a filename
             self.f = open(filename, "r")
         else:
