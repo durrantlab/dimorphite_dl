@@ -572,10 +572,9 @@ class Protonate(object):
             for new_mol in new_mols:
                 new_smi = Chem.MolToSmiles(new_mol, isomericSmiles=True)
 
-                # Charges were set directly on the Mol without sanitizing, so
-                # confirm the result is still a parseable molecule.
-                if Chem.MolFromSmiles(new_smi) is None:
-                    continue
+                # Not re-parsed on purpose: some states, such as a protonated
+                # pyridone's O=c...[nH+], cannot be kekulized but are still
+                # reported.
 
                 # In some cases, the script might generate redundant
                 # molecules. Phosphonates, when the pH is between the two pKa
@@ -584,11 +583,6 @@ class Protonate(object):
                 # redundancy.
                 if new_smi not in new_smis:
                     new_smis.append(new_smi)
-
-        if len(new_smis) == 0:
-            UtilFuncs.eprint(
-                "WARNING: No valid protonation states for: " + smi + " " + tag
-            )
 
         # If the user wants to see the target states, add those
         # to the ends of each line.

@@ -1,0 +1,385 @@
+"""Checks the protonation states Dimorphite-DL assigns to each ionizable
+group, alone and in combination."""
+
+import os
+from typing import Callable, Dict, List
+
+import pytest
+from rdkit import Chem
+
+import dimorphite_dl
+
+SMARTS_FILE = os.path.join(
+    os.path.dirname(os.path.realpath(dimorphite_dl.__file__)),
+    "site_substructures.smarts",
+)
+
+VERY_ACIDIC_PH = -10000000.0
+VERY_BASIC_PH = 10000000.0
+DEFAULT_PKA_PRECISION = 0.5
+
+# Expected states that RDKit cannot kekulize but Dimorphite-DL deliberately
+# still emits. Every other output must parse.
+KNOWN_UNPARSEABLE = {"O=c1c(Br)c[nH+]cc1Br"}
+
+SINGLE_SITE_GROUPS = [
+    # [input smiles, protonated, deprotonated, category]
+    ["C#CCO", "C#CCO", "C#CC[O-]", "Alcohol"],
+    ["C(=O)N", "NC=O", "[NH-]C=O", "Amide"],
+    [
+        "CC(=O)NOC(C)=O",
+        "CC(=O)NOC(C)=O",
+        "CC(=O)[N-]OC(C)=O",
+        "Amide_electronegative",
+    ],
+    ["COC(=N)N", "COC(N)=[NH2+]", "COC(=N)N", "AmidineGuanidine2"],
+    [
+        "Brc1ccc(C2NCCS2)cc1",
+        "Brc1ccc(C2[NH2+]CCS2)cc1",
+        "Brc1ccc(C2NCCS2)cc1",
+        "Amines_primary_secondary_tertiary",
+    ],
+    [
+        "CC(=O)[n+]1ccc(N)cc1",
+        "CC(=O)[n+]1ccc([NH3+])cc1",
+        "CC(=O)[n+]1ccc(N)cc1",
+        "Anilines_primary",
+    ],
+    ["CCNc1ccccc1", "CC[NH2+]c1ccccc1", "CCNc1ccccc1", "Anilines_secondary"],
+    [
+        "Cc1ccccc1N(C)C",
+        "Cc1ccccc1[NH+](C)C",
+        "Cc1ccccc1N(C)C",
+        "Anilines_tertiary",
+    ],
+    [
+        "BrC1=CC2=C(C=C1)NC=C2",
+        "Brc1ccc2[nH]ccc2c1",
+        "Brc1ccc2[n-]ccc2c1",
+        "Indole_pyrrole",
+    ],
+    [
+        "BrC1=CNC=C(C1=O)Br",
+        "O=c1c(Br)c[nH+]cc1Br",
+        "O=c1c(Br)c[nH]cc1Br",
+        "Aromatic_nitrogen_protonated",
+    ],
+    ["C-N=[N+]=[N@H]", "CN=[N+]=N", "CN=[N+]=[N-]", "Azide"],
+    ["BrC(C(O)=O)CBr", "O=C(O)C(Br)CBr", "O=C([O-])C(Br)CBr", "Carboxyl"],
+    ["NC(NN=O)=N", "NC(=[NH2+])NN=O", "N=C(N)NN=O", "AmidineGuanidine1"],
+    [
+        "C(F)(F)(F)C(=O)NC(=O)C",
+        "CC(=O)NC(=O)C(F)(F)F",
+        "CC(=O)[N-]C(=O)C(F)(F)F",
+        "Imide",
+    ],
+    ["O=C(C)NC(C)=O", "CC(=O)NC(C)=O", "CC(=O)[N-]C(C)=O", "Imide2"],
+    [
+        "CC(C)(C)C(N(C)O)=O",
+        "CN(O)C(=O)C(C)(C)C",
+        "CN([O-])C(=O)C(C)(C)C",
+        "N-hydroxyamide",
+    ],
+    ["C[N+](O)=O", "C[N+](=O)O", "C[N+](=O)[O-]", "Nitro"],
+    ["O=C1C=C(O)CC1", "O=C1C=C(O)CC1", "O=C1C=C([O-])CC1", "O=C-C=C-OH"],
+    ["C1CC1OO", "OOC1CC1", "[O-]OC1CC1", "Peroxide2"],
+    ["C(=O)OO", "O=COO", "O=CO[O-]", "Peroxide1"],
+    [
+        "Brc1cc(O)cc(Br)c1",
+        "Oc1cc(Br)cc(Br)c1",
+        "[O-]c1cc(Br)cc(Br)c1",
+        "Phenol",
+    ],
+    [
+        "CC(=O)c1ccc(S)cc1",
+        "CC(=O)c1ccc(S)cc1",
+        "CC(=O)c1ccc([S-])cc1",
+        "Phenyl_Thiol",
+    ],
+    [
+        "C=CCOc1ccc(C(=O)O)cc1",
+        "C=CCOc1ccc(C(=O)O)cc1",
+        "C=CCOc1ccc(C(=O)[O-])cc1",
+        "Phenyl_carboxyl",
+    ],
+    ["COP(=O)(O)OC", "COP(=O)(O)OC", "COP(=O)([O-])OC", "Phosphate_diester"],
+    ["CP(C)(=O)O", "CP(C)(=O)O", "CP(C)(=O)[O-]", "Phosphinic_acid"],
+    [
+        "CC(C)OP(C)(=O)O",
+        "CC(C)OP(C)(=O)O",
+        "CC(C)OP(C)(=O)[O-]",
+        "Phosphonate_ester",
+    ],
+    [
+        "CC1(C)OC(=O)NC1=O",
+        "CC1(C)OC(=O)NC1=O",
+        "CC1(C)OC(=O)[N-]C1=O",
+        "Ringed_imide1",
+    ],
+    ["O=C(N1)C=CC1=O", "O=C1C=CC(=O)N1", "O=C1C=CC(=O)[N-]1", "Ringed_imide2"],
+    ["O=S(OC)(O)=O", "COS(=O)(=O)O", "COS(=O)(=O)[O-]", "Sulfate"],
+    [
+        "COc1ccc(S(=O)O)cc1",
+        "COc1ccc(S(=O)O)cc1",
+        "COc1ccc(S(=O)[O-])cc1",
+        "Sulfinic_acid",
+    ],
+    ["CS(N)(=O)=O", "CS(N)(=O)=O", "CS([NH-])(=O)=O", "Sulfonamide"],
+    [
+        "CC(=O)CSCCS(O)(=O)=O",
+        "CC(=O)CSCCS(=O)(=O)O",
+        "CC(=O)CSCCS(=O)(=O)[O-]",
+        "Sulfonate",
+    ],
+    ["CC(=O)S", "CC(=O)S", "CC(=O)[S-]", "Thioic_acid"],
+    ["C(C)(C)(C)(S)", "CC(C)(C)S", "CC(C)(C)[S-]", "Thiol"],
+    [
+        "Brc1cc[nH+]cc1",
+        "Brc1cc[nH+]cc1",
+        "Brc1ccncc1",
+        "Aromatic_nitrogen_unprotonated",
+    ],
+    [
+        "C=C(O)c1c(C)cc(C)cc1C",
+        "C=C(O)c1c(C)cc(C)cc1C",
+        "C=C([O-])c1c(C)cc(C)cc1C",
+        "Vinyl_alcohol",
+    ],
+    ["CC(=O)ON", "CC(=O)O[NH3+]", "CC(=O)ON", "Primary_hydroxyl_amine"],
+]
+
+
+PHOSPHORUS_GROUPS = [
+    # [input smiles, protonated, singly deprotonated, deprotonated, category]
+    [
+        "O=P(O)(O)OCCCC",
+        "CCCCOP(=O)(O)O",
+        "CCCCOP(=O)([O-])O",
+        "CCCCOP(=O)([O-])[O-]",
+        "Phosphate",
+    ],
+    [
+        "CC(P(O)(O)=O)C",
+        "CC(C)P(=O)(O)O",
+        "CC(C)P(=O)([O-])O",
+        "CC(C)P(=O)([O-])[O-]",
+        "Phosphonate",
+    ],
+]
+
+# [input smiles, protonated, deprotonated]. Written in any valid form; the
+# tests canonicalize them.
+MULTIPLE_SITE_MOLECULES = [
+    ["NCCCC(=O)O", "[NH3+]CCCC(=O)O", "NCCCC(=O)[O-]"],
+    ["NCc1ccc(O)cc1", "[NH3+]Cc1ccc(O)cc1", "NCc1ccc([O-])cc1"],
+    [
+        "OC(=O)CCC(N)C(=O)O",
+        "OC(=O)CCC([NH3+])C(=O)O",
+        "[O-]C(=O)CCC(N)C(=O)[O-]",
+    ],
+    ["NCc1ccc2[nH]ccc2c1", "[NH3+]Cc1ccc2[nH]ccc2c1", "NCc1ccc2[n-]ccc2c1"],
+]
+
+
+def group_id(group: List[str]) -> str:
+    """Names each parametrized case after its category so failures are easy
+    to find in pytest's output.
+
+    Args:
+        group: A row of SINGLE_SITE_GROUPS or PHOSPHORUS_GROUPS.
+
+    Returns:
+        The category name, the last entry of the row.
+    """
+
+    return group[-1]
+
+
+@pytest.fixture(scope="module")
+def average_pkas() -> Dict[str, List[float]]:
+    """Reads each group's mean pKa values from the shipped SMARTS file, so the
+    at-pKa tests follow the parameters rather than hard-coding them.
+
+    Returns:
+        Group name (with any "*" removed) mapped to its mean pKa per site.
+    """
+
+    pkas: Dict[str, List[float]] = {}
+    with open(SMARTS_FILE) as smarts:
+        for line in smarts:
+            splits = line.split()
+            if len(splits) == 0:
+                continue
+
+            # Columns: name, SMARTS, then (site, mean, std) triples.
+            pkas[splits[0].replace("*", "")] = [float(x) for x in splits[3::3]]
+    return pkas
+
+
+def protonate(smiles: str, ph: float, pka_precision: float) -> List[List[str]]:
+    """Runs Dimorphite-DL on one molecule at a single pH, with state labels,
+    the way the command line would.
+
+    Args:
+        smiles: The input SMILES string.
+        ph: Used as both the minimum and maximum pH.
+        pka_precision: Number of standard deviations to consider.
+
+    Returns:
+        One [smiles, first label, other labels...] list per output state.
+    """
+
+    args = {
+        "min_ph": ph,
+        "max_ph": ph,
+        "pka_precision": pka_precision,
+        "smiles": smiles,
+        "label_states": True,
+    }
+    return [line.split() for line in dimorphite_dl.Protonate(args)]
+
+
+def check_protonation(
+    smiles: str,
+    ph: float,
+    expected_smiles: List[str],
+    labels: List[str],
+    pka_precision: float = DEFAULT_PKA_PRECISION,
+) -> None:
+    """Asserts that a molecule yields exactly the expected states at a pH.
+
+    Every output outside KNOWN_UNPARSEABLE must also be a parseable SMILES
+    string, so that bad hydrogen bookkeeping (e.g., [nH-]) is caught.
+
+    Args:
+        smiles: The input SMILES string.
+        ph: Used as both the minimum and maximum pH.
+        expected_smiles: The canonical SMILES of every expected state.
+        labels: The allowed values of the first site's label.
+        pka_precision: Number of standard deviations to consider.
+    """
+
+    output = protonate(smiles, ph, pka_precision)
+    output_smiles = [line[0] for line in output]
+
+    invalid = [
+        s
+        for s in output_smiles
+        if s not in KNOWN_UNPARSEABLE and Chem.MolFromSmiles(s) is None
+    ]
+    assert invalid == [], "invalid SMILES produced: " + str(invalid)
+
+    assert len(output) == len(expected_smiles), output
+    assert set(output_smiles) <= set(expected_smiles), output
+    assert set(line[1] for line in output) <= set(labels), output
+
+
+@pytest.mark.parametrize("group", SINGLE_SITE_GROUPS, ids=group_id)
+def test_single_site_very_acidic(group: List[str]) -> None:
+    """Checks that every group is fully protonated at extremely low pH."""
+
+    smiles, protonated, deprotonated, category = group
+    check_protonation(smiles, VERY_ACIDIC_PH, [protonated], ["PROTONATED"])
+
+
+@pytest.mark.parametrize("group", SINGLE_SITE_GROUPS, ids=group_id)
+def test_single_site_very_basic(group: List[str]) -> None:
+    """Checks that every group is fully deprotonated at extremely high pH."""
+
+    smiles, protonated, deprotonated, category = group
+    check_protonation(smiles, VERY_BASIC_PH, [deprotonated], ["DEPROTONATED"])
+
+
+@pytest.mark.parametrize("group", SINGLE_SITE_GROUPS, ids=group_id)
+def test_single_site_at_category_pka(
+    group: List[str], average_pkas: Dict[str, List[float]]
+) -> None:
+    """Checks that both states are produced at a group's own mean pKa."""
+
+    smiles, protonated, deprotonated, category = group
+    check_protonation(
+        smiles, average_pkas[category][0], [protonated, deprotonated], ["BOTH"]
+    )
+
+
+@pytest.mark.parametrize("group", PHOSPHORUS_GROUPS, ids=group_id)
+def test_phosphorus_very_acidic(group: List[str]) -> None:
+    """Checks that both acidic sites stay protonated at extremely low pH."""
+
+    smiles, protonated, mix, deprotonated, category = group
+    check_protonation(smiles, VERY_ACIDIC_PH, [protonated], ["PROTONATED"])
+
+
+@pytest.mark.parametrize("group", PHOSPHORUS_GROUPS, ids=group_id)
+def test_phosphorus_very_basic(group: List[str]) -> None:
+    """Checks that both acidic sites are deprotonated at extremely high pH."""
+
+    smiles, protonated, mix, deprotonated, category = group
+    check_protonation(smiles, VERY_BASIC_PH, [deprotonated], ["DEPROTONATED"])
+
+
+@pytest.mark.parametrize("group", PHOSPHORUS_GROUPS, ids=group_id)
+def test_phosphorus_at_first_pka(
+    group: List[str], average_pkas: Dict[str, List[float]]
+) -> None:
+    """Checks that only the first site is ambiguous at the first pKa."""
+
+    smiles, protonated, mix, deprotonated, category = group
+    check_protonation(smiles, average_pkas[category][0], [mix, protonated], ["BOTH"])
+
+
+@pytest.mark.parametrize("group", PHOSPHORUS_GROUPS, ids=group_id)
+def test_phosphorus_at_second_pka(
+    group: List[str], average_pkas: Dict[str, List[float]]
+) -> None:
+    """Checks that the first site is deprotonated and only the second is
+    ambiguous at the second pKa."""
+
+    smiles, protonated, mix, deprotonated, category = group
+    check_protonation(
+        smiles, average_pkas[category][1], [mix, deprotonated], ["DEPROTONATED"]
+    )
+
+
+@pytest.mark.parametrize("group", PHOSPHORUS_GROUPS, ids=group_id)
+def test_phosphorus_between_pkas(
+    group: List[str], average_pkas: Dict[str, List[float]]
+) -> None:
+    """Checks that a wide precision between the two pKas yields all three
+    states, with the duplicate singly deprotonated state removed."""
+
+    smiles, protonated, mix, deprotonated, category = group
+    ph = 0.5 * (average_pkas[category][0] + average_pkas[category][1])
+    check_protonation(
+        smiles, ph, [mix, deprotonated, protonated], ["BOTH"], pka_precision=5.0
+    )
+
+
+@pytest.mark.parametrize(
+    "molecule", MULTIPLE_SITE_MOLECULES, ids=lambda molecule: molecule[0]
+)
+def test_multiple_sites_very_acidic(
+    molecule: List[str], canonical_smiles: Callable[[str], str]
+) -> None:
+    """Checks molecules whose first charged site can reorder the canonical
+    atoms that later site indices refer to."""
+
+    smiles, protonated, deprotonated = molecule
+    check_protonation(
+        smiles, VERY_ACIDIC_PH, [canonical_smiles(protonated)], ["PROTONATED"]
+    )
+
+
+@pytest.mark.parametrize(
+    "molecule", MULTIPLE_SITE_MOLECULES, ids=lambda molecule: molecule[0]
+)
+def test_multiple_sites_very_basic(
+    molecule: List[str], canonical_smiles: Callable[[str], str]
+) -> None:
+    """Same as the acidic case. The indole also checks that deprotonating a
+    bracketed [nH] does not make the molecule disappear from the output."""
+
+    smiles, protonated, deprotonated = molecule
+    check_protonation(
+        smiles, VERY_BASIC_PH, [canonical_smiles(deprotonated)], ["DEPROTONATED"]
+    )
