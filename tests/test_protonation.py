@@ -293,7 +293,7 @@ def check_protonation(
     expected_smiles: List[str],
     labels: List[str],
     pka_precision: float = DEFAULT_PKA_PRECISION,
-) -> None:
+) -> List[List[str]]:
     """Asserts that a molecule yields exactly the expected states at a pH.
 
     Every output outside KNOWN_UNPARSEABLE must also be a parseable SMILES
@@ -303,8 +303,13 @@ def check_protonation(
         smiles: The input SMILES string.
         ph: Used as both the minimum and maximum pH.
         expected_smiles: The canonical SMILES of every expected state.
-        labels: The allowed values of the first site's label.
+        labels: The allowed labels. Every site's label is checked, not just
+            the first.
         pka_precision: Number of standard deviations to consider.
+
+    Returns:
+        The output, so callers can make further assertions (e.g., on the
+        order of the site labels).
     """
 
     output = protonate(smiles, ph, pka_precision)
@@ -321,7 +326,8 @@ def check_protonation(
     assert set(normalize_smiles(s) for s in output_smiles) <= set(
         normalize_smiles(s) for s in expected_smiles
     ), output
-    assert set(line[1] for line in output) <= set(labels), output
+    assert set(label for line in output for label in line[1:]) <= set(labels), output
+    return output
 
 
 @pytest.mark.parametrize("group", SINGLE_SITE_GROUPS, ids=group_id)
@@ -375,7 +381,15 @@ def test_phosphorus_at_first_pka(
     """Checks that only the first site is ambiguous at the first pKa."""
 
     smiles, protonated, mix, deprotonated, category = group
-    check_protonation(smiles, average_pkas[category][0], [mix, protonated], ["BOTH"])
+    output = check_protonation(
+        smiles,
+        average_pkas[category][0],
+        [mix, protonated],
+        ["BOTH", "PROTONATED"],
+    )
+
+    # Sites are listed in SMARTS order: the pKa1 site, then the pKa2 site.
+    assert all(line[1:] == ["BOTH", "PROTONATED"] for line in output), output
 
 
 @pytest.mark.parametrize("group", PHOSPHORUS_GROUPS, ids=group_id)
@@ -386,9 +400,15 @@ def test_phosphorus_at_second_pka(
     ambiguous at the second pKa."""
 
     smiles, protonated, mix, deprotonated, category = group
-    check_protonation(
-        smiles, average_pkas[category][1], [mix, deprotonated], ["DEPROTONATED"]
+    output = check_protonation(
+        smiles,
+        average_pkas[category][1],
+        [mix, deprotonated],
+        ["DEPROTONATED", "BOTH"],
     )
+
+    # Sites are listed in SMARTS order: the pKa1 site, then the pKa2 site.
+    assert all(line[1:] == ["DEPROTONATED", "BOTH"] for line in output), output
 
 
 @pytest.mark.parametrize("group", PHOSPHORUS_GROUPS, ids=group_id)
@@ -403,6 +423,18 @@ def test_phosphorus_between_pkas(
     check_protonation(
         smiles, ph, [mix, deprotonated, protonated], ["BOTH"], pka_precision=5.0
     )
+
+
+def test_check_protonation_verifies_every_site_label() -> None:
+    """Checks that check_protonation fails when only a later site's label is
+    wrong. At pH 6 the carboxyl (listed first) is DEPROTONATED and the amine
+    is PROTONATED, so allowing only the first label must fail."""
+
+    zwitterion = "[NH3+]CCCC(=O)[O-]"
+    with pytest.raises(AssertionError):
+        check_protonation("NCCCC(=O)O", 6.0, [zwitterion], ["DEPROTONATED"])
+
+    check_protonation("NCCCC(=O)O", 6.0, [zwitterion], ["DEPROTONATED", "PROTONATED"])
 
 
 @pytest.mark.parametrize(
