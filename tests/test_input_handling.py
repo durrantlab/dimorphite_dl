@@ -4,6 +4,7 @@ protonation happens."""
 import warnings
 from io import StringIO
 from pathlib import Path
+from typing import List
 
 import pytest
 from rdkit import Chem
@@ -79,6 +80,67 @@ def test_path_object_is_read_as_a_filename(tmp_path: Path) -> None:
     smi_file.write_text("CCCN\n")
 
     assert list(dimorphite_dl.LoadSMIFile(smi_file)) == [{"smiles": "CCCN", "data": []}]
+
+
+def test_input_file_closed_when_protonation_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Checks that main() closes the input file when an exception stops it
+    partway through. The file was closed only at EOF, so each failed call
+    from a long-running library caller leaked a handle."""
+
+    smi_file = tmp_path / "input.smi"
+    smi_file.write_text("CCCN\nCCC(=O)O\n")
+
+    loaders: List[dimorphite_dl.LoadSMIFile] = []
+    original_init = dimorphite_dl.LoadSMIFile.__init__
+
+    def recording_init(self: dimorphite_dl.LoadSMIFile, filename: str) -> None:
+        """Keeps each loader so the test can inspect its file afterward.
+
+        Args:
+            self: The loader being constructed.
+            filename: Passed through unchanged.
+        """
+
+        original_init(self, filename)
+        loaders.append(self)
+
+    def failing_protonate_sites(*args: object) -> None:
+        """Stands in for an error raised partway through the input.
+
+        Args:
+            *args: Ignored.
+        """
+
+        raise RuntimeError("simulated failure")
+
+    monkeypatch.setattr(dimorphite_dl.LoadSMIFile, "__init__", recording_init)
+    monkeypatch.setattr(
+        dimorphite_dl.ProtSubstructFuncs,
+        "protonate_sites",
+        staticmethod(failing_protonate_sites),
+    )
+
+    with pytest.raises(RuntimeError, match="simulated failure"):
+        dimorphite_dl.run(smiles_file=str(smi_file), return_as_list=True)
+
+    assert len(loaders) == 1
+    assert loaders[0].f.closed
+
+
+def test_load_smi_file_closes_on_early_exit(tmp_path: Path) -> None:
+    """Checks that a caller who stops iterating before EOF can still close
+    the file, and that the later EOF close does not fail."""
+
+    smi_file = tmp_path / "input.smi"
+    smi_file.write_text("CCCN\nCCC(=O)O\n")
+
+    with dimorphite_dl.LoadSMIFile(smi_file) as loader:
+        assert loader.next()["smiles"] == "CCCN"
+    assert loader.f.closed
+
+    loader.close()
 
 
 def test_smiles_and_smiles_file_together_are_rejected(tmp_path: Path) -> None:

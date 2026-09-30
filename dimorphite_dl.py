@@ -110,18 +110,23 @@ def main(params=None):
     # without truncating an existing file.
     protonator = Protonate(args)
 
-    # Run protonation
-    if "output_file" in args and args["output_file"] is not None:
-        # An output file was specified, so write to that.
-        with open(args["output_file"], "w") as file:
+    # The input file is otherwise closed only at EOF, so an exception partway
+    # through would leak the handle in a long-running library caller.
+    try:
+        # Run protonation
+        if "output_file" in args and args["output_file"] is not None:
+            # An output file was specified, so write to that.
+            with open(args["output_file"], "w") as file:
+                for protonated_smi in protonator:
+                    file.write(protonated_smi + "\n")
+        elif "return_as_list" in args and args["return_as_list"] == True:
+            return list(protonator)
+        else:
+            # No output file specified. Just print it to the screen.
             for protonated_smi in protonator:
-                file.write(protonated_smi + "\n")
-    elif "return_as_list" in args and args["return_as_list"] == True:
-        return list(protonator)
-    else:
-        # No output file specified. Just print it to the screen.
-        for protonated_smi in protonator:
-            print(protonated_smi)
+                print(protonated_smi)
+    finally:
+        protonator.close()
 
 
 class MyParser(argparse.ArgumentParser):
@@ -335,11 +340,14 @@ class UtilFuncs:
             ],  # To handle charge-separated phosphine oxides and phosphates
             # (e.g., C[P+](C)(C)[O-]). The phosphate sites expect P=O.
             [
-                "[Ov1-1;!$([O-]-[#7+;!$([#7+]=O)]):1]",
+                "[Ov1-1;!$([O-]-[#7+;!$([#7+]=O)]);!$([O-]-[#7+](=O)-[#8]-[H]):1]",
                 "[Ov2+0:1]-[H]",
             ],  # To handle O- bonded to only one atom (add hydrogen). The O- of
             # an N-oxide or nitrone is left alone: no site pattern restores it
             # from N+-OH, whereas a nitro O-H is deprotonated again by Nitro.
+            # Nitrate gets only one H, giving nitric acid (O[N+](=O)[O-]).
+            # Nitro deprotonates one OH per group, so a second OH would lock
+            # the first as context and survive as neutral HNO3 at any pH.
             [
                 "[Sv1-1:1]",
                 "[Sv2+0:1]-[H]",
@@ -516,6 +524,37 @@ class LoadSMIFile(object):
 
         return self
 
+    def __enter__(self):
+        # type: () -> LoadSMIFile
+        """Lets library callers that iterate by hand close the file even if
+        they stop early or raise, rather than relying on reaching EOF.
+
+        Returns:
+            This loader.
+        """
+
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # type: (object, object, object) -> None
+        """Closes the file on leaving a with block.
+
+        Args:
+            exc_type: The exception type, if one was raised. Not suppressed.
+            exc_value: The exception, if one was raised.
+            traceback: Its traceback, if one was raised.
+        """
+
+        self.close()
+
+    def close(self):
+        # type: () -> None
+        """Closes the input file. Safe to call more than once, since both
+        EOF and an early exit call it.
+        """
+
+        self.f.close()
+
     def __next__(self):
         """Ensure Python3 compatibility.
 
@@ -544,7 +583,7 @@ class LoadSMIFile(object):
 
             if line == "":
                 # EOF
-                self.f.close()
+                self.close()
                 raise StopIteration()
 
             # Divide line into smi and data
@@ -630,6 +669,14 @@ class Protonate(object):
         """
 
         return self
+
+    def close(self):
+        # type: () -> None
+        """Closes the input file, which LoadSMIFile otherwise closes only at
+        EOF. Callers that may stop early (e.g., on an exception) call this.
+        """
+
+        self.args["smiles_and_data"].close()
 
     def __next__(self):
         """Ensure Python3 compatibility.

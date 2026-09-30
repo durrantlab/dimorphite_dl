@@ -538,6 +538,44 @@ def test_charged_nitro_input_still_handled(
 
 
 @pytest.mark.parametrize(
+    "smiles", ["[O-][N+](=O)[O-]", "O[N+](=O)[O-]"], ids=["nitrate", "nitric_acid"]
+)
+@pytest.mark.parametrize(
+    "ph, expected, state",
+    [
+        (VERY_ACIDIC_PH, "O[N+](=O)[O-]", "PROTONATED"),
+        (7.0, "[O-][N+](=O)[O-]", "DEPROTONATED"),
+        (VERY_BASIC_PH, "[O-][N+](=O)[O-]", "DEPROTONATED"),
+    ],
+    ids=["very_acidic", "neutral", "very_basic"],
+)
+def test_nitrate_loses_both_protons(
+    smiles: str, ph: float, expected: str, state: str
+) -> None:
+    """Checks that nitrate is not reported as nitric acid. Neutralization
+    protonated both of its O-, and the Nitro pattern then restored only one,
+    because the other OH was locked as context. Nitrate counterions came out
+    as neutral HNO3 at pH 7."""
+
+    check_protonation(smiles, ph, [expected], [state])
+
+
+@pytest.mark.parametrize(
+    "ph, expected, state",
+    [
+        (VERY_ACIDIC_PH, "CO[N+](=O)O", "PROTONATED"),
+        (VERY_BASIC_PH, "CO[N+](=O)[O-]", "DEPROTONATED"),
+    ],
+    ids=["very_acidic", "very_basic"],
+)
+def test_nitrate_ester_still_handled(ph: float, expected: str, state: str) -> None:
+    """Checks that the nitrate exception in neutralization does not reach
+    nitrate esters, whose single O- must still be protonated for Nitro."""
+
+    check_protonation("CO[N+](=O)[O-]", ph, [expected], [state])
+
+
+@pytest.mark.parametrize(
     "charged, neutral",
     [
         ("C[S+](C)[O-]", "CS(C)=O"),
