@@ -2,7 +2,7 @@
 group, alone and in combination."""
 
 import os
-from typing import Callable, Dict, List, Union
+from typing import Callable, Dict, List, Tuple, Union
 
 import pytest
 from rdkit import Chem
@@ -197,6 +197,14 @@ SHARED_CONTEXT_MOLECULES = [
     ],
 ]
 
+# A precision this wide makes every site BOTH at any pH.
+EVERY_SITE_BOTH_PRECISION = 1000000.0
+
+# Eight carboxyl groups on distinct, non-equivalent carbons, so every one of
+# the 2**8 charge patterns is a different molecule.
+EIGHT_CARBOXYLS = "CC(C(=O)O)" * 8
+EIGHT_CARBOXYL_STATES = 2**8
+
 
 def group_id(group: List[str]) -> str:
     """Names each parametrized case after its category so failures are easy
@@ -233,7 +241,12 @@ def average_pkas() -> Dict[str, List[float]]:
     return pkas
 
 
-def protonate(smiles: str, ph: float, pka_precision: float) -> List[List[str]]:
+def protonate(
+    smiles: str,
+    ph: float,
+    pka_precision: float,
+    max_variants: int = dimorphite_dl.DEFAULT_MAX_VARIANTS,
+) -> List[List[str]]:
     """Runs Dimorphite-DL on one molecule at a single pH, with state labels,
     the way the command line would.
 
@@ -241,19 +254,37 @@ def protonate(smiles: str, ph: float, pka_precision: float) -> List[List[str]]:
         smiles: The input SMILES string.
         ph: Used as both the minimum and maximum pH.
         pka_precision: Number of standard deviations to consider.
+        max_variants: The most states to return.
 
     Returns:
         One [smiles, first label, other labels...] list per output state.
     """
 
-    args = {
+    args: Dict[str, Union[str, float, bool]] = {
         "min_ph": ph,
         "max_ph": ph,
         "pka_precision": pka_precision,
+        "max_variants": max_variants,
         "smiles": smiles,
         "label_states": True,
     }
     return [line.split() for line in dimorphite_dl.Protonate(args)]
+
+
+def normalize_smiles(smiles: str) -> str:
+    """Canonicalizes with the installed RDKit, so comparisons do not depend on
+    the RDKit version that wrote the expected strings. Unparseable strings
+    (see KNOWN_UNPARSEABLE) cannot be canonicalized and are compared as is.
+
+    Args:
+        smiles: A SMILES string, valid or not.
+
+    Returns:
+        The canonical isomeric SMILES, or smiles itself if it does not parse.
+    """
+
+    mol = Chem.MolFromSmiles(smiles)
+    return smiles if mol is None else Chem.MolToSmiles(mol, isomericSmiles=True)
 
 
 def check_protonation(
@@ -287,7 +318,9 @@ def check_protonation(
     assert invalid == [], "invalid SMILES produced: " + str(invalid)
 
     assert len(output) == len(expected_smiles), output
-    assert set(output_smiles) <= set(expected_smiles), output
+    assert set(normalize_smiles(s) for s in output_smiles) <= set(
+        normalize_smiles(s) for s in expected_smiles
+    ), output
     assert set(line[1] for line in output) <= set(labels), output
 
 
@@ -425,6 +458,99 @@ def test_shared_context_sites(
     check_protonation(smiles, ph, [canonical_smiles(expected)], [state])
 
 
+def test_multiple_both_sites_enumerate_every_combination(
+    canonical_smiles: Callable[[str], str],
+) -> None:
+    """Checks that two BOTH sites combine into all four states rather than
+    only the fully protonated and fully deprotonated ones."""
+
+    output = protonate("NCCCC(=O)O", 7.0, EVERY_SITE_BOTH_PRECISION)
+
+    expected = [
+        "NCCCC(=O)O",
+        "[NH3+]CCCC(=O)O",
+        "NCCCC(=O)[O-]",
+        "[NH3+]CCCC(=O)[O-]",
+    ]
+    assert sorted(line[0] for line in output) == sorted(
+        canonical_smiles(s) for s in expected
+    ), output
+    assert all(line[1:] == ["BOTH", "BOTH"] for line in output), output
+
+
+def test_many_both_sites_uncapped(capsys: pytest.CaptureFixture[str]) -> None:
+    """Checks that every combination is produced when the cap is not hit, and
+    that no truncation warning is printed."""
+
+    output = protonate(
+        EIGHT_CARBOXYLS,
+        7.0,
+        EVERY_SITE_BOTH_PRECISION,
+        max_variants=EIGHT_CARBOXYL_STATES,
+    )
+
+    output_smiles = [line[0] for line in output]
+    assert len(output_smiles) == EIGHT_CARBOXYL_STATES
+    assert len(set(output_smiles)) == EIGHT_CARBOXYL_STATES
+    assert all(Chem.MolFromSmiles(s) is not None for s in output_smiles)
+    assert "Limited number of variants" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "max_variants",
+    [1, 10, dimorphite_dl.DEFAULT_MAX_VARIANTS],
+    ids=["one", "ten", "default"],
+)
+def test_many_both_sites_capped(
+    max_variants: int,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Checks that the cap limits the output, that the working list never
+    grows past twice the cap (so memory stays bounded), and that the
+    truncation is reported."""
+
+    original = dimorphite_dl.ProtSubstructFuncs.protonate_site
+    input_sizes: List[int] = []
+
+    def recording_protonate_site(
+        mols: List[Chem.Mol], site: Tuple[int, str, str]
+    ) -> List[Chem.Mol]:
+        """Records how many states each site is applied to.
+
+        Args:
+            mols: The states going into this site.
+            site: The site being protonated.
+
+        Returns:
+            The original function's result.
+        """
+
+        input_sizes.append(len(mols))
+        return original(mols, site)
+
+    monkeypatch.setattr(
+        dimorphite_dl.ProtSubstructFuncs,
+        "protonate_site",
+        staticmethod(recording_protonate_site),
+    )
+
+    output = protonate(
+        EIGHT_CARBOXYLS, 7.0, EVERY_SITE_BOTH_PRECISION, max_variants=max_variants
+    )
+
+    output_smiles = [line[0] for line in output]
+    assert len(output_smiles) == max_variants
+    assert len(set(output_smiles)) == max_variants
+    assert all(Chem.MolFromSmiles(s) is not None for s in output_smiles)
+
+    # Every site is still assigned after the cap is reached.
+    assert len(input_sizes) == 8
+    assert max(input_sizes) <= max_variants
+
+    assert "Limited number of variants" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     "mean, std, min_ph, max_ph",
     [(7.4, 0.1, 8.4, 6.4), (7.4, -0.1, 6.4, 8.4)],
@@ -444,8 +570,8 @@ def test_define_protonation_state_rejects_inverted_intervals(
 
 @pytest.mark.parametrize(
     "params",
-    [{"min_ph": 8.4, "max_ph": 6.4}, {"pka_precision": -1.0}],
-    ids=["inverted_ph_range", "negative_precision"],
+    [{"min_ph": 8.4, "max_ph": 6.4}, {"pka_precision": -1.0}, {"max_variants": 0}],
+    ids=["inverted_ph_range", "negative_precision", "zero_max_variants"],
 )
 def test_protonate_rejects_invalid_ranges(params: Dict[str, float]) -> None:
     """Checks that bad user parameters are rejected before any protonation."""

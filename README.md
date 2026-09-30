@@ -30,9 +30,9 @@ Usage
 
 ```
 usage: dimorphite_dl.py [-h] [--min_ph MIN] [--max_ph MAX]
-                        [--pka_precision PRE] [--smiles SMI]
-                        [--smiles_file FILE] [--output_file FILE]
-                        [--label_states]
+                        [--pka_precision PRE] [--max_variants MXV]
+                        [--smiles SMI] [--smiles_file FILE]
+                        [--output_file FILE] [--label_states]
 
 Dimorphite 1.1: Creates models of appropriately protonated small moleucles.
 Apache 2.0 License. Copyright 2018 Jacob D. Durrant.
@@ -43,6 +43,8 @@ optional arguments:
   --max_ph MAX         maximum pH to consider (default: 8.4)
   --pka_precision PRE  pKa precision factor (number of standard devations,
                        default: 1.0)
+  --max_variants MXV   limit number of variants per input compound (default:
+                       128)
   --smiles SMI         SMILES string to protonate
   --smiles_file FILE   file that contains SMILES strings to protonate
   --output_file FILE   output file to write protonated SMILES (optional)

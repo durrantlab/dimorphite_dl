@@ -37,33 +37,23 @@ except ImportError:
     # Python3
     from io import StringIO
 
-# Always let the user know a help file is available.
-# These go to stderr because stdout carries the protonated SMILES.
-print("\nFor help, use: python dimorphite_dl.py --help", file=sys.stderr)
-
-# And always report citation information.
-print("\nIf you use Dimorphite-DL in your research, please cite:", file=sys.stderr)
-print(
-    "Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An",
-    file=sys.stderr,
-)
-print(
-    "open-source program for enumerating the ionization states of drug-like small",
-    file=sys.stderr,
-)
-print(
-    "molecules. J Cheminform 11:14. doi:10.1186/s13321-019-0336-9.\n",
-    file=sys.stderr,
-)
-
 try:
     import rdkit
     from rdkit import Chem
     from rdkit.Chem import AllChem
-except:
-    msg = "Dimorphite-DL requires RDKit. See https://www.rdkit.org/"
-    print(msg)
-    raise Exception(msg)
+except ImportError:
+    raise ImportError("Dimorphite-DL requires RDKit. See https://www.rdkit.org/")
+
+# What RDKit raises for a molecule it cannot handle: sanitization failures
+# derive from ValueError, and C++ invariant violations surface as
+# RuntimeError. Those mean "skip this input". Anything else is a bug in this
+# module and should propagate rather than be reported as a bad SMILES.
+RDKIT_ERRORS = (ValueError, RuntimeError)
+
+# Caps the protonation states kept per input molecule. Each BOTH site doubles
+# the count, so without a cap a molecule with 20 such sites would need about a
+# million states in memory.
+DEFAULT_MAX_VARIANTS = 128
 
 
 def main(params=None):
@@ -94,17 +84,21 @@ def main(params=None):
             print(k.rjust(13) + ": " + str(args[k]), file=sys.stderr)
         print("", file=sys.stderr)
 
+    # Built before any output file is opened, so that invalid arguments raise
+    # without truncating an existing file.
+    protonator = Protonate(args)
+
     # Run protonation
     if "output_file" in args and args["output_file"] is not None:
         # An output file was specified, so write to that.
         with open(args["output_file"], "w") as file:
-            for protonated_smi in Protonate(args):
+            for protonated_smi in protonator:
                 file.write(protonated_smi + "\n")
     elif "return_as_list" in args and args["return_as_list"] == True:
-        return list(Protonate(args))
+        return list(protonator)
     else:
         # No output file specified. Just print it to the screen.
-        for protonated_smi in Protonate(args):
+        for protonated_smi in protonator:
             print(protonated_smi)
 
 
@@ -185,6 +179,14 @@ class ArgParseFuncs:
             help="pKa precision factor (number of standard devations, default: 1.0)",
         )
         parser.add_argument(
+            "--max_variants",
+            metavar="MXV",
+            type=int,
+            default=DEFAULT_MAX_VARIANTS,
+            help="limit number of variants per input compound (default: %d)"
+            % DEFAULT_MAX_VARIANTS,
+        )
+        parser.add_argument(
             "--smiles", metavar="SMI", type=str, help="SMILES string to protonate"
         )
         parser.add_argument(
@@ -220,6 +222,7 @@ class ArgParseFuncs:
             "min_ph": 6.4,
             "max_ph": 8.4,
             "pka_precision": 1.0,
+            "max_variants": DEFAULT_MAX_VARIANTS,
             "label_states": False,
         }
 
@@ -237,6 +240,14 @@ class ArgParseFuncs:
             print(msg)
             raise Exception(msg)
 
+        if "smiles" in args and "smiles_file" in args:
+            msg = (
+                "Error: Both smiles and smiles_file were given. Only one input "
+                + "can be used."
+            )
+            UtilFuncs.eprint(msg)
+            raise ValueError(msg)
+
         if args["min_ph"] > args["max_ph"]:
             msg = "Error: min_ph (%s) is greater than max_ph (%s)." % (
                 args["min_ph"],
@@ -248,6 +259,13 @@ class ArgParseFuncs:
         if args["pka_precision"] < 0:
             msg = "Error: pka_precision (%s) must not be negative." % (
                 args["pka_precision"]
+            )
+            UtilFuncs.eprint(msg)
+            raise ValueError(msg)
+
+        if args["max_variants"] < 1:
+            msg = "Error: max_variants (%s) must be at least 1." % (
+                args["max_variants"]
             )
             UtilFuncs.eprint(msg)
             raise ValueError(msg)
@@ -376,7 +394,7 @@ class UtilFuncs:
             smiles_str = smiles_str.replace("N=N=N", "N=[N+]=N")
             smiles_str = smiles_str.replace("NN#N", "N=[N+]=N")
             mol = Chem.MolFromSmiles(smiles_str)
-        except:
+        except RDKIT_ERRORS:
             return None
 
         # Check that there are None type errors Chem.MolFromSmiles has sanitize on
@@ -444,17 +462,22 @@ class LoadSMIFile(object):
         :rtype: dict
         """
 
-        line = self.f.readline()
+        # A loop rather than recursion, so a long run of blank or bad lines
+        # cannot exhaust the stack.
+        while True:
+            line = self.f.readline()
 
-        if line == "":
-            # EOF
-            self.f.close()
-            raise StopIteration()
-            return
+            if line == "":
+                # EOF
+                self.f.close()
+                raise StopIteration()
 
-        # Divide line into smi and data
-        splits = line.split()
-        if len(splits) != 0:
+            # Divide line into smi and data
+            splits = line.split()
+            if len(splits) == 0:
+                # Blank line? Go to next one.
+                continue
+
             # Generate mol object
             smiles_str = splits[0]
 
@@ -466,7 +489,7 @@ class LoadSMIFile(object):
                 UtilFuncs.eprint(
                     "WARNING: Skipping poorly formed SMILES string: " + line
                 )
-                return self.next()
+                continue
 
             # Handle nuetralizing the molecules. Filter if failed.
             mol = UtilFuncs.neutralize_mol(mol)
@@ -474,30 +497,27 @@ class LoadSMIFile(object):
                 UtilFuncs.eprint(
                     "WARNING: Skipping poorly formed SMILES string: " + line
                 )
-                return self.next()
+                continue
 
             # Remove the hydrogens.
             try:
                 mol = Chem.RemoveHs(mol)
-            except:
+            except RDKIT_ERRORS:
                 UtilFuncs.eprint(
                     "WARNING: Skipping poorly formed SMILES string: " + line
                 )
-                return self.next()
+                continue
 
             if mol is None:
                 UtilFuncs.eprint(
                     "WARNING: Skipping poorly formed SMILES string: " + line
                 )
-                return self.next()
+                continue
 
             # Regenerate the smiles string (to standardize).
             new_mol_string = Chem.MolToSmiles(mol, isomericSmiles=True)
 
             return {"smiles": new_mol_string, "data": splits[1:]}
-        else:
-            # Blank line? Go to next one.
-            return self.next()
 
 
 class Protonate(object):
@@ -591,23 +611,15 @@ class Protonate(object):
         if mol is None:
             new_smis = [smi]
         else:
-            new_mols = ProtSubstructFuncs.protonate_sites(mol, sites)
-
-            new_smis = []
-            for new_mol in new_mols:
-                new_smi = Chem.MolToSmiles(new_mol, isomericSmiles=True)
-
-                # Not re-parsed on purpose: some states, such as a protonated
-                # pyridone's O=c...[nH+], cannot be kekulized but are still
-                # reported.
-
-                # In some cases, the script might generate redundant
-                # molecules. Phosphonates, when the pH is between the two pKa
-                # values and the stdev value is big enough, for example, will
-                # generate two identical BOTH states. Let's remove this
-                # redundancy.
-                if new_smi not in new_smis:
-                    new_smis.append(new_smi)
+            # Not re-parsed on purpose: some states, such as a protonated
+            # pyridone's O=c...[nH+], cannot be kekulized but are still
+            # reported.
+            new_smis = [
+                smi_and_mol[0]
+                for smi_and_mol in ProtSubstructFuncs.protonate_sites(
+                    mol, sites, self.args["max_variants"]
+                )
+            ]
 
         # If the user wants to see the target states, add those
         # to the ends of each line.
@@ -648,7 +660,7 @@ class ProtSubstructFuncs:
             for line in substruct:
                 line = line.strip()
                 sub = {}
-                if line is not "":
+                if line != "":
                     splits = line.split()
                     sub["name"] = splits[0]
                     sub["smart"] = splits[1]
@@ -734,7 +746,7 @@ class ProtSubstructFuncs:
         # Try to Add hydrogens. if failed return []
         try:
             mol = Chem.AddHs(mol)
-        except:
+        except RDKIT_ERRORS:
             UtilFuncs.eprint("ERROR:   ", smi)
             return []
 
@@ -799,27 +811,59 @@ class ProtSubstructFuncs:
         return protonation_sites
 
     @staticmethod
-    def protonate_sites(mol, sites):
-        # type: (Chem.Mol, List[Tuple[int, str, str]]) -> List[Chem.Mol]
+    def protonate_sites(mol, sites, max_variants):
+        # type: (Chem.Mol, List[Tuple[int, str, str]], int) -> List[Tuple[str, Chem.Mol]]
         """Enumerates the protonation states of every site on one molecule.
 
         Works on Mol objects end to end because the site indices refer to
         mol's atom ordering. Re-serializing to canonical SMILES between sites
-        can reorder the atoms once a charge has been set.
+        can reorder the atoms once a charge has been set. Duplicates are
+        dropped and the list is capped after every site, not just at the end,
+        so memory stays bounded when many sites are BOTH.
 
         Args:
             mol: The molecule the site indices were computed from.
             sites: (idx, target_prot_state, prot_site_name) tuples.
+            max_variants: The most states to keep. Once reached, later sites
+                are still assigned, but only on the states already kept, and
+                a warning is printed.
 
         Returns:
-            One Mol per enumerated protonation state (may contain duplicates).
+            Unique (canonical SMILES, Mol) pairs, in enumeration order.
         """
 
-        new_mols = [mol]
+        input_smi = Chem.MolToSmiles(mol, isomericSmiles=True)
+        new_mols = [(input_smi, mol)]
+        truncated = False
         for site in sites:
             # Note that new_mols is a growing list. This is how multiple
             # protonation sites are handled.
-            new_mols = ProtSubstructFuncs.protonate_site(new_mols, site)
+            protonated = ProtSubstructFuncs.protonate_site(
+                [m for _, m in new_mols], site
+            )
+
+            # In some cases, the script might generate redundant molecules.
+            # Phosphonates, when the pH is between the two pKa values and the
+            # stdev value is big enough, for example, will generate two
+            # identical BOTH states. Removing them before capping keeps them
+            # from taking the place of distinct states.
+            new_mols = []
+            seen = set()
+            for protonated_mol in protonated:
+                new_smi = Chem.MolToSmiles(protonated_mol, isomericSmiles=True)
+                if new_smi not in seen:
+                    seen.add(new_smi)
+                    new_mols.append((new_smi, protonated_mol))
+
+            if len(new_mols) > max_variants:
+                new_mols = new_mols[:max_variants]
+                truncated = True
+
+        if truncated:
+            UtilFuncs.eprint(
+                "WARNING: Limited number of variants to %d (see --max_variants): %s"
+                % (max_variants, input_smi)
+            )
 
         return new_mols
 
@@ -992,10 +1036,13 @@ def run(**kwargs):
     :param **kwargs: For a complete description, run dimorphite_dl.py from the
         command line with the -h option.
     :type kwargs: dict
+    :return: The list of protonated SMILES lines if return_as_list is True.
+        Otherwise, None.
+    :rtype: list or None
     """
 
     # Run the main function with the specified arguments.
-    main(kwargs)
+    return main(kwargs)
 
 
 def run_with_mol_list(mol_lst, **kwargs):
@@ -1048,4 +1095,21 @@ def run_with_mol_list(mol_lst, **kwargs):
 
 
 if __name__ == "__main__":
+    # Printed only when run as a script, so that importing the module has no
+    # side effects. These go to stderr because stdout carries the protonated
+    # SMILES.
+
+    # Always let the user know a help file is available.
+    UtilFuncs.eprint("\nFor help, use: python dimorphite_dl.py --help")
+
+    # And always report citation information.
+    UtilFuncs.eprint("\nIf you use Dimorphite-DL in your research, please cite:")
+    UtilFuncs.eprint(
+        "Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An"
+    )
+    UtilFuncs.eprint(
+        "open-source program for enumerating the ionization states of drug-like small"
+    )
+    UtilFuncs.eprint("molecules. J Cheminform 11:14. doi:10.1186/s13321-019-0336-9.\n")
+
     main()
