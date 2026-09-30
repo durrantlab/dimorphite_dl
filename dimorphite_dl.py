@@ -831,14 +831,17 @@ class ProtSubstructFuncs:
                     target_charge = charge
 
                 delta = target_charge - atom.GetFormalCharge()
+                num_hs = atom.GetTotalNumHs()
                 atom.SetFormalCharge(target_charge)
 
-                # Bracket atoms such as the indole/pyrrole [nH] carry a fixed
-                # hydrogen count that SetFormalCharge leaves alone, so
-                # deprotonating them would give an invalid [nH-]. Atoms with
-                # implicit hydrogens are corrected by UpdatePropertyCache.
-                if delta < 0 and atom.GetNoImplicit():
-                    atom.SetNumExplicitHs(max(0, atom.GetNumExplicitHs() + delta))
+                # On deprotonation, pin the hydrogen count rather than letting
+                # RDKit recompute it. Aromatic [nH] keeps its H as an explicit
+                # count even though GetNoImplicit() is False, so neither
+                # SetFormalCharge nor UpdatePropertyCache removes it, which
+                # gives an invalid [nH-].
+                if delta < 0:
+                    atom.SetNumExplicitHs(max(0, num_hs + delta))
+                    atom.SetNoImplicit(True)
 
                 mol.UpdatePropertyCache(strict=False)
 
