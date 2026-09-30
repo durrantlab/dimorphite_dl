@@ -5,7 +5,7 @@ Format
 ------
 
 To allow others to reproduce our work, we here include the data used to
-calculate typical pKa ranges for 38 ionizable substructures. Please see the
+calculate typical pKa ranges for 39 ionizable substructures. Please see the
 `training_data.json` file.
 
 The keys of the JSON are the labels of each substructure (e.g.,
@@ -13,10 +13,10 @@ The keys of the JSON are the labels of each substructure (e.g.,
 
 ``` json
 {
-    "Aromatic_protonated_nitrogen": [
-        7.7, 14.9, 15.3, ...
+    "Aromatic_nitrogen_protonated": [
+        7.7, 3.0, 11.1, ...
     ],
-    "Vynl_alcohol": [
+    "Vinyl_alcohol": [
         9.2, 9.5, 9.5, ...
     ]
 }

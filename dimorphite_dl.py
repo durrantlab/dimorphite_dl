@@ -20,6 +20,7 @@ strings.
 from __future__ import print_function
 import copy
 import math
+import operator
 import os
 import argparse
 import sys
@@ -122,7 +123,7 @@ def main(params=None):
         # Run protonation
         if "output_file" in args and args["output_file"] is not None:
             # An output file was specified, so write to that.
-            with open(args["output_file"], "w") as file:
+            with open(args["output_file"], "w", encoding="utf-8") as file:
                 for protonated_smi in protonator:
                     file.write(protonated_smi + "\n")
         elif "return_as_list" in args and args["return_as_list"] == True:
@@ -146,9 +147,9 @@ class MyParser(argparse.ArgumentParser):
         :param message: The default error message.
         """
 
-        self.print_help()
+        self.print_help(sys.stderr)
         msg = "ERROR: %s\n\n" % message
-        print(msg)
+        UtilFuncs.eprint(msg)
         raise Exception(msg)
 
     def print_help(self, file=None):
@@ -157,10 +158,10 @@ class MyParser(argparse.ArgumentParser):
         :param file: Output file, defaults to None
         """
 
-        print("")
-
         if file is None:
             file = sys.stdout
+
+        print("", file=file)
         self._print_message(self.format_help(), file)
         print(
             """
@@ -168,9 +169,10 @@ examples:
   python dimorphite_dl.py --smiles_file sample_molecules.smi
   python dimorphite_dl.py --smiles "CCC(=O)O" --min_ph -3.0 --max_ph -2.0
   python dimorphite_dl.py --smiles "CCCN" --min_ph -3.0 --max_ph -2.0 --output_file output.smi
-  python dimorphite_dl.py --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states"""
+  python dimorphite_dl.py --smiles_file sample_molecules.smi --pka_precision 2.0 --label_states""",
+            file=file,
         )
-        print("")
+        print("", file=file)
 
 
 class ArgParseFuncs:
@@ -259,18 +261,20 @@ class ArgParseFuncs:
             "label_states": False,
         }
 
-        for key in defaults:
-            if key not in args:
-                args[key] = defaults[key]
-
+        # None means "not given", so drop those keys before filling in
+        # defaults; otherwise an explicit None suppresses the default.
         keys = list(args.keys())
         for key in keys:
             if args[key] is None:
                 del args[key]
 
+        for key in defaults:
+            if key not in args:
+                args[key] = defaults[key]
+
         if not "smiles" in args and not "smiles_file" in args:
             msg = "Error: No SMILES in params. Use the -h parameter for help."
-            print(msg)
+            UtilFuncs.eprint(msg)
             raise Exception(msg)
 
         if "smiles" in args and "smiles_file" in args:
@@ -306,6 +310,17 @@ class ArgParseFuncs:
         if args["pka_precision"] < 0:
             msg = "Error: pka_precision (%s) must not be negative." % (
                 args["pka_precision"]
+            )
+            UtilFuncs.eprint(msg)
+            raise ValueError(msg)
+
+        # A float such as 128.0 (common from JSON or YAML configs) would pass
+        # the range check and only fail at the first slice that truncates.
+        try:
+            args["max_variants"] = operator.index(args["max_variants"])
+        except TypeError:
+            msg = "Error: max_variants (%s) must be an integer." % (
+                args["max_variants"]
             )
             UtilFuncs.eprint(msg)
             raise ValueError(msg)
@@ -532,6 +547,30 @@ class UtilFuncs:
 
         print(*args, file=sys.stderr, **kwargs)
 
+    @staticmethod
+    def clear_exchangeable_h_isotopes(mol):
+        # type: (Chem.Mol) -> None
+        """Strips the isotope label from hydrogens bonded to O, N, or S, so
+        that RemoveHs folds them into the heavy atom's hydrogen count.
+
+        RemoveHs keeps isotopic hydrogens as graph atoms, and deprotonation
+        only lowers the implicit count, so an acidic O-D could never be
+        deprotonated. These hydrogens exchange with water almost at once, so
+        the label carries no meaning at the pH values modeled. Labels on
+        carbon are left alone. Doing this at load time, before sites are
+        matched, avoids renumbering atoms later.
+
+        Args:
+            mol: The molecule to edit in place.
+        """
+
+        for atom in mol.GetAtoms():
+            if atom.GetAtomicNum() != 1 or atom.GetIsotope() == 0:
+                continue
+            neighbors = atom.GetNeighbors()
+            if len(neighbors) == 1 and neighbors[0].GetSymbol() in ("O", "N", "S"):
+                atom.SetIsotope(0)
+
 
 class LoadSMIFile(object):
     """A generator class for loading in the SMILES strings from a file, one at
@@ -546,7 +585,9 @@ class LoadSMIFile(object):
 
         if isinstance(filename, (str, os.PathLike)):
             # It's a filename
-            self.f = open(filename, "r")
+            # utf-8-sig strips the BOM that Excel and Notepad add, which would
+            # otherwise glue onto the first SMILES and make it unparseable.
+            self.f = open(filename, "r", encoding="utf-8-sig")
         else:
             # It's a file object (i.e., StringIO)
             self.f = filename
@@ -651,6 +692,7 @@ class LoadSMIFile(object):
 
             # Remove the hydrogens.
             try:
+                UtilFuncs.clear_exchangeable_h_isotopes(mol)
                 mol = Chem.RemoveHs(mol)
             except RDKIT_ERRORS:
                 UtilFuncs.eprint(
@@ -692,10 +734,18 @@ class Protonate(object):
         # molecule would pass in the smiles_file left over from this call.
         self.args = ArgParseFuncs.clean_args(dict(args))
 
-        # Load the substructures that can be protonated.
-        self.subs = ProtSubstructFuncs.load_protonation_substructs_calc_state_for_ph(
-            self.args["min_ph"], self.args["max_ph"], self.args["pka_precision"]
-        )
+        # Load the substructures that can be protonated. The input file is
+        # already open, and main() cannot close it because it never receives
+        # this object.
+        try:
+            self.subs = (
+                ProtSubstructFuncs.load_protonation_substructs_calc_state_for_ph(
+                    self.args["min_ph"], self.args["max_ph"], self.args["pka_precision"]
+                )
+            )
+        except Exception:
+            self.close()
+            raise
 
     def __iter__(self):
         """Returns this generator object.
@@ -1388,8 +1438,12 @@ def run_with_mol_list(mol_lst, **kwargs):
     # Now convert the list of protonated smiles strings back to RDKit Mol
     # objects.
     mols = [Chem.MolFromSmiles(s) for s in protonated_smiles]
+    if any(m is None for m in mols):
+        UtilFuncs.eprint(
+            "WARNING: Dropping protonated SMILES that RDKit could not parse."
+        )
 
-    return mols
+    return [m for m in mols if m is not None]
 
 
 if __name__ == "__main__":

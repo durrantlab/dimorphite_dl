@@ -86,6 +86,19 @@ def test_run_with_mol_list_returns_only_valid_mols(
     assert output == [canonical_smiles("O=c1c(Br)c[nH]cc1Br")]
 
 
+def test_run_with_mol_list_drops_unparseable_output(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Checks that output RDKit cannot re-parse is dropped with a warning
+    rather than returned as None. Protonate emits the raw input string when
+    its canonical SMILES fails to re-parse."""
+
+    monkeypatch.setattr(dimorphite_dl, "main", lambda params: ["not_a_smiles\t"])
+
+    assert dimorphite_dl.run_with_mol_list([Chem.MolFromSmiles("C")]) == []
+    assert "Dropping protonated SMILES" in capsys.readouterr().err
+
+
 def test_run_with_mol_list_skips_none_entries(
     capsys: pytest.CaptureFixture[str],
     canonical_smiles: Callable[[str], str],
@@ -228,3 +241,28 @@ def test_unrecognized_parameter_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="ph_min"):
         dimorphite_dl.run_with_mol_list([Chem.MolFromSmiles("CCCN")], ph_min=2.0)
+
+
+def test_float_max_variants_is_rejected_up_front() -> None:
+    """Checks that a float max_variants raises at construction. It passed the
+    range check and raised TypeError only at the first molecule that needed
+    truncating, possibly hours into a batch."""
+
+    with pytest.raises(ValueError, match="max_variants"):
+        dimorphite_dl.Protonate({"smiles": "CCCN", "max_variants": 10.0})
+
+
+@pytest.mark.parametrize(
+    "key", ["min_ph", "max_ph", "pka_precision", "max_variants", "label_states"]
+)
+def test_none_parameter_uses_default(key: str) -> None:
+    """Checks that passing None for a parameter means "use the default". The
+    defaults were filled in before None keys were deleted, so the key was
+    left missing and raised KeyError."""
+
+    expected = list(dimorphite_dl.Protonate({"smiles": "CCC(=O)O"}))
+
+    assert list(dimorphite_dl.Protonate({"smiles": "CCC(=O)O", key: None})) == expected
+    assert dimorphite_dl.run(smiles="CCC(=O)O", return_as_list=True, **{key: None}) == (
+        expected
+    )
