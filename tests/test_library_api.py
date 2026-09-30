@@ -86,6 +86,23 @@ def test_run_with_mol_list_returns_only_valid_mols(
     assert output == [canonical_smiles("O=c1c(Br)c[nH]cc1Br")]
 
 
+def test_run_with_mol_list_skips_none_entries(
+    capsys: pytest.CaptureFixture[str],
+    canonical_smiles: Callable[[str], str],
+) -> None:
+    """Checks that a None from a failed Chem.MolFromSmiles is skipped with a
+    warning, as bad SMILES are on the command line, instead of raising an
+    opaque Boost error."""
+
+    mols = dimorphite_dl.run_with_mol_list(
+        [None, Chem.MolFromSmiles("CCCN")], min_ph=-1e7, max_ph=-1e7
+    )
+
+    output = [Chem.MolToSmiles(m, isomericSmiles=True) for m in mols]
+    assert output == [canonical_smiles("CCC[NH3+]")]
+    assert "Skipping None entry" in capsys.readouterr().err
+
+
 def test_protonate_does_not_modify_args() -> None:
     """Checks that a caller can reuse its args dict. Protonate used to add
     smiles_file to it, so a second call raised because both smiles and

@@ -506,6 +506,60 @@ def test_invalid_site_state_keeps_other_sites(
     )
 
 
+@pytest.mark.parametrize(
+    "smiles",
+    ["C[N+](C)(C)[O-]", "[O-][n+]1ccccc1", "CC=[N+](C)[O-]"],
+    ids=["amine_oxide", "pyridine_n_oxide", "nitrone"],
+)
+def test_n_oxide_keeps_oxide(smiles: str) -> None:
+    """Checks that neutralization does not turn an N-oxide into an N-hydroxy
+    cation. No site restores the O-, so the trimethylamine oxide came out as
+    [N+]-OH, and the pyridine N-oxide was misread as a phenol."""
+
+    check_protonation(smiles, 7.0, [smiles], [])
+
+
+@pytest.mark.parametrize(
+    "ph, expected, state",
+    [
+        (VERY_ACIDIC_PH, "C[N+](=O)O", "PROTONATED"),
+        (VERY_BASIC_PH, "C[N+](=O)[O-]", "DEPROTONATED"),
+    ],
+    ids=["very_acidic", "very_basic"],
+)
+def test_charged_nitro_input_still_handled(
+    ph: float, expected: str, state: str
+) -> None:
+    """Checks that a nitro group written with its usual [O-] is still
+    neutralized and handed to the Nitro site, unlike an N-oxide."""
+
+    check_protonation("C[N+](=O)[O-]", ph, [expected], [state])
+
+
+THIOLATE_GROUPS = [
+    # [input smiles, protonated, deprotonated, id]
+    ["CC(C)(C)[S-]", "CC(C)(C)S", "CC(C)(C)[S-]", "Thiol"],
+    ["[S-]c1ccccc1", "Sc1ccccc1", "[S-]c1ccccc1", "Phenyl_Thiol"],
+    ["CC(=O)[S-]", "CC(=O)S", "CC(=O)[S-]", "Thioic_acid"],
+]
+
+
+@pytest.mark.parametrize("group", THIOLATE_GROUPS, ids=group_id)
+@pytest.mark.parametrize(
+    "ph, state",
+    [(VERY_ACIDIC_PH, "PROTONATED"), (VERY_BASIC_PH, "DEPROTONATED")],
+    ids=["very_acidic", "very_basic"],
+)
+def test_thiolate_input_is_neutralized(group: List[str], ph: float, state: str) -> None:
+    """Checks that sulfur given already deprotonated is still recognized as a
+    site. The thiol patterns require S-H, so [S-] inputs kept their charge at
+    any pH."""
+
+    smiles, protonated, deprotonated, _ = group
+    expected = protonated if state == "PROTONATED" else deprotonated
+    check_protonation(smiles, ph, [expected], [state])
+
+
 def test_multiple_both_sites_enumerate_every_combination(
     canonical_smiles: Callable[[str], str],
 ) -> None:

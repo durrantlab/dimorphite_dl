@@ -297,9 +297,16 @@ class UtilFuncs:
         # Get the reaction data
         rxn_data = [
             [
-                "[Ov1-1:1]",
+                "[Ov1-1;!$([O-]-[#7+;!$([#7+]=O)]):1]",
                 "[Ov2+0:1]-[H]",
-            ],  # To handle O- bonded to only one atom (add hydrogen).
+            ],  # To handle O- bonded to only one atom (add hydrogen). The O- of
+            # an N-oxide or nitrone is left alone: no site pattern restores it
+            # from N+-OH, whereas a nitro O-H is deprotonated again by Nitro.
+            [
+                "[Sv1-1:1]",
+                "[Sv2+0:1]-[H]",
+            ],  # To handle S- bonded to only one atom (add hydrogen). The thiol
+            # site patterns all require S-H.
             [
                 "[#7v4+1:1]-[H]",
                 "[#7v3+0:1]",
@@ -1099,6 +1106,12 @@ def run_with_mol_list(mol_lst, **kwargs):
     # work.
     protonated_smiles = []
     for m in mol_lst:
+        # Chem.MolFromSmiles returns None for bad SMILES. Skip these with a
+        # warning, as the command line does, rather than raising an opaque
+        # Boost error from MolToSmiles.
+        if m is None:
+            UtilFuncs.eprint("WARNING: Skipping None entry in mol_lst.")
+            continue
         smiles = Chem.MolToSmiles(m, isomericSmiles=True)
         kwargs["smiles"] = smiles
         protonated_smiles.extend([s.split("\t")[0] for s in main(kwargs)])
