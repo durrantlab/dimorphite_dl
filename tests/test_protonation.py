@@ -2,7 +2,7 @@
 group, alone and in combination."""
 
 import os
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Union
 
 import pytest
 from rdkit import Chem
@@ -178,6 +178,23 @@ MULTIPLE_SITE_MOLECULES = [
         "[O-]C(=O)CCC(N)C(=O)[O-]",
     ],
     ["NCc1ccc2[nH]ccc2c1", "[NH3+]Cc1ccc2[nH]ccc2c1", "NCc1ccc2[n-]ccc2c1"],
+]
+
+# [input smiles, protonated, deprotonated]. Each has two sites whose matches
+# share context atoms, or one pattern with several matches on the same sites.
+SHARED_CONTEXT_MOLECULES = [
+    # The phosphonate's carbon is also the amine's only carbon.
+    ["NCP(=O)(O)O", "[NH3+]CP(=O)(O)O", "NCP(=O)([O-])[O-]"],
+    # The carboxyl's ring carbon is also part of the pyrrole match.
+    ["O=C(O)c1ccc[nH]1", "O=C(O)c1ccc[nH]1", "O=C([O-])c1ccc[n-]1"],
+    # Three interchangeable OH groups; only two are sites.
+    ["OP(=O)(O)O", "O=P(O)(O)O", "O=P([O-])([O-])O"],
+    # Both phosphates use the same bridging O as context.
+    [
+        "OP(=O)(O)OP(=O)(O)O",
+        "O=P(O)(O)OP(=O)(O)O",
+        "O=P([O-])([O-])OP(=O)([O-])[O-]",
+    ],
 ]
 
 
@@ -383,3 +400,57 @@ def test_multiple_sites_very_basic(
     check_protonation(
         smiles, VERY_BASIC_PH, [canonical_smiles(deprotonated)], ["DEPROTONATED"]
     )
+
+
+@pytest.mark.parametrize(
+    "molecule", SHARED_CONTEXT_MOLECULES, ids=lambda molecule: molecule[0]
+)
+@pytest.mark.parametrize(
+    "ph, state",
+    [(VERY_ACIDIC_PH, "PROTONATED"), (VERY_BASIC_PH, "DEPROTONATED")],
+    ids=["very_acidic", "very_basic"],
+)
+def test_shared_context_sites(
+    molecule: List[str],
+    ph: float,
+    state: str,
+    canonical_smiles: Callable[[str], str],
+) -> None:
+    """Checks that an atom used only as context by one group does not hide a
+    later group's site, and that one group's repeated matches do not assign
+    extra sites."""
+
+    smiles, protonated, deprotonated = molecule
+    expected = protonated if state == "PROTONATED" else deprotonated
+    check_protonation(smiles, ph, [canonical_smiles(expected)], [state])
+
+
+@pytest.mark.parametrize(
+    "mean, std, min_ph, max_ph",
+    [(7.4, 0.1, 8.4, 6.4), (7.4, -0.1, 6.4, 8.4)],
+    ids=["inverted_ph_range", "negative_std"],
+)
+def test_define_protonation_state_rejects_inverted_intervals(
+    mean: float, std: float, min_ph: float, max_ph: float
+) -> None:
+    """Checks that an inverted pH or pKa interval raises instead of silently
+    returning the wrong state."""
+
+    with pytest.raises(ValueError):
+        dimorphite_dl.ProtSubstructFuncs.define_protonation_state(
+            mean, std, min_ph, max_ph
+        )
+
+
+@pytest.mark.parametrize(
+    "params",
+    [{"min_ph": 8.4, "max_ph": 6.4}, {"pka_precision": -1.0}],
+    ids=["inverted_ph_range", "negative_precision"],
+)
+def test_protonate_rejects_invalid_ranges(params: Dict[str, float]) -> None:
+    """Checks that bad user parameters are rejected before any protonation."""
+
+    args: Dict[str, Union[str, float]] = {"smiles": "CCCN"}
+    args.update(params)
+    with pytest.raises(ValueError):
+        dimorphite_dl.Protonate(args)

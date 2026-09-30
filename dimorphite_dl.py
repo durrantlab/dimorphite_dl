@@ -38,13 +38,23 @@ except ImportError:
     from io import StringIO
 
 # Always let the user know a help file is available.
-print("\nFor help, use: python dimorphite_dl.py --help")
+# These go to stderr because stdout carries the protonated SMILES.
+print("\nFor help, use: python dimorphite_dl.py --help", file=sys.stderr)
 
 # And always report citation information.
-print("\nIf you use Dimorphite-DL in your research, please cite:")
-print("Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An")
-print("open-source program for enumerating the ionization states of drug-like small")
-print("molecules. J Cheminform 11:14. doi:10.1186/s13321-019-0336-9.\n")
+print("\nIf you use Dimorphite-DL in your research, please cite:", file=sys.stderr)
+print(
+    "Ropp PJ, Kaminsky JC, Yablonski S, Durrant JD (2019) Dimorphite-DL: An",
+    file=sys.stderr,
+)
+print(
+    "open-source program for enumerating the ionization states of drug-like small",
+    file=sys.stderr,
+)
+print(
+    "molecules. J Cheminform 11:14. doi:10.1186/s13321-019-0336-9.\n",
+    file=sys.stderr,
+)
 
 try:
     import rdkit
@@ -79,10 +89,10 @@ def main(params=None):
 
     # If being run from the command line, print out all parameters.
     if __name__ == "__main__":
-        print("\nPARAMETERS:\n")
+        print("\nPARAMETERS:\n", file=sys.stderr)
         for k in sorted(args.keys()):
-            print(k.rjust(13) + ": " + str(args[k]))
-        print("")
+            print(k.rjust(13) + ": " + str(args[k]), file=sys.stderr)
+        print("", file=sys.stderr)
 
     # Run protonation
     if "output_file" in args and args["output_file"] is not None:
@@ -226,6 +236,21 @@ class ArgParseFuncs:
             msg = "Error: No SMILES in params. Use the -h parameter for help."
             print(msg)
             raise Exception(msg)
+
+        if args["min_ph"] > args["max_ph"]:
+            msg = "Error: min_ph (%s) is greater than max_ph (%s)." % (
+                args["min_ph"],
+                args["max_ph"],
+            )
+            UtilFuncs.eprint(msg)
+            raise ValueError(msg)
+
+        if args["pka_precision"] < 0:
+            msg = "Error: pka_precision (%s) must not be negative." % (
+                args["pka_precision"]
+            )
+            UtilFuncs.eprint(msg)
+            raise ValueError(msg)
 
         # If the user provides a smiles string, turn it into a file-like StringIO
         # object.
@@ -660,7 +685,17 @@ class ProtSubstructFuncs:
         :param float min_ph: The min pH of the range.
         :param float max_ph: The max pH of the range.
         :return: A string describing the protonation state.
+        :raises ValueError: If min_ph > max_ph or std < 0. Either inverts an
+            interval, and the overlap test below then silently gives the wrong
+            state.
         """
+
+        if min_ph > max_ph:
+            raise ValueError(
+                "min_ph (%s) is greater than max_ph (%s)." % (min_ph, max_ph)
+            )
+        if std < 0:
+            raise ValueError("The pKa standard deviation (%s) is negative." % std)
 
         min_pka = mean - std
         max_pka = mean + std
@@ -716,19 +751,50 @@ class ProtSubstructFuncs:
             if mol.HasSubstructMatch(smart):
                 matches = ProtectUnprotectFuncs.get_unprotected_matches(mol, smart)
                 prot = item["prot_states_for_pH"]
+                context_idxs = []
                 for match in matches:
+                    # Re-checked per match so that two matches of one pattern
+                    # cannot claim the same site, as happens with the three
+                    # interchangeable OH groups of phosphoric acid.
+                    if not ProtectUnprotectFuncs.is_match_unprotected(mol, match):
+                        continue
+
                     # We want to move the site from being relative to the
                     # substructure, to the index on the main molecule.
+                    site_idxs = []
                     for site in prot:
                         proton = int(site[0])
                         category = site[1]
+                        site_idxs.append(match[proton])
                         new_site = (match[proton], category, item["name"])
 
                         if not new_site in protonation_sites:
                             # Because sites must be unique.
                             protonation_sites.append(new_site)
 
-                    ProtectUnprotectFuncs.protect_molecule(mol, match)
+                    h_idxs = [
+                        neighbor.GetIdx()
+                        for idx in site_idxs
+                        for neighbor in mol.GetAtomWithIdx(idx).GetNeighbors()
+                        if neighbor.GetAtomicNum() == 1
+                    ]
+                    ProtectUnprotectFuncs.protect_molecule(mol, site_idxs + h_idxs)
+
+                    context_idxs.extend(
+                        idx
+                        for idx in match
+                        if idx not in site_idxs
+                        and mol.GetAtomWithIdx(idx).GetAtomicNum() != 6
+                    )
+
+                # Heteroatom context (an amidine's second N, a carbonyl O, a
+                # phosphate's ester O) is part of this functional group, so
+                # later patterns must not claim it. It is locked only after
+                # the whole pattern is done because one bridging O serves both
+                # phosphates of a pyrophosphate. Carbon context is just the
+                # attachment point and is never a site, so it stays free: the
+                # amine of NCP(=O)(O)O needs the carbon the phosphonate used.
+                ProtectUnprotectFuncs.protect_molecule(mol, context_idxs)
 
         return protonation_sites
 
