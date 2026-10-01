@@ -292,6 +292,13 @@ class Protonate:
                 smiles_strings = self._validate_generated_smiles(
                     smiles_strings, mol_record.smiles_original
                 )
+                # Without this, a molecule whose every variant is rejected
+                # produces no output line at all.
+                if len(smiles_strings) == 0:
+                    self._add_fallback_result(
+                        mol_record.smiles_original, mol_record.identifier
+                    )
+                    return
             # Create results with state information
             self._create_results_from_smiles(
                 smiles_strings, mol_record.identifier, protonation_sites

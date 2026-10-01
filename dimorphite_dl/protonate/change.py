@@ -154,6 +154,9 @@ def _apply_charge_to_molecule(
         logger.warning("Failed to remove hydrogens: {}", str(e))
         return None
 
+    # Kept so an unbuildable state can fall back to the parent's state.
+    mol_parent = Chem.Mol(mol_copy)
+
     # Validate atom index
     if idx >= mol_copy.GetNumAtoms():
         logger.warning(
@@ -196,6 +199,21 @@ def _apply_charge_to_molecule(
     except Exception as e:
         logger.warning("Error setting atom properties: {}", str(e))
         return None
+
+    # Some states have no valid structure when only this atom is edited (e.g.,
+    # a bridgehead aromatic N given a +1 charge cannot be kekulized). The site
+    # keeps its parent's state; otherwise the invalid SMILES is rejected at
+    # the end, and when it is the site's only state the molecule disappears.
+    sanitized = Chem.SanitizeMol(Chem.Mol(mol_copy), catchErrors=True)
+    if sanitized != Chem.SanitizeFlags.SANITIZE_NONE:
+        logger.warning(
+            "No valid state with charge {} at atom {} of {}; keeping the "
+            "unmodified structure in its place",
+            charge,
+            idx,
+            Chem.MolToSmiles(mol_parent),
+        )
+        return mol_parent
 
     return mol_copy
 
