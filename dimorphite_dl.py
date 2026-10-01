@@ -78,6 +78,18 @@ STATE_TO_CHARGE = {"DEPROTONATED": [-1], "PROTONATED": [0], "BOTH": [-1, 0]}
 # million states in memory.
 DEFAULT_MAX_VARIANTS = 128
 
+# The pH range and precision used when the caller gives none. The command
+# line, clean_args, and the substructure loader all read these, so the three
+# cannot disagree.
+DEFAULT_MIN_PH = 6.4
+DEFAULT_MAX_PH = 8.4
+DEFAULT_PKA_PRECISION = 1.0
+
+# Each neutralization pass fixes one charged atom, so a sane molecule needs at
+# most a few passes per atom. More than this means a rule keeps recreating its
+# own reactant, which would otherwise loop forever.
+NEUTRALIZE_PASSES_PER_ATOM = 10
+
 
 def main(params=None):
     """The main definition run when you call the script from the commandline.
@@ -196,22 +208,23 @@ class ArgParseFuncs:
             "--min_ph",
             metavar="MIN",
             type=float,
-            default=6.4,
-            help="minimum pH to consider (default: 6.4)",
+            default=DEFAULT_MIN_PH,
+            help="minimum pH to consider (default: %s)" % DEFAULT_MIN_PH,
         )
         parser.add_argument(
             "--max_ph",
             metavar="MAX",
             type=float,
-            default=8.4,
-            help="maximum pH to consider (default: 8.4)",
+            default=DEFAULT_MAX_PH,
+            help="maximum pH to consider (default: %s)" % DEFAULT_MAX_PH,
         )
         parser.add_argument(
             "--pka_precision",
             metavar="PRE",
             type=float,
-            default=1.0,
-            help="pKa precision factor (number of standard devations, default: 1.0)",
+            default=DEFAULT_PKA_PRECISION,
+            help="pKa precision factor (number of standard devations, default: %s)"
+            % DEFAULT_PKA_PRECISION,
         )
         parser.add_argument(
             "--max_variants",
@@ -254,9 +267,9 @@ class ArgParseFuncs:
         """
 
         defaults = {
-            "min_ph": 6.4,
-            "max_ph": 8.4,
-            "pka_precision": 1.0,
+            "min_ph": DEFAULT_MIN_PH,
+            "max_ph": DEFAULT_MAX_PH,
+            "pka_precision": DEFAULT_PKA_PRECISION,
             "max_variants": DEFAULT_MAX_VARIANTS,
             "label_states": False,
         }
@@ -369,7 +382,10 @@ class UtilFuncs:
         should not be allowed to specify the valence of the atoms in most cases.
 
         :param rdkit.Chem.rdchem.Mol mol: The rdkit Mol objet to be neutralized.
-        :return: The neutralized Mol object.
+        :raises RuntimeError: If a rule keeps matching after the pass limit,
+            which means the rule table itself is wrong.
+        :return: The neutralized Mol object, or None if it cannot be
+            sanitized afterward.
         """
 
         # Get the reaction data
@@ -450,9 +466,12 @@ class UtilFuncs:
 
         # Add hydrogens (respects valence, so incomplete).
         # Chem.calcImplicitValence(mol)
+        input_mol = mol
         mol.UpdatePropertyCache(strict=False)
         mol = Chem.AddHs(mol)
 
+        max_passes = NEUTRALIZE_PASSES_PER_ATOM * mol.GetNumAtoms()
+        passes = 0
         while True:  # Keep going until all these issues have been resolved.
             current_rxn = None  # The reaction to perform.
             current_rxn_str = None
@@ -465,8 +484,8 @@ class UtilFuncs:
                     rxn_placeholder,
                 ) = rxn_datum
                 if mol.HasSubstructMatch(substruct_match_mol):
+                    current_rxn_str = reactant_smarts + ">>" + product_smarts
                     if rxn_placeholder is None:
-                        current_rxn_str = reactant_smarts + ">>" + product_smarts
                         current_rxn = AllChem.ReactionFromSmarts(current_rxn_str)
                         rxn_data[i][3] = current_rxn  # Update the placeholder.
                     else:
@@ -477,7 +496,21 @@ class UtilFuncs:
             if current_rxn is None:  # No reaction left, so break out of while loop.
                 break
             else:
-                mol = current_rxn.RunReactants((mol,))[0][0]
+                passes += 1
+                if passes > max_passes:
+                    raise RuntimeError(
+                        "neutralize_mol did not converge after %d passes on %s; "
+                        "rule %s keeps matching its own product."
+                        % (
+                            max_passes,
+                            Chem.MolToSmiles(input_mol, isomericSmiles=True),
+                            current_rxn_str,
+                        )
+                    )
+
+                # Only the first product is used, so enumerating RDKit's
+                # default of up to 1000 is wasted work on symmetric molecules.
+                mol = current_rxn.RunReactants((mol,), 1)[0][0]
                 mol.UpdatePropertyCache(strict=False)  # Update valences
 
         # The mols have been altered from the reactions described above, we need
@@ -583,7 +616,10 @@ class LoadSMIFile(object):
         :type filename: str, os.PathLike, or StringIO
         """
 
-        if isinstance(filename, (str, os.PathLike)):
+        # A handle the caller passed in is theirs to close; they may still be
+        # reading from it or writing to it after this loader is done.
+        self.owns_file = isinstance(filename, (str, os.PathLike))
+        if self.owns_file:
             # It's a filename
             # utf-8-sig strips the BOM that Excel and Notepad add, which would
             # otherwise glue onto the first SMILES and make it unparseable.
@@ -626,11 +662,27 @@ class LoadSMIFile(object):
 
     def close(self):
         # type: () -> None
-        """Closes the input file. Safe to call more than once, since both
-        EOF and an early exit call it.
+        """Closes the input file if this loader opened it. Safe to call more
+        than once, since both EOF and an early exit call it.
         """
 
-        self.f.close()
+        if self.owns_file:
+            self.f.close()
+
+    @staticmethod
+    def warn_skipped(line, reason):
+        # type: (str, str) -> None
+        """Reports a skipped input line along with the step that rejected it,
+        so a log shows whether to fix the SMILES or look for a bug here.
+
+        Args:
+            line: The raw input line, including any name after the SMILES.
+            reason: Which step failed.
+        """
+
+        UtilFuncs.eprint(
+            "WARNING: Skipping SMILES string (%s): %s" % (reason, line.rstrip("\n"))
+        )
 
     def __next__(self):
         """Ensure Python3 compatibility.
@@ -677,16 +729,14 @@ class LoadSMIFile(object):
             # into a canonical form. Filter if failed.
             mol = UtilFuncs.convert_smiles_str_to_mol(smiles_str)
             if mol is None:
-                UtilFuncs.eprint(
-                    "WARNING: Skipping poorly formed SMILES string: " + line
-                )
+                LoadSMIFile.warn_skipped(line, "RDKit could not parse it")
                 continue
 
             # Handle nuetralizing the molecules. Filter if failed.
             mol = UtilFuncs.neutralize_mol(mol)
             if mol is None:
-                UtilFuncs.eprint(
-                    "WARNING: Skipping poorly formed SMILES string: " + line
+                LoadSMIFile.warn_skipped(
+                    line, "sanitization failed after neutralizing charges"
                 )
                 continue
 
@@ -694,16 +744,12 @@ class LoadSMIFile(object):
             try:
                 UtilFuncs.clear_exchangeable_h_isotopes(mol)
                 mol = Chem.RemoveHs(mol)
-            except RDKIT_ERRORS:
-                UtilFuncs.eprint(
-                    "WARNING: Skipping poorly formed SMILES string: " + line
-                )
+            except RDKIT_ERRORS as e:
+                LoadSMIFile.warn_skipped(line, "removing hydrogens failed: %s" % e)
                 continue
 
             if mol is None:
-                UtilFuncs.eprint(
-                    "WARNING: Skipping poorly formed SMILES string: " + line
-                )
+                LoadSMIFile.warn_skipped(line, "removing hydrogens failed")
                 continue
 
             # Regenerate the smiles string (to standardize).
@@ -813,7 +859,13 @@ class Protonate(object):
         # cannot drift out of step with the atom ordering.
         mol = UtilFuncs.convert_smiles_str_to_mol(smi)
         if mol is None:
-            UtilFuncs.eprint("ERROR:   ", smi)
+            # LoadSMIFile produced smi from a Mol, so this is an RDKit round-trip
+            # failure rather than bad input. The line is still written so the
+            # output keeps one entry per input, but it is not protonated.
+            UtilFuncs.eprint(
+                "WARNING: RDKit could not re-read its own canonical SMILES; "
+                + "writing it unprotonated: %s\t%s" % (smi, tag)
+            )
             sites = []
             new_smis = [smi]
         else:
@@ -851,15 +903,19 @@ class ProtSubstructFuncs:
 
     @staticmethod
     def load_protonation_substructs_calc_state_for_ph(
-        min_ph=6.4, max_ph=8.4, pka_std_range=1
+        min_ph=DEFAULT_MIN_PH,
+        max_ph=DEFAULT_MAX_PH,
+        pka_std_range=DEFAULT_PKA_PRECISION,
     ):
         """A pre-calculated list of R-groups with protonation sites, with their
         likely pKa bins.
 
-        :param float min_ph:  The lower bound on the pH range, defaults to 6.4.
-        :param float max_ph:  The upper bound on the pH range, defaults to 8.4.
+        :param float min_ph:  The lower bound on the pH range, defaults to
+                              DEFAULT_MIN_PH.
+        :param float max_ph:  The upper bound on the pH range, defaults to
+                              DEFAULT_MAX_PH.
         :param pka_std_range: Basically the precision (stdev from predicted pKa to
-                            consider), defaults to 1.
+                            consider), defaults to DEFAULT_PKA_PRECISION.
         :return: A dict of the protonation substructions for the specified pH
                 range.
         """
@@ -963,15 +1019,19 @@ class ProtSubstructFuncs:
         smi = Chem.MolToSmiles(mol, isomericSmiles=True)
 
         # Try to Add hydrogens. if failed return []
+        no_sites_msg = (
+            "WARNING: Adding hydrogens failed, so no sites were found; "
+            + "writing it unprotonated: "
+        )
         try:
             mol = Chem.AddHs(mol)
-        except RDKIT_ERRORS:
-            UtilFuncs.eprint("ERROR:   ", smi)
+        except RDKIT_ERRORS as e:
+            UtilFuncs.eprint(no_sites_msg + "%s (%s)" % (smi, e))
             return []
 
         # Check adding Hs worked
         if mol is None:
-            UtilFuncs.eprint("ERROR:   ", smi)
+            UtilFuncs.eprint(no_sites_msg + smi)
             return []
 
         ProtectUnprotectFuncs.unprotect_molecule(mol)

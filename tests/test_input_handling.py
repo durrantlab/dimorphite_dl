@@ -1,13 +1,15 @@
 """Checks how input SMILES are read, skipped, and validated before any
 protonation happens."""
 
+import inspect
 import warnings
 from io import StringIO
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, List, Optional, Tuple
 
 import pytest
 from rdkit import Chem
+from rdkit.Chem import rdChemReactions
 
 import dimorphite_dl
 
@@ -21,7 +23,7 @@ def test_long_run_of_skipped_lines(capsys: pytest.CaptureFixture[str]) -> None:
     records = list(dimorphite_dl.LoadSMIFile(StringIO(text)))
 
     assert records == [{"smiles": "CCCN", "data": ["name"]}]
-    assert "Skipping poorly formed SMILES string" in capsys.readouterr().err
+    assert "RDKit could not parse it" in capsys.readouterr().err
 
 
 def test_rdkit_error_skips_the_line(
@@ -44,7 +46,7 @@ def test_rdkit_error_skips_the_line(
     monkeypatch.setattr(dimorphite_dl.Chem, "RemoveHs", failing_remove_hs)
 
     assert list(dimorphite_dl.LoadSMIFile(StringIO("CCCN\n"))) == []
-    assert "Skipping poorly formed SMILES string" in capsys.readouterr().err
+    assert "removing hydrogens failed: Sanitization error" in capsys.readouterr().err
 
 
 def test_programming_error_is_not_reported_as_bad_smiles(
@@ -295,3 +297,183 @@ def test_deuterated_acid_is_deprotonated(
     assert [line.split()[0] for line in output] == [
         canonical_smiles("[2H]C([2H])([2H])C(=O)[O-]")
     ]
+
+
+def test_neutralize_mol_raises_when_a_rule_never_converges(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checks that a rule whose product still matches its reactant raises
+    with the input SMILES. The loop had no pass limit, so one such rule
+    hung the whole batch."""
+
+    real_reaction_from_smarts = dimorphite_dl.AllChem.ReactionFromSmarts
+
+    def self_regenerating(smarts: str) -> rdChemReactions.ChemicalReaction:
+        """Swaps the thiolate rule for one that leaves S- charged.
+
+        Args:
+            smarts: The reaction SMARTS neutralize_mol asked for.
+
+        Returns:
+            The compiled reaction, broken only for the thiolate rule.
+        """
+
+        if smarts.startswith("[Sv1-1:1]>>"):
+            return real_reaction_from_smarts("[Sv1-1:1]>>[S-1:1]")
+        return real_reaction_from_smarts(smarts)
+
+    monkeypatch.setattr(dimorphite_dl.AllChem, "ReactionFromSmarts", self_regenerating)
+
+    with pytest.raises(RuntimeError, match="did not converge") as info:
+        dimorphite_dl.UtilFuncs.neutralize_mol(Chem.MolFromSmiles("CC[S-]"))
+    assert "CC[S-]" in str(info.value)
+    assert "[Sv1-1:1]>>[S-1:1]" in str(info.value)
+
+
+def test_neutralize_mol_enumerates_one_product(
+    monkeypatch: pytest.MonkeyPatch, canonical_smiles: Callable[[str], str]
+) -> None:
+    """Checks that each pass asks RDKit for a single product. Only the first
+    is used, but the default enumerated up to 1000 per pass."""
+
+    real_reaction_from_smarts = dimorphite_dl.AllChem.ReactionFromSmarts
+    requested: List[int] = []
+
+    class RecordingReaction:
+        """Wraps a reaction to record how many products each call asks for,
+        since RDKit's C++ methods cannot be patched directly."""
+
+        def __init__(self, rxn: rdChemReactions.ChemicalReaction) -> None:
+            """Stores the real reaction.
+
+            Args:
+                rxn: The compiled reaction to delegate to.
+            """
+
+            self.rxn = rxn
+
+        def RunReactants(
+            self, reactants: Tuple[Chem.Mol, ...], maxProducts: int = 1000
+        ) -> Tuple[Tuple[Chem.Mol, ...], ...]:
+            """Records maxProducts, then runs the real reaction.
+
+            Args:
+                reactants: Passed through unchanged.
+                maxProducts: The product limit to record.
+
+            Returns:
+                The real reaction's products.
+            """
+
+            requested.append(maxProducts)
+            return self.rxn.RunReactants(reactants, maxProducts)
+
+    monkeypatch.setattr(
+        dimorphite_dl.AllChem,
+        "ReactionFromSmarts",
+        lambda smarts: RecordingReaction(real_reaction_from_smarts(smarts)),
+    )
+
+    mol = dimorphite_dl.UtilFuncs.neutralize_mol(
+        Chem.MolFromSmiles("[O-]C(=O)CC(=O)[O-]")
+    )
+
+    assert mol is not None
+    assert Chem.MolToSmiles(Chem.RemoveHs(mol)) == canonical_smiles("OC(=O)CC(=O)O")
+    assert requested != [] and all(n == 1 for n in requested), requested
+
+
+def test_neutralization_failure_names_its_cause(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Checks that a molecule rejected after neutralization is reported as
+    such. Parse, neutralization, and RemoveHs failures all printed the same
+    "poorly formed SMILES" warning."""
+
+    monkeypatch.setattr(
+        dimorphite_dl.UtilFuncs, "neutralize_mol", staticmethod(lambda mol: None)
+    )
+
+    assert list(dimorphite_dl.LoadSMIFile(StringIO("CCCN name\n"))) == []
+    err = capsys.readouterr().err
+    assert "sanitization failed after neutralizing charges" in err, err
+    assert "CCCN name" in err, err
+
+
+def test_reparse_failure_is_reported_as_unprotonated(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Checks that when Protonate cannot re-read LoadSMIFile's canonical
+    SMILES, stderr says the line was written unprotonated and names it. It
+    printed only "ERROR:" and the SMILES, with no hint of what happened."""
+
+    real_convert = dimorphite_dl.UtilFuncs.convert_smiles_str_to_mol
+    calls: List[str] = []
+
+    def fail_on_reparse(smiles_str: str) -> Optional[Chem.Mol]:
+        """Parses the input line, then fails Protonate's second parse.
+
+        Args:
+            smiles_str: The SMILES string to parse.
+
+        Returns:
+            The parsed Mol on the first call, then None.
+        """
+
+        calls.append(smiles_str)
+        return real_convert(smiles_str) if len(calls) == 1 else None
+
+    monkeypatch.setattr(
+        dimorphite_dl.UtilFuncs,
+        "convert_smiles_str_to_mol",
+        staticmethod(fail_on_reparse),
+    )
+
+    output = dimorphite_dl.run(smiles="CCC(=O)O acid", return_as_list=True)
+
+    assert output == ["CCC(=O)O\tacid"]
+    err = capsys.readouterr().err
+    assert "writing it unprotonated" in err, err
+    assert "CCC(=O)O\tacid" in err, err
+
+
+def test_caller_supplied_handle_is_left_open() -> None:
+    """Checks that a file object passed in by the caller is not closed at
+    EOF or by main(). The loader does not own it, and closing it broke
+    callers that reuse the handle afterward."""
+
+    handle = StringIO("CCCN\n")
+    with dimorphite_dl.LoadSMIFile(handle) as loader:
+        assert list(loader) == [{"smiles": "CCCN", "data": []}]
+    assert not handle.closed
+
+    handle = StringIO("CCCN\n")
+    assert dimorphite_dl.run(smiles_file=handle, return_as_list=True) is not None
+    assert not handle.closed
+
+
+def test_defaults_agree_everywhere() -> None:
+    """Checks that the command line, clean_args, and the substructure loader
+    share one set of pH and precision defaults. Each had its own copy of
+    the numbers, free to drift apart."""
+
+    expected = {
+        "min_ph": dimorphite_dl.DEFAULT_MIN_PH,
+        "max_ph": dimorphite_dl.DEFAULT_MAX_PH,
+        "pka_precision": dimorphite_dl.DEFAULT_PKA_PRECISION,
+    }
+    # The values the README documents.
+    assert list(expected.values()) == [6.4, 8.4, 1.0]
+
+    parser = dimorphite_dl.ArgParseFuncs.get_args()
+    cleaned = dimorphite_dl.ArgParseFuncs.clean_args({"smiles": "C"})
+    loader_params = inspect.signature(
+        dimorphite_dl.ProtSubstructFuncs.load_protonation_substructs_calc_state_for_ph
+    ).parameters
+
+    for key, value in expected.items():
+        assert parser.get_default(key) == value, key
+        assert cleaned[key] == value, key
+    assert loader_params["min_ph"].default == expected["min_ph"]
+    assert loader_params["max_ph"].default == expected["max_ph"]
+    assert loader_params["pka_std_range"].default == expected["pka_precision"]

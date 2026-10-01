@@ -111,6 +111,41 @@ Dimorphite-DL deprotonates indoles and pyrroles around pH 14.5. But these
 substructures can also be protonated around pH -3.5. Dimorphite does not
 perform the protonation.
 
+The following limitations are part of the published substructure library
+(`site_substructures.smarts`). They are documented here rather than fixed
+so that results remain consistent with the original publication.
+
+* Tertiary amides, sulfonamides, carbamates, and ureas are protonated as if
+  they were aliphatic amines (pKa ~8.2). The amide and sulfonamide
+  substructures require an N-H, so a nitrogen without one falls through to the
+  general amine substructure, which matches any trivalent nitrogen bonded to
+  an aliphatic carbon. For example, `CN(C)C=O` becomes `C[NH+](C)C=O` at pH
+  2, and `CC(=O)N1CCN(C)CC1` becomes doubly protonated. At the default pH
+  range the correct neutral form is still produced, but the protonated variant
+  is ranked as more probable, so it is the one kept when `--max_variants` is
+  small.
+* Acidic aromatic N-H groups other than indoles and pyrroles are never
+  deprotonated. Tetrazoles (pKa ~4.9), for example, remain neutral at every
+  pH, and cationic tetrazolium variants may be produced instead. Aromatic
+  imides such as uracil and 5-fluorouracil are also not recognized, because
+  the ringed-imide substructures match only non-aromatic rings. Molecules with
+  aromatic N-H groups (imidazoles, pyrazoles, triazoles, pyridones, etc.) may
+  also trigger "No valid protonated state" warnings; these do not affect the
+  output.
+* N-alkyl anilines whose alkyl carbon bears exactly one hydrogen (e.g.,
+  N-isopropyl and N-cyclohexyl anilines) are treated as aliphatic amines
+  rather than anilines. In SMARTS, `[!H]` means "not exactly one attached
+  hydrogen," not "not a hydrogen atom," so the secondary and tertiary aniline
+  substructures do not match these compounds. At pH 7.4, for example,
+  `CC(C)Nc1ccccc1` produces a protonated variant, but `CCNc1ccccc1` does not.
+* Phosphorus atoms in di- and triphosphate linkages that carry only one OH
+  group are never deprotonated. This includes the alpha and beta phosphates
+  of ATP and both phosphates of NAD. The phosphate diester substructure
+  requires both ester oxygens to be bonded to carbon, nitrogen, or a halogen,
+  so a P-O-P bridge is not recognized. ATP is therefore assigned a net charge
+  of -2 rather than -4, even at pH 12. Charges for nucleotides, cofactors, and
+  other polyphosphates should be assigned manually.
+
 Authors and Contacts
 --------------------
 

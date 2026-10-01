@@ -2,6 +2,7 @@
 group, alone and in combination."""
 
 import os
+import sys
 from io import StringIO
 from typing import Callable, Dict, List, Tuple, Union
 
@@ -318,11 +319,29 @@ def check_protonation(
     invalid = [s for s in output_smiles if Chem.MolFromSmiles(s) is None]
     assert invalid == [], "invalid SMILES produced: " + str(invalid)
 
-    expected = set(normalize_smiles(s) for s in expected_smiles)
-    assert len(output) == len(expected), output
-    assert set(normalize_smiles(s) for s in output_smiles) <= expected, output
+    # Lists rather than sets, so a repeated output cannot stand in for a
+    # missing expected state.
+    expected = sorted(set(normalize_smiles(s) for s in expected_smiles))
+    assert sorted(normalize_smiles(s) for s in output_smiles) == expected, output
     assert set(label for line in output for label in line[1:]) <= set(labels), output
     return output
+
+
+def test_check_protonation_rejects_repeated_state_for_missing_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checks that the helper fails when one expected state is replaced by a
+    second copy of another. It compared only the count and a subset, so
+    [A, A] passed for an expectation of {A, B}."""
+
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "protonate",
+        lambda *args: [["CCO", "BOTH"], ["CCO", "BOTH"]],
+    )
+
+    with pytest.raises(AssertionError):
+        check_protonation("CCO", 7.0, ["CCO", "CC[O-]"], ["BOTH"])
 
 
 @pytest.mark.parametrize("group", SINGLE_SITE_GROUPS, ids=group_id)
