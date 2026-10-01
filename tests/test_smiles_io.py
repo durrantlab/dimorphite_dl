@@ -90,6 +90,28 @@ class TestSMILESProcessor:
         assert records[0].source_line == 1
         assert processor.get_stats()["processed"] == 1
 
+    def test_single_string_with_identifier_is_split(self):
+        """Checks that "SMILES name" passed as one string keeps its name.
+        RDKit parsed the name as part of the SMILES, so validation passed and
+        the identifier was silently lost."""
+        processor = SMILESProcessor()
+        records = list(processor.stream("CCO ethanol"))
+
+        assert len(records) == 1
+        assert records[0].smiles == "CCO"
+        assert records[0].identifier == "ethanol"
+
+    def test_multiline_string_yields_every_molecule(self):
+        """Checks that a multi-line string, such as a file's contents, gives
+        one record per line. It was treated as a single SMILES, so later
+        molecules were dropped or the whole block was rejected."""
+        processor = SMILESProcessor()
+        records = list(processor.stream("CCO ethanol\nCCC propane\n\nCCCN\n"))
+
+        assert [r.smiles for r in records] == ["CCO", "CCC", "CCCN"]
+        assert [r.identifier for r in records] == ["ethanol", "propane", ""]
+        assert [r.source_line for r in records] == [1, 2, 4]
+
     def test_list_input(self):
         """Test processing a list of SMILES strings."""
         smiles_list = ["CCO", "CCC", "c1ccccc1"]
@@ -703,6 +725,13 @@ class TestIntegration:
         """Checks that pentavalent nitro, which sanitization repairs rather
         than rejects, still comes out as a charge-separated nitro group."""
         assert protonate_smiles("CN(=O)=O") == ["C[N+](=O)[O-]"]
+
+    def test_single_string_identifier_reaches_output(self):
+        """Checks that a name given in a single input string is labeled on
+        the output, as it is for files and lists."""
+        assert protonate_smiles("c1ccccc1 benzene", label_identifiers=True) == [
+            "c1ccccc1,benzene"
+        ]
 
     def test_end_to_end_file_processing(self):
         """Test complete end-to-end file processing workflow."""

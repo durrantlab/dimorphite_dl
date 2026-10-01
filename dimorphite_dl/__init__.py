@@ -1,7 +1,6 @@
 """Adds hydrogen atoms to molecular representations as specified by pH"""
 
-from typing import Any
-
+import contextlib
 import os
 import sys
 
@@ -24,6 +23,10 @@ LOG_FORMAT = (
     "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
 )
 
+# Loguru ids of the sinks enable_logging added, so a later call can replace
+# them without touching sinks that belong to the host application.
+_handler_ids: list[int] = []
+
 
 def enable_logging(
     level_set: int,
@@ -34,6 +37,11 @@ def enable_logging(
 ) -> None:
     r"""Enable logging.
 
+    Calling again replaces the sinks added by the previous call. Sinks added
+    by anything else, including loguru's default stderr sink, are left in
+    place; an application that wants only these sinks should call
+    `logger.remove()` first.
+
     Args:
         level: Requested log level: `10` is debug, `20` is info.
         stdout_set: Write logs to the console. They go to stderr, despite the
@@ -41,28 +49,29 @@ def enable_logging(
         file_path: Also write logs to files here.
         colorize: Color the console output. File output is never colored.
     """
-    config: dict[str, Any] = {"handlers": []}
+    # Replace only this package's sinks. logger.configure(handlers=...) would
+    # also remove every sink the host application added.
+    for handler_id in _handler_ids:
+        # The host may already have removed it, e.g. with logger.remove().
+        with contextlib.suppress(ValueError):
+            logger.remove(handler_id)
+    _handler_ids.clear()
     if stdout_set:
-        config["handlers"].append(
-            {
-                "sink": sys.stderr,
-                "level": level_set,
-                "format": log_format,
-                "colorize": colorize,
-            }
+        _handler_ids.append(
+            logger.add(
+                sys.stderr, level=level_set, format=log_format, colorize=colorize
+            )
         )
     if isinstance(file_path, str):
-        config["handlers"].append(
-            {
-                "sink": file_path,
-                "level": level_set,
-                "format": log_format,
+        _handler_ids.append(
+            logger.add(
+                file_path,
+                level=level_set,
+                format=log_format,
                 # Color codes would be written into the file verbatim.
-                "colorize": False,
-            }
+                colorize=False,
+            )
         )
-    # https://loguru.readthedocs.io/en/stable/api/logger.html#loguru._logger.Logger.configure
-    logger.configure(**config)
 
     logger.enable("dimorphite_dl")
 

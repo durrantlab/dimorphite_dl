@@ -2,6 +2,7 @@
 files, and that stdout carries nothing but SMILES."""
 
 import os
+import re
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -288,3 +289,44 @@ def test_log_file_has_no_color_codes(tmp_path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     assert "probe message" in text
     assert "\x1b[" not in text, text
+
+
+def test_enable_logging_keeps_host_sinks() -> None:
+    """Checks that enabling logging leaves the host application's loguru
+    sinks alone. logger.configure replaced every handler, so the host's sink
+    stopped receiving messages and removing it raised ValueError."""
+
+    messages: list[str] = []
+    host_id = logger.add(messages.append, format="{message}")
+    try:
+        enable_logging(20, stdout_set=False)
+        logger.info("host probe")
+    finally:
+        # Matches the session fixture in conftest.py.
+        enable_logging(0)
+    logger.remove(host_id)
+
+    assert any("host probe" in message for message in messages), messages
+
+
+@pytest.mark.parametrize(
+    ("args", "env_overrides"),
+    [
+        (["--log_level", "info", "CCCN"], {}),
+        (["CCCN"], {"DIMORPHITE_DL_LOG": "1", "DIMORPHITE_DL_LOG_LEVEL": "INFO"}),
+    ],
+)
+def test_cli_logs_each_line_once(
+    tmp_path: Path, args: list[str], env_overrides: dict[str, str]
+) -> None:
+    """Checks that the command line does not also log through loguru's
+    default sink, which enable_logging no longer removes. Its lines start
+    with a full date, unlike LOG_FORMAT."""
+
+    result = run_cli(args, tmp_path, env_overrides)
+
+    assert result.returncode == 0, result.stderr
+    lines = [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in result.stderr.splitlines()]
+    assert lines, result.stderr
+    default_format = [line for line in lines if re.match(r"\d{4}-\d{2}-\d{2} ", line)]
+    assert default_format == [], result.stderr

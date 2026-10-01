@@ -136,16 +136,17 @@ class SMILESProcessor:
             yield batch
 
     def _handle_string_input(self, input_str: str) -> Iterator[SMILESRecord]:
-        """Handle string input - either file path or single SMILES."""
+        """Handle string input - either file path or SMILES text."""
         # A SMILES string cannot start with "~", so expansion is safe here.
         expanded = os.path.expanduser(input_str)
         if self._is_file_path(expanded):
             yield from self._stream_from_file(expanded)
         else:
-            # Single SMILES string
-            record = self._create_record(input_str, source_line=1)
-            if record:
-                yield record
+            # Split like any other input. RDKit reads text after a space as the
+            # molecule name, so an unsplit "CCO ethanol" passed validation and
+            # lost its identifier, and later lines of a multi-line string were
+            # dropped or sank the whole block.
+            yield from self._handle_iterable_input(input_str.splitlines())
 
     def _handle_iterable_input(self, iterable: Iterable[str]) -> Iterator[SMILESRecord]:
         """Handle iterable input (list, generator, etc.).

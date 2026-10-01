@@ -1,10 +1,11 @@
 import argparse
+import contextlib
 import itertools
 import os
 
 from loguru import logger
 
-from dimorphite_dl import __version__, enable_logging
+from dimorphite_dl import __version__, _handler_ids, enable_logging
 from dimorphite_dl.io import SMILESStreamError
 from dimorphite_dl.protonate.run import Protonate
 
@@ -65,6 +66,14 @@ def run_cli() -> None:
     )
 
     args = parser.parse_args()
+
+    # The CLI owns this process, so loguru's default stderr sink (id 0) would
+    # only repeat each log line in a second format. enable_logging leaves it
+    # alone because a host application may rely on it. Without autoinit, id 0
+    # can be one of this package's own sinks.
+    if 0 not in _handler_ids:
+        with contextlib.suppress(ValueError):
+            logger.remove(0)
     if args.log_level != "none":
         enable_logging(LOG_LEVEL_TO_INT[args.log_level])
 
