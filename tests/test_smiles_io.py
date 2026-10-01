@@ -205,10 +205,30 @@ class TestSMILESProcessor:
         assert stats["errors"] == 2
 
     def test_unsupported_input_type(self):
-        """Test handling of unsupported input types."""
+        """Checks that an unsupported input type raises even with
+        skip_invalid, rather than yielding nothing."""
         processor = SMILESProcessor()
 
-        list(processor.stream(123))  # type: ignore
+        with pytest.raises(SMILESStreamError, match="Unsupported input type"):
+            list(processor.stream(123))  # type: ignore
+
+    def test_item_with_extra_fields_skips_only_that_item(self):
+        """Checks that an item with more than two fields is skipped. It raised
+        a ValueError that ended the stream and dropped every later item."""
+        processor = SMILESProcessor(validate_smiles=False)
+
+        records = list(processor.stream(["CCO", "CCC a b", "CCN x"]))
+
+        assert [r.smiles for r in records] == ["CCO", "CCN"]
+        assert records[1].identifier == "x"
+        assert processor.get_stats()["skipped"] == 1
+
+    def test_item_with_extra_fields_raises_without_skip(self):
+        """Checks that skip_invalid=False still reports the bad item."""
+        processor = SMILESProcessor(validate_smiles=False, skip_invalid=False)
+
+        with pytest.raises(SMILESValidationError):
+            list(processor.stream(["CCO", "CCC a b"]))
 
     def test_stats_reset_between_calls(self):
         """Test that stats are reset between stream calls."""
@@ -276,33 +296,69 @@ class TestFileProcessing:
         assert not processor._is_file_path(long_string)
 
     def test_file_not_found(self):
-        """Test handling of non-existent files."""
-        import loguru
-        from loguru import logger
-
+        """Checks that a missing file raises even with skip_invalid. It was
+        logged and swallowed, so a typo in the path gave empty output."""
         processor = SMILESProcessor()  # skip_invalid=True by default
 
-        # Capture loguru logs
-        import io
+        with pytest.raises(
+            SMILESStreamError, match="File not found: nonexistent_file.smi"
+        ):
+            list(processor.stream("nonexistent_file.smi"))
 
-        log_stream = io.StringIO()
+    def test_truncated_gzip_raises(self, tmp_path):
+        """Checks that a corrupt archive raises instead of ending the stream
+        early, which looked like a complete but shorter input."""
+        path = tmp_path / "mols.smi.gz"
+        with gzip.open(path, "wt") as f:
+            f.write("CCO\n" * 10000)
+        data = path.read_bytes()
+        path.write_bytes(data[: len(data) // 2])
 
-        # Add a sink to capture logs
-        sink_id = logger.add(log_stream, format="{message}")
+        processor = SMILESProcessor(validate_smiles=False)
 
-        try:
-            records = list(processor.stream("nonexistent_file.smi"))
+        with pytest.raises(SMILESStreamError):
+            list(processor.stream(str(path)))
 
-            # Should return empty results but log the error
-            assert len(records) == 0
+    def test_path_object_input(self, tmp_path):
+        """Checks that a pathlib.Path is read as a file. It was neither a str
+        nor iterable, so it was rejected and the error swallowed."""
+        path = tmp_path / "mols.smi"
+        path.write_text("CCO ethanol\nCCC\n")
 
-            # Check that error was logged
-            log_output = log_stream.getvalue()
-            assert "File not found: nonexistent_file.smi" in log_output
+        processor = SMILESProcessor(validate_smiles=False)
+        records = list(processor.stream(path))
 
-        finally:
-            # Clean up the logger sink
-            logger.remove(sink_id)
+        assert [r.smiles for r in records] == ["CCO", "CCC"]
+        assert records[0].identifier == "ethanol"
+
+    def test_home_directory_is_expanded(self, tmp_path, monkeypatch):
+        """Checks that "~" in a path string is expanded, as in the README's
+        scripting example. It was taken literally and found no file."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
+        (tmp_path / "example.smi").write_text("CCO\n")
+
+        processor = SMILESProcessor(validate_smiles=False)
+        records = list(processor.stream("~/example.smi"))
+
+        assert [r.smiles for r in records] == ["CCO"]
+
+    @pytest.mark.parametrize("name", ["mols.sdf", "mols.csv", "mols.sdf.gz"])
+    def test_unsupported_file_formats_raise(self, tmp_path, name):
+        """Checks that SDF and CSV files are rejected. They were parsed as
+        whitespace-delimited SMILES, which gave empty or garbage output."""
+        path = tmp_path / name
+        content = "CCO,ethanol\n"
+        if name.endswith(".gz"):
+            with gzip.open(path, "wt") as f:
+                f.write(content)
+        else:
+            path.write_text(content)
+
+        processor = SMILESProcessor(validate_smiles=False)
+
+        with pytest.raises(SMILESStreamError, match="not supported"):
+            list(processor.stream(str(path)))
 
     def test_text_file_processing(self):
         """Test processing of plain text SMILES files."""

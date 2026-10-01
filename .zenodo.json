@@ -3,18 +3,18 @@
   "title": "Dimorphite-DL",
   "creators": [
     {
-      "name": "Ropp, Patrick J.",
+      "name": "Ropp, Patrick J."
     },
     {
       "name": "Kaminsky, Jesse C.",
       "orcid": "0000-0001-5796-2874"
     },
     {
-      "name": "Yablonski, Sara",
+      "name": "Yablonski, Sara"
     },
     {
       "name": "Spiegel, Jacob O.",
-      "orcid": "0000-0002-8496-6915",
+      "orcid": "0000-0002-8496-6915"
     },
     {
       "name": "Maldonado, Alex M.",
@@ -25,11 +25,11 @@
       "name": "Durrant, Jacob D.",
       "orcid": "0000-0002-5808-4097",
       "affiliation": "Department of Biological Sciences, University of Pittsburgh"
-    },
+    }
   ],
   "access_right": "open",
   "license": {
-    "id": "apache-2.0",
+    "id": "apache-2.0"
   },
-  "language": "eng",
+  "language": "eng"
 }

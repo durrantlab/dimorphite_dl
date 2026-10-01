@@ -4,7 +4,6 @@ from typing import Any
 
 import os
 import sys
-from ast import literal_eval
 
 from loguru import logger
 
@@ -66,8 +65,48 @@ def enable_logging(
     logger.enable("dimorphite_dl")
 
 
-if literal_eval(os.environ.get("DIMORPHITE_DL_LOG", "False")):
-    level = int(os.environ.get("DIMORPHITE_DL_LOG_LEVEL", 20))
-    stdout = literal_eval(os.environ.get("DIMORPHITE_DL_STDOUT", "True"))
+def _env_flag(name: str, default: bool) -> bool:
+    """Parse a boolean environment variable leniently, because values like
+    "true" or "yes" made literal_eval raise and broke the import.
+
+    Args:
+        name: Environment variable name.
+        default: Value when the variable is unset.
+
+    Returns:
+        True for 1/true/yes/on (any case), False for anything else.
+    """
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_log_level(name: str, default: int) -> int:
+    """Parse a log level given as a number or a name such as "INFO", because
+    int() on a name raised and broke the import.
+
+    Args:
+        name: Environment variable name.
+        default: Level when the variable is unset or unrecognized.
+
+    Returns:
+        The numeric log level.
+    """
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    value = value.strip()
+    if value.isdigit():
+        return int(value)
+    try:
+        return logger.level(value.upper()).no
+    except ValueError:
+        return default
+
+
+if _env_flag("DIMORPHITE_DL_LOG", False):
+    level = _env_log_level("DIMORPHITE_DL_LOG_LEVEL", 20)
+    stdout = _env_flag("DIMORPHITE_DL_STDOUT", True)
     log_file_path = os.environ.get("DIMORPHITE_DL_LOG_FILE_PATH", None)
     enable_logging(level, stdout, log_file_path)

@@ -1,9 +1,12 @@
 import argparse
+import itertools
 import os
 
 from loguru import logger
 
-from dimorphite_dl import __version__, enable_logging, protonate_smiles
+from dimorphite_dl import __version__, enable_logging
+from dimorphite_dl.io import SMILESStreamError
+from dimorphite_dl.protonate.run import Protonate
 
 LOG_LEVEL_TO_INT = {"debug": 10, "info": 20, "warning": 30, "error": 40, "critical": 50}
 
@@ -75,22 +78,34 @@ def run_cli() -> None:
     ):
         parser.error(f"--output_file ({args.output_file}) is the input file")
 
-    # Protonated before the output file is opened, so that invalid arguments
-    # fail without truncating an existing file.
-    smiles_protonated_all = protonate_smiles(
+    # Identifiers are always kept: each input yields a variable number of
+    # variants and invalid inputs are skipped, so without them the output
+    # cannot be matched back to the input.
+    protonator = Protonate(
         smiles_input=args.smiles,
         ph_min=args.ph_min,
         ph_max=args.ph_max,
         precision=args.precision,
+        label_identifiers=True,
         label_states=args.label_states,
         max_variants=args.max_variants,
     )
 
-    if args.output_file is not None:
-        logger.info("Writing smiles to {}", args.output_file)
-        with open(args.output_file, "w", encoding="utf-8") as f:
-            for smiles_protonated in smiles_protonated_all:
-                f.write(smiles_protonated + "\n")
-    else:
-        for smiles_protonated in smiles_protonated_all:
-            print(smiles_protonated)
+    try:
+        # Results are streamed so large libraries need not fit in memory. The
+        # first one is pulled before the output file is opened, so that an
+        # unreadable input fails without truncating an existing file.
+        # Invalid arguments already failed in the constructor above.
+        first = next(protonator, None)
+        results = itertools.chain([] if first is None else [first], protonator)
+
+        if args.output_file is not None:
+            logger.info("Writing smiles to {}", args.output_file)
+            with open(args.output_file, "w", encoding="utf-8") as f:
+                for smiles_protonated in results:
+                    f.write(smiles_protonated + "\n")
+        else:
+            for smiles_protonated in results:
+                print(smiles_protonated)
+    except SMILESStreamError as error:
+        parser.exit(1, f"{parser.prog}: error: {error}\n")

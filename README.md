@@ -47,7 +47,7 @@ pip install dimorphite_dl
 Or you can install the latest development version from the `main` branch on [GitHub](https://github.com/durrantlab/dimorphite_dl) using
 
 ```bash
-pip install https://github.com/durrantlab/dimorphite_dl.git
+pip install git+https://github.com/durrantlab/dimorphite_dl.git
 ```
 
 ## Usage

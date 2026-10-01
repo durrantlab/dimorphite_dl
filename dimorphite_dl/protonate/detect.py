@@ -34,7 +34,8 @@ class ProtonationSiteDetector:
 
         Args:
             validate_sites: Whether to validate detected sites (explicit, not default)
-            max_sites_per_molecule: Maximum sites to detect per molecule (bounded)
+            max_sites_per_molecule: Maximum pKa values one substructure pattern
+                may assign in a molecule (bounded)
         """
         assert isinstance(validate_sites, bool)
         assert isinstance(max_sites_per_molecule, int)
@@ -145,7 +146,12 @@ class ProtonationSiteDetector:
                 mol, matches, substructure_data
             ):
                 n_sites += len(site.pkas)
-                if n_sites >= self.max_sites_per_molecule:
+                if n_sites > self.max_sites_per_molecule:
+                    logger.warning(
+                        "More than {} '{}' sites; remaining groups left unprotonated",
+                        self.max_sites_per_molecule,
+                        substructure_data.name,
+                    )
                     break
 
                 matches_used.append(site.idxs_match)

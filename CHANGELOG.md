@@ -4,6 +4,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+## [2.1.0] - 2026-10-01
+
+### Changed
+
+- When `max_variants` truncates the output, the most probable states are kept, scored by the Henderson-Hasselbalch fraction at the middle of the pH range.
+  Previously the first states generated were kept, and enumeration stopped there, so every later site stayed in its input state.
+- Console logging from `enable_logging` and `--log_level` now goes to stderr, so stdout carries only SMILES.
+  The `stdout_set` argument keeps its name.
+- Output order no longer depends on `PYTHONHASHSEED`; variants come out in enumeration order.
+
+### Fixed
+
+- `label_states` and `--label_states` had no effect.
+  Each output now lists the target state of every pKa site, in detection order.
+- Neutralization of charged inputs.
+    - Charge-separated sulfoxides, sulfones, phosphine oxides, and phosphates (e.g., `C[S+](C)[O-]`) are collapsed to S=O and P=O instead of protonated to hydroxysulfonium and hydroxyphosphonium cations.
+    - Thiolates (`[S-]`) are protonated, so thiol and thioic acid sites are found.
+    - Amidinium, guanidinium, imidazolium, and pyrazolium cations drawn with the charge on a nitrogen without H (e.g., `C[n+]1cc[nH]c1`) are neutralized.
+    - N-oxides and nitrones keep their O- instead of becoming N-hydroxy cations.
+    - Nitrate gets one proton, not two, so it is deprotonated again at physiological pH.
+    - The terminal N- of a diazo group is left alone, so diazo compounds are no longer permanent +1 cations.
+    - A rule that keeps matching its own product raises an error instead of looping forever.
+- Site detection.
+    - Two matches of one pattern can no longer claim the same site.
+      A primary amide nitrogen was listed and charged twice, and phosphoric acid lost all three protons.
+    - A carbon used by one group as its attachment point no longer hides another group's site.
+      The amine of `NCP(=O)(O)O` was never protonated.
+- A protonation state that cannot be kekulized (e.g., a +1 charge on a bridgehead aromatic nitrogen) now keeps the site's previous state.
+  Such variants were dropped as invalid SMILES, and when that was the site's only state the molecule vanished from the output.
+  A molecule whose every variant is rejected now falls back to its input.
+- Deuterium and tritium on O, N, or S are treated as ordinary hydrogen, so deuterated acids can be deprotonated.
+  Labels on carbon are kept.
+- A UTF-8 byte order mark at the start of an input file is ignored instead of corrupting the first SMILES.
+- The CLI refuses an `--output_file` that is the input file, which it previously truncated before reading.
+  Invalid arguments no longer truncate an existing output file, and the output file is closed properly.
+
 ## [2.0.2] - 2025-08-11
 
 ### Added

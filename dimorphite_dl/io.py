@@ -70,10 +70,15 @@ class SMILESProcessor:
         self._stats: dict[str, int] = {"processed": 0, "skipped": 0, "errors": 0}
 
     def stream(
-        self, input_data: str | Iterable[str] | Iterator[str]
+        self, input_data: str | os.PathLike[str] | Iterable[str] | Iterator[str]
     ) -> Iterator[SMILESRecord]:
         """
         Stream SMILES records from various input types.
+
+        skip_invalid applies only to individual records. A source that cannot
+        be read (missing file, unsupported format, corrupt archive) always
+        raises, because inside a generator a swallowed error ends the stream
+        and looks exactly like a short or empty input.
 
         Args:
             input_data: File path, single SMILES, or iterable of SMILES
@@ -89,18 +94,21 @@ class SMILESProcessor:
         try:
             if isinstance(input_data, str):
                 yield from self._handle_string_input(input_data)
+            elif isinstance(input_data, os.PathLike):
+                yield from self._stream_from_file(
+                    os.path.expanduser(os.fspath(input_data))
+                )
             elif hasattr(input_data, "__iter__"):
                 yield from self._handle_iterable_input(input_data)
             else:
                 raise SMILESStreamError(f"Unsupported input type: {type(input_data)}")
 
+        except (SMILESStreamError, SMILESValidationError) as e:
+            logger.error(f"Error streaming SMILES: {e}")
+            raise
         except Exception as e:
             logger.error(f"Error streaming SMILES: {e}")
-            if not self.skip_invalid:
-                if isinstance(e, SMILESValidationError):
-                    raise e
-                else:
-                    raise SMILESStreamError(f"Failed to process input: {e}") from e
+            raise SMILESStreamError(f"Failed to process input: {e}") from e
 
     def stream_batches(
         self, input_data: str | Iterable[str], batch_size: int | None = None
@@ -129,8 +137,10 @@ class SMILESProcessor:
 
     def _handle_string_input(self, input_str: str) -> Iterator[SMILESRecord]:
         """Handle string input - either file path or single SMILES."""
-        if self._is_file_path(input_str):
-            yield from self._stream_from_file(input_str)
+        # A SMILES string cannot start with "~", so expansion is safe here.
+        expanded = os.path.expanduser(input_str)
+        if self._is_file_path(expanded):
+            yield from self._stream_from_file(expanded)
         else:
             # Single SMILES string
             record = self._create_record(input_str, source_line=1)
@@ -148,12 +158,11 @@ class SMILESProcessor:
                 line = line.strip()
                 line_split = line.split()
                 if len(line_split) > 2:
-                    logger.warning(
-                        f"Lines can only contain a smiles string and identifier, but we were given {line}"
+                    self._handle_error(
+                        f"Item {line_num} has more than two fields "
+                        f"(SMILES and identifier): {line}"
                     )
-                    raise ValueError(
-                        "Line contains more than two items (smiles and identifier)"
-                    )
+                    continue
                 if len(line_split) == 0:
                     continue
                 smiles = line_split[0]
@@ -193,7 +202,18 @@ class SMILESProcessor:
         self, file_obj: TextIO, path: pathlib.Path
     ) -> Iterator[SMILESRecord]:
         """Stream from file object based on file extension."""
-        suffix = path.suffix.lower().replace(".gz", "")
+        # path.suffix of "x.sdf.gz" is ".gz", so look past the compression
+        # suffix for the real format.
+        suffixes = [s.lower() for s in path.suffixes if s.lower() != ".gz"]
+        suffix = suffixes[-1] if suffixes else ""
+
+        # Read as whitespace-delimited SMILES, these formats give empty or
+        # garbage output rather than an error.
+        if suffix in {".sdf", ".csv"}:
+            raise SMILESStreamError(
+                f"{suffix} input is not supported; convert {path} to a "
+                "whitespace-delimited SMILES file first"
+            )
 
         if suffix in {".smiles", ".smi", ".txt", ""}:
             yield from self._stream_from_text(file_obj)

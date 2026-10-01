@@ -4,11 +4,14 @@ files, and that stdout carries nothing but SMILES."""
 import os
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
+import pytest
 from rdkit import Chem, RDLogger
 
 from dimorphite_dl import protonate_smiles
+from dimorphite_dl.io import SMILESStreamError
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -142,3 +145,87 @@ def test_output_file_is_written(tmp_path: Path) -> None:
     assert sorted(canonical(line) for line in lines) == sorted(
         canonical(s) for s in CCCN_STATES
     )
+
+
+def test_identifiers_are_kept(tmp_path: Path) -> None:
+    """Checks that names from the input file reach the output. They were
+    dropped, so variants could not be traced back to their input."""
+
+    path = tmp_path / "molecules.smi"
+    path.write_text("CCCN amine\nCCO ethanol\n", encoding="utf-8")
+
+    result = run_cli([str(path)], tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    pairs = [line.split(",") for line in result.stdout.splitlines()]
+    assert sorted(canonical(smi) for smi, name in pairs if name == "amine") == sorted(
+        canonical(s) for s in CCCN_STATES
+    ), result.stdout
+    assert [canonical(smi) for smi, name in pairs if name == "ethanol"] == [
+        canonical("CCO")
+    ], result.stdout
+
+
+def test_missing_input_file_is_an_error(tmp_path: Path) -> None:
+    """Checks that a missing input file fails with a message and leaves an
+    existing output file alone. The error was swallowed and the run exited 0
+    with no output."""
+
+    out = tmp_path / "existing.smi"
+    out.write_text("keep me\n", encoding="utf-8")
+
+    result = run_cli(
+        ["--output_file", str(out), str(tmp_path / "missing.smi")], tmp_path
+    )
+
+    assert result.returncode != 0
+    assert "File not found" in result.stderr, result.stderr
+    assert out.read_text(encoding="utf-8") == "keep me\n"
+
+
+def test_output_is_written_as_it_is_produced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Checks that the command line writes each result as it is produced.
+    Results were collected into a list first, so memory grew with the
+    library and a failure late in the run left no output at all."""
+
+    from dimorphite_dl import cli
+
+    def failing_protonator(**kwargs: object) -> Iterator[str]:
+        yield "CCCN"
+        raise SMILESStreamError("input ended unexpectedly")
+
+    out = tmp_path / "out.smi"
+    monkeypatch.setattr(cli, "Protonate", failing_protonator)
+    monkeypatch.setattr(
+        sys, "argv", ["dimorphite_dl", "--output_file", str(out), "CCCN"]
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.run_cli()
+
+    assert excinfo.value.code == 1
+    assert out.read_text(encoding="utf-8") == "CCCN\n"
+
+
+def test_env_flag_values_do_not_break_import() -> None:
+    """Checks that common spellings of the logging environment variables are
+    accepted. literal_eval and int() raised on "true" and "INFO", so the
+    package could not be imported."""
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = PROJECT_ROOT + os.pathsep + env.get("PYTHONPATH", "")
+    env["DIMORPHITE_DL_LOG"] = "true"
+    env["DIMORPHITE_DL_LOG_LEVEL"] = "INFO"
+    env["DIMORPHITE_DL_STDOUT"] = "yes"
+    result = subprocess.run(
+        [sys.executable, "-c", "import dimorphite_dl"],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
