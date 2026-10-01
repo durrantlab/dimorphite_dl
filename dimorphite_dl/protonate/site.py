@@ -105,9 +105,9 @@ class PKaDatum:
         assert isinstance(ph_min, (int, float))
         assert isinstance(ph_max, (int, float))
         assert isinstance(precision, (int, float))
-        assert ph_min <= ph_max, (
-            f"ph_min ({ph_min}) must be less than ph_max ({ph_max})"
-        )
+        assert (
+            ph_min <= ph_max
+        ), f"ph_min ({ph_min}) must be less than ph_max ({ph_max})"
         assert precision >= 0.0, f"precision must be positive, got: {precision}"
 
         # Calculate effective pKa range based on precision
@@ -237,9 +237,9 @@ class ProtonationSite:
         assert isinstance(ph_min, (int, float))
         assert isinstance(ph_max, (int, float))
         assert isinstance(precision, (int, float))
-        assert ph_min <= ph_max, (
-            f"ph_min ({ph_min}) must be less than or equal to ph_max ({ph_max})"
-        )
+        assert (
+            ph_min <= ph_max
+        ), f"ph_min ({ph_min}) must be less than or equal to ph_max ({ph_max})"
         assert precision >= 0.0, f"precision must be positive, got: {precision}"
 
         pka_count = len(self.pkas)
@@ -253,9 +253,9 @@ class ProtonationSite:
             states_generated += 1
             yield idx_atom, state
 
-        assert states_generated == pka_count, (
-            f"Expected {pka_count} states, generated {states_generated}"
-        )
+        assert (
+            states_generated == pka_count
+        ), f"Expected {pka_count} states, generated {states_generated}"
 
     def get_unique_states(
         self, ph_min: float, ph_max: float, precision: float
@@ -272,7 +272,9 @@ class ProtonationSite:
             List of ProtonationState objects for this site
         """
         gen = tuple(state for state in self.get_states(ph_min, ph_max, precision))
-        states_unique = tuple(set(gen))
+        # dict.fromkeys keeps first-seen order; a set would order by hash,
+        # which varies with PYTHONHASHSEED and so would the output order.
+        states_unique = tuple(dict.fromkeys(gen))
         return states_unique
 
     def is_valid(self) -> bool:

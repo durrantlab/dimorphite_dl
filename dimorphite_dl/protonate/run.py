@@ -134,15 +134,15 @@ class Protonate:
             **smiles_processor_kwargs: Additional arguments for SMILESProcessor
         """
         # Validate all input parameters with clear bounds
-        assert ph_min <= ph_max, (
-            f"ph_min ({ph_min}) must be less than or equal to ph_max ({ph_max})"
-        )
-        assert precision >= 0.0 and precision <= 10.0, (
-            f"precision must be 0-10, got: {precision}"
-        )
-        assert max_variants > 0 and max_variants <= 10000, (
-            f"max_variants must be 1-10000, got: {max_variants}"
-        )
+        assert (
+            ph_min <= ph_max
+        ), f"ph_min ({ph_min}) must be less than or equal to ph_max ({ph_max})"
+        assert (
+            precision >= 0.0 and precision <= 10.0
+        ), f"precision must be 0-10, got: {precision}"
+        assert (
+            max_variants > 0 and max_variants <= 10000
+        ), f"max_variants must be 1-10000, got: {max_variants}"
         assert isinstance(label_identifiers, bool)
         assert isinstance(label_states, bool)
         assert isinstance(validate_output, bool)
@@ -487,7 +487,9 @@ class Protonate:
         if len(molecules) == 0:
             return []
 
-        unique_smiles = set()
+        # A dict rather than a set, so duplicates are dropped while keeping
+        # enumeration order; set order depends on PYTHONHASHSEED.
+        unique_smiles: dict[str, None] = {}
         valid_molecule_count = 0
 
         for mol in molecules:
@@ -497,7 +499,7 @@ class Protonate:
             valid_molecule_count += 1
             canonical_smiles = self._generate_canonical_smiles_from_mol(mol)
             if canonical_smiles is not None:
-                unique_smiles.add(canonical_smiles)
+                unique_smiles[canonical_smiles] = None
 
         smiles_list = list(unique_smiles)
         unique_count = len(smiles_list)
@@ -628,7 +630,7 @@ class Protonate:
             )
             self.current_results_queue.append(result)
 
-    def _generate_states_string_from_sites(self, sites: list) -> str:
+    def _generate_states_string_from_sites(self, sites: list[ProtonationSite]) -> str:
         """
         Generate states string from protonation sites.
 
@@ -636,21 +638,20 @@ class Protonate:
             sites: List of protonation sites
 
         Returns:
-            Tab-separated string of site states
+            Tab-separated string of target states, one per pKa of each site
+            (so a phosphate contributes two), in detection order.
         """
         assert isinstance(sites, list)
         assert len(sites) > 0
 
-        try:
-            state_strings = []
-            for site in sites:
-                if hasattr(site, "target_state") and site.target_state:
-                    state_strings.append(str(site.target_state))
-
-            return "\t".join(state_strings)
-        except Exception as error:
-            logger.debug("Error generating states string: {}", str(error))
-            return ""
+        # Not wrapped in a broad except, so a failure here surfaces instead of
+        # silently dropping the labels.
+        state_strings = [
+            state.to_str()
+            for site in sites
+            for _, state in site.get_states(self.ph_min, self.ph_max, self.precision)
+        ]
+        return "\t".join(state_strings)
 
     def _add_result_to_queue(self, smiles: str, identifier: str, states: str) -> None:
         """
