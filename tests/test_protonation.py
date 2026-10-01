@@ -681,6 +681,62 @@ def test_fully_substituted_cation_stays_charged(
     assert record["smiles"] == canonical_smiles(smiles)
 
 
+DIAZO_COMPOUNDS = [
+    # [smiles, id]
+    ["CCOC(=O)C=[N+]=[N-]", "ethyl_diazoacetate"],
+    ["[N-]=[N+]=CC(=O)OC[C@H](N)C(=O)O", "azaserine"],
+    ["[N-]=[N+]=CC(=O)CC[C@H](N)C(=O)O", "DON"],
+]
+
+
+@pytest.mark.parametrize(
+    "smiles",
+    [group[0] for group in DIAZO_COMPOUNDS],
+    ids=[group[1] for group in DIAZO_COMPOUNDS],
+)
+def test_diazo_input_is_not_neutralized(
+    smiles: str, canonical_smiles: Callable[[str], str]
+) -> None:
+    """Checks that the terminal N- of a diazo group is left alone. The rule
+    that turns azide N- into N-H also matched it, giving C=[N+]=N, which no
+    site pattern deprotonates."""
+
+    record = dimorphite_dl.LoadSMIFile(StringIO(smiles)).next()
+    assert record["smiles"] == canonical_smiles(smiles)
+
+
+@pytest.mark.parametrize(
+    "ph", [VERY_ACIDIC_PH, 7.4, VERY_BASIC_PH], ids=["very_acidic", "7.4", "very_basic"]
+)
+def test_diazo_without_sites_is_unchanged(
+    ph: float, canonical_smiles: Callable[[str], str]
+) -> None:
+    """Checks that a diazo compound with no ionizable site comes out neutral
+    at every pH, rather than as a permanent +1 cation."""
+
+    smiles = "CCOC(=O)C=[N+]=[N-]"
+    output = protonate(smiles, ph, DEFAULT_PKA_PRECISION)
+    assert [line[0] for line in output] == [canonical_smiles(smiles)], output
+
+
+@pytest.mark.parametrize(
+    "ph, expected, state",
+    [
+        (VERY_ACIDIC_PH, "[N-]=[N+]=CC(=O)OC[C@H]([NH3+])C(=O)O", "PROTONATED"),
+        (VERY_BASIC_PH, "[N-]=[N+]=CC(=O)OC[C@H](N)C(=O)[O-]", "DEPROTONATED"),
+    ],
+    ids=["very_acidic", "very_basic"],
+)
+def test_diazo_does_not_shift_net_charge_of_other_sites(
+    ph: float, expected: str, state: str
+) -> None:
+    """Checks that azaserine's amine and acid are protonated as usual while
+    its diazo group stays neutral, so the net charge is +1 and -1 rather than
+    +2 and 0."""
+
+    check_protonation("[N-]=[N+]=CC(=O)OC[C@H](N)C(=O)O", ph, [expected], [state])
+
+
 THIOLATE_GROUPS = [
     # [input smiles, protonated, deprotonated, id]
     ["CC(C)(C)[S-]", "CC(C)(C)S", "CC(C)(C)[S-]", "Thiol"],

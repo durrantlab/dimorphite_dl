@@ -149,6 +149,23 @@ so that results remain consistent with the original publication.
   so a P-O-P bridge is not recognized. ATP is therefore assigned a net charge
   of -2 rather than -4, even at pH 12. Charges for nucleotides, cofactors, and
   other polyphosphates should be assigned manually.
+* Amide N-H groups are deprotonated at physiological pH. The amide pKa
+  (12.0) has a standard deviation of 4.5, so at the default precision its
+  range reaches pH 7.5 and every amide N-H is treated as possibly
+  deprotonated. `CC(=O)NC`, for example, yields both the neutral form and
+  `CC(=O)[N-]C` at pH 7.4. The neutral form is ranked first, but molecules
+  with several amides (e.g., peptides) produce many amide-anion variants and
+  can reach the `--max_variants` limit.
+* Thioamides and thioureas are protonated as if they were aliphatic amines
+  (pKa ~8.2). The amide substructures require C=O, so a C(=S)N nitrogen falls
+  through to the general amine substructure, as tertiary amides do. Ethionamide
+  (`CCc1cc(C(N)=S)ccn1`), for example, gets a protonated variant at pH 7.4,
+  and that variant is ranked as more probable than the neutral form.
+  Thiosemicarbazones are affected in the same way.
+* Alkyl azides are protonated below about pH 4.6. The azide substructure uses
+  the pKa of hydrazoic acid (4.65), so an organic azide such as zidovudine is
+  written as the cation `R-N=[N+]=N` in acidic runs, although alkyl azides are
+  not basic in that range.
 
 Authors and Contacts
 --------------------

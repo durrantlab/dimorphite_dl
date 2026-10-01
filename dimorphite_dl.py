@@ -433,9 +433,12 @@ class UtilFuncs:
                 "[#7v3+0:1]",
             ],  # To handle N+ bonded to three atoms. Should not be positive.
             [
-                "[#7v2-1:1]",
+                "[#7v2-1;!$([#7-]=[#7+]=[#6]):1]",
                 "[#7+0:1]-[H]",
-            ],  # To handle N- Bonded to two atoms. Add hydrogen.
+            ],  # To handle N- Bonded to two atoms. Add hydrogen. The terminal
+            # N- of a diazo group (C=[N+]=[N-]) is excluded: no site pattern
+            # removes that proton, so it would stay a +1 cation at every pH.
+            # Azides still match, since their far atom is nitrogen.
             # ['[N:1]=[N+0:2]=[N:3]-[H]', '[N:1]=[N+1:2]=[N+0:3]-[H]'],  # To
             # handle bad azide. Must be protonated. (Now handled elsewhere, before
             # SMILES converted to Mol object.)
