@@ -139,6 +139,7 @@ class ProtonationSiteDetector:
             total_matches_found += n_matches
             self._stats_substructures_matched += 1
             n_sites = 0
+            matches_used = []
 
             for site in self._create_sites_from_matches(
                 mol, matches, substructure_data
@@ -147,9 +148,14 @@ class ProtonationSiteDetector:
                 if n_sites >= self.max_sites_per_molecule:
                     break
 
+                matches_used.append(site.idxs_match)
                 yield site
 
-            mol = self._protect_matched_atoms_in_molecule(mol, matches)
+            # Context is locked only after the whole pattern is done, because
+            # one bridging O serves both phosphates of a pyrophosphate.
+            mol = self._protect_context_atoms_in_molecule(
+                mol, matches_used, substructure_data
+            )
 
     def _iterate_available_substructures(self) -> Iterator[SubstructureDatum]:
         """
@@ -306,6 +312,13 @@ class ProtonationSiteDetector:
         assert isinstance(substructure_data, SubstructureDatum)
 
         for match_indices in matches:
+            # Re-checked per match so that two matches of one pattern cannot
+            # claim the same site, as happens with the two N-H matches of a
+            # primary amide or the three interchangeable OH groups of
+            # phosphoric acid.
+            if not self._are_all_atoms_in_match_unprotected(mol, match_indices):
+                continue
+
             site = ProtonationSite(
                 mol=mol,
                 idxs_match=tuple(match_indices),
@@ -313,31 +326,73 @@ class ProtonationSiteDetector:
                 smarts=substructure_data.smarts,
                 name=substructure_data.name,
             )
+
+            # The site atoms and their hydrogens are locked at once. The H
+            # neighbors matter because each H of an NH2 gives its own match.
+            site_idxs = self._get_site_atom_indices(match_indices, substructure_data)
+            h_idxs = [
+                neighbor.GetIdx()
+                for idx in site_idxs
+                for neighbor in mol.GetAtomWithIdx(idx).GetNeighbors()
+                if neighbor.GetAtomicNum() == 1
+            ]
+            MoleculeRecord.protect_atoms(mol, site_idxs + h_idxs)
             yield site
 
-    def _protect_matched_atoms_in_molecule(
-        self, mol: Chem.Mol, matches: list[tuple[int, ...]]
+    @staticmethod
+    def _get_site_atom_indices(
+        match: tuple[int, ...], substructure_data: SubstructureDatum
+    ) -> list[int]:
+        """Maps a pattern's site positions onto molecule atoms, because both
+        locking steps need to tell a match's sites from its context.
+
+        Args:
+            match: Atom indices of one substructure match.
+            substructure_data: The pattern that produced the match.
+
+        Returns:
+            Molecule atom indices of the match's protonation sites.
+        """
+        return [match[pka.idx_site] for pka in substructure_data.pkas]
+
+    def _protect_context_atoms_in_molecule(
+        self,
+        mol: Chem.Mol,
+        matches: list[tuple[int, ...]],
+        substructure_data: SubstructureDatum,
     ) -> Chem.Mol:
         """
-        Protect all atoms involved in matches to prevent overlap.
+        Protect the heteroatom context of the matches a pattern used, so later
+        patterns cannot claim part of this functional group (an amidine's
+        second N, a carbonyl O, a phosphate's ester O).
+
+        Carbon context is only the attachment point and is never a site, so it
+        stays free: the amine of NCP(=O)(O)O needs the carbon the phosphonate
+        used.
 
         Args:
             mol: RDKit mol object
-            matches: List of matches whose atoms should be protected
+            matches: Matches that produced sites for this pattern
+            substructure_data: The pattern that produced the matches
 
         Returns:
-            Same mol object with matched atoms protected
+            Same mol object with context atoms protected
         """
         assert mol is not None
         assert isinstance(matches, list)
 
+        context_idxs = []
         for match in matches:
             assert isinstance(match, tuple)
-            atom_indices = list(match)
-            logger.debug("Protecting atoms: {}", match)
-            mol = MoleculeRecord.protect_atoms(mol, atom_indices)
+            site_idxs = self._get_site_atom_indices(match, substructure_data)
+            context_idxs.extend(
+                idx
+                for idx in match
+                if idx not in site_idxs and mol.GetAtomWithIdx(idx).GetAtomicNum() != 6
+            )
 
-        return mol
+        logger.debug("Protecting context atoms: {}", context_idxs)
+        return MoleculeRecord.protect_atoms(mol, context_idxs)
 
     def get_stats(self) -> dict[str, int]:
         """
