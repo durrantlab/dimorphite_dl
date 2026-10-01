@@ -1,4 +1,5 @@
 import argparse
+import os
 
 from loguru import logger
 
@@ -64,19 +65,32 @@ def run_cli() -> None:
     if args.log_level != "none":
         enable_logging(LOG_LEVEL_TO_INT[args.log_level])
 
-    if args.output_file is not None:
-        logger.info("Writing smiles to {}", args.output_file)
-        f = open(args.output_file, "w", encoding="utf-8")
+    # Writing would replace the input with its own protonated forms.
+    # samefile also catches symlinks and hard links.
+    if (
+        args.output_file is not None
+        and os.path.exists(args.smiles)
+        and os.path.exists(args.output_file)
+        and os.path.samefile(args.smiles, args.output_file)
+    ):
+        parser.error(f"--output_file ({args.output_file}) is the input file")
 
-    for smiles_protonated in protonate_smiles(
+    # Protonated before the output file is opened, so that invalid arguments
+    # fail without truncating an existing file.
+    smiles_protonated_all = protonate_smiles(
         smiles_input=args.smiles,
         ph_min=args.ph_min,
         ph_max=args.ph_max,
         precision=args.precision,
         label_states=args.label_states,
         max_variants=args.max_variants,
-    ):
-        if args.output_file is not None:
-            f.write(smiles_protonated + "\n")
-        else:
+    )
+
+    if args.output_file is not None:
+        logger.info("Writing smiles to {}", args.output_file)
+        with open(args.output_file, "w", encoding="utf-8") as f:
+            for smiles_protonated in smiles_protonated_all:
+                f.write(smiles_protonated + "\n")
+    else:
+        for smiles_protonated in smiles_protonated_all:
             print(smiles_protonated)

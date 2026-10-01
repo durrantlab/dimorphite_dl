@@ -182,7 +182,9 @@ class SMILESProcessor:
         mode = "rt" if path.suffix == ".gz" else "r"
 
         try:
-            with open_func(filepath, mode, encoding="utf-8", errors="replace") as f:
+            # utf-8-sig strips the BOM that Excel and Notepad add, which would
+            # otherwise glue onto the first SMILES and make it unparseable.
+            with open_func(filepath, mode, encoding="utf-8-sig", errors="replace") as f:
                 yield from self._stream_from_file_object(f, path)
         except Exception as e:
             raise SMILESStreamError(f"Error reading file {filepath}: {e}") from e

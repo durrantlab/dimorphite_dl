@@ -37,13 +37,15 @@ def enable_logging(
 
     Args:
         level: Requested log level: `10` is debug, `20` is info.
+        stdout_set: Write logs to the console. They go to stderr, despite the
+            name, so that stdout carries only protonated SMILES.
         file_path: Also write logs to files here.
     """
     config: dict[str, Any] = {"handlers": []}
     if stdout_set:
         config["handlers"].append(
             {
-                "sink": sys.stdout,
+                "sink": sys.stderr,
                 "level": level_set,
                 "format": log_format,
                 "colorize": colorize,
