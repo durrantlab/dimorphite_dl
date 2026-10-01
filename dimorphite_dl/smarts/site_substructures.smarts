@@ -1,7 +1,12 @@
 *Azide	[N+0:1]=[N+:2]=[N+0:3]-[H]	2	4.65	0.07071067811865513
 Nitro	[C,c,N,n,O,o:1]-[NX3:2](=[O:3])-[O:4]-[H]	3	-1000.0	0
 AmidineGuanidine1	[N:1]-[C:2](-[N:3])=[NX2:4]-[H:5]	3	12.025333333333334	1.5941046150769165
-AmidineGuanidine2	[C:1](-[N:2])=[NX2+0:3]	2	10.035538461538462	2.1312826469414716
+
+# Imine nitrogens bearing a cyano, sulfonyl, or oxygen substituent are
+# excluded (e.g., N-cyanoguanidines, N-sulfonylguanidines, amidoximes). These
+# substituents remove most of the basicity this group was fit to.
+AmidineGuanidine2	[C:1](-[N:2])=[NX2+0;!$(N-C#N);!$(N-S(=O)=O);!$(N-[OX2]):3]	2	10.035538461538462	2.1312826469414716
+
 Sulfate	[SX4:1](=[O:2])(=[O:3])([O:4]-[C,c,N,n:5])-[OX2:6]-[H]	5	-2.36	1.3048043093561141
 Sulfonate	[SX4:1](=[O:2])(=[O:3])(-[C,c,N,n:4])-[OX2:5]-[H]	4	-1.8184615384615386	1.4086213481855594
 Sulfinic_acid	[SX3:1](=[O:2])-[O:3]-[H]	2	1.7933333333333332	0.4372070447739835
@@ -49,10 +54,23 @@ N-hydroxyamide	[C:1](=[O:2])-[N:3]-[O:4]-[H]	3	9.301904761904762	1.2181897185891
 *Amide	[C:1](=[O:2])-[N:3]-[H]	2	12.00611111111111	4.512491341218857
 *Sulfonamide	[SX4:1](=[O:2])(=[O:3])-[NX3+0:4]-[H]	3	7.9160326086956525	1.9842121316708763
 Anilines_primary	[c:1]-[NX3+0:2]([H:3])[H:4]	1	3.899298673194805	2.068768503987161
-Anilines_secondary	[c:1]-[NX3+0:2]([H:3])[!H:4]	1	4.335408163265306	2.1768842022330843
-Anilines_tertiary	[c:1]-[NX3+0:2]([!H:3])[!H:4]	1	4.16690685045614	2.005865735782679
-Aromatic_nitrogen_unprotonated	[n+0&H0:1]	0	4.3535441240733945	2.0714072661859584
-Amines_primary_secondary_tertiary	[C:1]-[NX3+0:2]	1	8.159107682388349	2.5183597445318147
+
+# [!#1] tests for a non-hydrogen atom. The earlier [!H] tested for an H count
+# other than one, so N-CH(R)R' substituents fell through to the amine group.
+# Delocalized nitrogens are excluded for the same reason as in the amine group
+# (below).
+Anilines_secondary	[c:1]-[NX3+0;!$(N-C=[O,S,N]);!$(N-S(=O)=O);!$(N-N=[O,C]);!$(N-C#N):2]([H:3])[!#1:4]	1	4.335408163265306	2.1768842022330843
+Anilines_tertiary	[c:1]-[NX3+0;!$(N-C=[O,S,N]);!$(N-S(=O)=O);!$(N-N=[O,C]);!$(N-C#N):2]([!#1:3])[!#1:4]	1	4.16690685045614	2.005865735782679
+
+# Tetrazole ring nitrogens are excluded. They are roughly nine pKa units less
+# basic than the pyridine-type nitrogens this group was fit to, so matching
+# them produced tetrazolium variants at physiological pH.
+Aromatic_nitrogen_unprotonated	[n+0&H0;!$(n1nnnc1);!$(n1nncn1):1]	0	4.3535441240733945	2.0714072661859584
+
+# Nitrogens whose lone pair is delocalized into an adjacent C=O, C=S, C=N,
+# S(=O)=O, N=O, N=C, or C#N are excluded. They are not basic in water, and
+# matching them protonated, e.g., tertiary amides, thioureas, and nitrosamines.
+Amines_primary_secondary_tertiary	[C:1]-[NX3+0;!$(N-C=[O,S,N]);!$(N-S(=O)=O);!$(N-N=[O,C]);!$(N-C#N):2]	1	8.159107682388349	2.5183597445318147
 
 # e.g., [*]P(=O)(O[H])[*]. Note that cannot match the internal phosphates of ATP, because
 # oxygen is not among [C,c,N,n,F,Cl,Br,I]
@@ -72,10 +90,20 @@ Primary_hydroxyl_amine	[C,c:1]-[O:2]-[NH2:3]	2	4.035714285714286	0.8463816543155
 # data. Without it, the N-H of imidazoles, pyrazoles, triazoles, benzimidazoles,
 # and purines falls through to Aromatic_nitrogen_protonated (pKa 7.17), so these
 # rings were deprotonated at physiological pH. The mean and standard deviation
-# are those of approximate literature N-H pKa values for the parent
-# heterocycles: imidazole 14.5, pyrazole 14.2, benzimidazole 12.8,
-# 1,2,4-triazole 10.3, and 1,2,3-triazole 9.3 (e.g., Joule and Mills,
-# Heterocyclic Chemistry). Tetrazoles (N-H pKa ~4.9) are deliberately excluded
-# and still match Aromatic_nitrogen_protonated.
-*Azole_NH	[n;$(n1naaa1),$(n1anaa1);!$(n1nnnc1);!$(n1nncn1):1]-[H]	0	12.22	2.33
+# are computed from one experimental aqueous N-H pKa per parent heterocycle, so
+# the standard deviation reflects the spread between ring types rather than
+# experimental scatter within a class. Sources were traced through the IUPAC
+# Digitized pKa Dataset (doi:10.5281/zenodo.7236452):
+#   imidazole 14.52 (25 C): Walba H, Isensee RW (1956) J Org Chem 21:702
+#   benzimidazole 12.78 (25 C): Walba H, Isensee RW (1961) J Org Chem
+#     26:2789-2791, doi:10.1021/jo01066a039
+#   pyrazole 14.21 (25 C): Yagil G (1967) Tetrahedron 23:2855-2861,
+#     doi:10.1016/0040-4020(67)85151-2 (aqueous KOH, H_ acidity scale)
+#   1,2,4-triazole 10.26 (20 C): Kroger CF, Freiberg W (1965) Z Chem 5:381
+#   1,2,3-triazole 9.4: Albert A (1963) Physical Methods in Heterocyclic
+#     Chemistry, Vol. 1, p. 98 (compiled value; primary source not yet verified)
+# Tetrazoles (N-H pKa ~4.9) are deliberately excluded and still match
+# Aromatic_nitrogen_protonated. Rings bearing an exocyclic C=O or C=S (e.g.,
+# 1,2,4-oxadiazol-5-ones) are also excluded, because they are far more acidic.
+*Azole_NH	[n;$(n1naaa1),$(n1anaa1);!$(n1nnnc1);!$(n1nncn1);!$(n1c(=[O,S])aaa1);!$(n1ac(=[O,S])aa1):1]-[H]	0	12.234	2.3106665704943237
 *Aromatic_nitrogen_protonated	[n:1]-[H]	0	7.17	2.94602395490212

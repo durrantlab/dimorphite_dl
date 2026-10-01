@@ -11,7 +11,12 @@ from dimorphite_dl.protonate.site import ProtonationSite
     ("smiles", "smiles_prepped_correct", "expected_smarts", "expected_idxs_match"),
     [
         ("C#CCO", "[H]C#CC([H])([H])O[H]", "[C:1]-[O:2]-[#1]", (2, 3, 7)),
-        ("Brc1cc[nH+]cc1", "[H]c1nc([H])c([H])c(Br)c1[H]", "[n&+0&H0:1]", (4,)),
+        (
+            "Brc1cc[nH+]cc1",
+            "[H]c1nc([H])c([H])c(Br)c1[H]",
+            "[n+0&H0;!$(n1nnnc1);!$(n1nncn1):1]",
+            (4,),
+        ),
         (
             "C-N=[N+]=[N@H]",
             "[H]N=[N+]=NC([H])([H])[H]",
