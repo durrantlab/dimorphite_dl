@@ -56,6 +56,27 @@ RXN_DATA = (
 NEUTRALIZE_PASSES_PER_ATOM = 10
 
 
+def clear_exchangeable_h_isotopes(mol: Chem.Mol) -> None:
+    """Strips the isotope label from hydrogens bonded to O, N, or S, so that
+    RemoveHs folds them into the heavy atom's hydrogen count.
+
+    RemoveHs keeps isotopic hydrogens as graph atoms, and deprotonation only
+    lowers the heavy atom's hydrogen count, so an acidic O-D could never be
+    deprotonated. These hydrogens exchange with water almost at once, so the
+    label carries no meaning at the pH values modeled. Labels on carbon are
+    left alone.
+
+    Args:
+        mol: The molecule, with explicit hydrogens, to edit in place.
+    """
+    for atom in mol.GetAtoms():
+        if atom.GetAtomicNum() != 1 or atom.GetIsotope() == 0:
+            continue
+        neighbors = atom.GetNeighbors()
+        if len(neighbors) == 1 and neighbors[0].GetSymbol() in ("O", "N", "S"):
+            atom.SetIsotope(0)
+
+
 class NeutralizationReaction:
     """
     Represents a single neutralization reaction defined by a pair of SMARTS strings
@@ -170,6 +191,8 @@ class MoleculeNeutralizer:
         logger.debug("After adding hydrogens: {}", Chem.MolToSmiles(mol))
         # Run neutralization
         mol = self.registry.neutralize(mol)
+        # Done before sites are matched, so atom indices never shift later.
+        clear_exchangeable_h_isotopes(mol)
         # Remove explicit Hs
         mol = Chem.RemoveHs(mol)
         logger.debug("After removing hydrogens: {}", Chem.MolToSmiles(mol))

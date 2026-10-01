@@ -338,3 +338,30 @@ def test_neutralization_enumerates_one_product() -> None:
 
     assert canonical(smiles) == canonical("OC(=O)CC(=O)O")
     assert requested != [] and all(n == 1 for n in requested), requested
+
+
+@pytest.mark.parametrize(
+    ("smiles", "expected"),
+    [
+        ("CC(=O)O[2H]", "CC(=O)O"),
+        ("CC(=O)O[3H]", "CC(=O)O"),
+        ("[2H]C([2H])([2H])C(=O)O[2H]", "[2H]C([2H])([2H])C(=O)O"),
+    ],
+    ids=["deuterium", "tritium", "carbon_label_kept"],
+)
+def test_exchangeable_h_isotopes_become_plain_h(smiles: str, expected: str) -> None:
+    """Checks that D and T on heteroatoms are loaded as ordinary hydrogens
+    while labels on carbon survive. RemoveHs kept them as graph atoms, which
+    deprotonation could not remove."""
+
+    assert neutralized(smiles) == canonical(expected)
+
+
+def test_deuterated_acid_is_deprotonated() -> None:
+    """Checks that an O-D acid ionizes at very basic pH. It stayed the
+    neutral acid, because the D atom remained bonded to the oxygen that was
+    being charged, and that state could not be built."""
+
+    assert protonated("[2H]C([2H])([2H])C(=O)O[2H]", VERY_BASIC_PH) == [
+        canonical("[2H]C([2H])([2H])C(=O)[O-]")
+    ]
