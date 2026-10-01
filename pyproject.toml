@@ -41,7 +41,7 @@ Changelog = "https://github.com/durrantlab/dimorphite_dl/blob/main/CHANGELOG.md"
 dimorphite_dl = "dimorphite_dl.cli:run_cli"
 
 [build-system]
-requires = ["setuptools>=61.0", "setuptools-scm>=8", "wheel"]
+requires = ["setuptools>=77", "setuptools-scm>=8", "wheel"]
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -68,13 +68,21 @@ def run_cli() -> None:
     if args.log_level != "none":
         enable_logging(LOG_LEVEL_TO_INT[args.log_level])
 
+    # The reader expands "~", so the guard and the writer must too. Otherwise a
+    # quoted "~/x.smi" input slips past the guard and is truncated while it is
+    # still being read, and a quoted "~/out.smi" output is written to "./~/".
+    input_path = os.path.expanduser(args.smiles)
+    output_file = (
+        None if args.output_file is None else os.path.expanduser(args.output_file)
+    )
+
     # Writing would replace the input with its own protonated forms.
     # samefile also catches symlinks and hard links.
     if (
-        args.output_file is not None
-        and os.path.exists(args.smiles)
-        and os.path.exists(args.output_file)
-        and os.path.samefile(args.smiles, args.output_file)
+        output_file is not None
+        and os.path.exists(input_path)
+        and os.path.exists(output_file)
+        and os.path.samefile(input_path, output_file)
     ):
         parser.error(f"--output_file ({args.output_file}) is the input file")
 
@@ -99,9 +107,9 @@ def run_cli() -> None:
         first = next(protonator, None)
         results = itertools.chain([] if first is None else [first], protonator)
 
-        if args.output_file is not None:
-            logger.info("Writing smiles to {}", args.output_file)
-            with open(args.output_file, "w", encoding="utf-8") as f:
+        if output_file is not None:
+            logger.info("Writing smiles to {}", output_file)
+            with open(output_file, "w", encoding="utf-8") as f:
                 for smiles_protonated in results:
                     f.write(smiles_protonated + "\n")
         else:

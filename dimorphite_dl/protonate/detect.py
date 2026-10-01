@@ -85,9 +85,12 @@ class ProtonationSiteDetector:
 
             sites_found = []
             for site in gen_sites:
+                self._stats_sites_found += 1
                 if self.validate_sites:
                     if not site.is_valid():
+                        self._stats_sites_rejected += 1
                         continue
+                    self._stats_sites_validated += 1
                 sites_found.append(site)
 
             sites_count = 0
@@ -152,6 +155,12 @@ class ProtonationSiteDetector:
                         self.max_sites_per_molecule,
                         substructure_data.name,
                     )
+                    # The unreached groups must still be claimed. Otherwise a
+                    # later, less specific pattern (e.g., amines for amide N-H)
+                    # matches them and assigns the wrong pKa.
+                    for match in matches:
+                        self._protect_site_atoms(mol, match, substructure_data)
+                    matches_used = matches
                     break
 
                 matches_used.append(site.idxs_match)
@@ -333,16 +342,7 @@ class ProtonationSiteDetector:
                 name=substructure_data.name,
             )
 
-            # The site atoms and their hydrogens are locked at once. The H
-            # neighbors matter because each H of an NH2 gives its own match.
-            site_idxs = self._get_site_atom_indices(match_indices, substructure_data)
-            h_idxs = [
-                neighbor.GetIdx()
-                for idx in site_idxs
-                for neighbor in mol.GetAtomWithIdx(idx).GetNeighbors()
-                if neighbor.GetAtomicNum() == 1
-            ]
-            MoleculeRecord.protect_atoms(mol, site_idxs + h_idxs)
+            self._protect_site_atoms(mol, match_indices, substructure_data)
             yield site
 
     @staticmethod
@@ -360,6 +360,30 @@ class ProtonationSiteDetector:
             Molecule atom indices of the match's protonation sites.
         """
         return [match[pka.idx_site] for pka in substructure_data.pkas]
+
+    def _protect_site_atoms(
+        self,
+        mol: Chem.Mol,
+        match: tuple[int, ...],
+        substructure_data: SubstructureDatum,
+    ) -> None:
+        """Claims a match's site atoms and their hydrogens, so neither a later
+        pattern nor a second match of this one can reuse the site. The H
+        neighbors matter because each H of an NH2 gives its own match.
+
+        Args:
+            mol: Molecule with explicit hydrogens; flags are set in place.
+            match: Atom indices of one substructure match.
+            substructure_data: The pattern that produced the match.
+        """
+        site_idxs = self._get_site_atom_indices(match, substructure_data)
+        h_idxs = [
+            neighbor.GetIdx()
+            for idx in site_idxs
+            for neighbor in mol.GetAtomWithIdx(idx).GetNeighbors()
+            if neighbor.GetAtomicNum() == 1
+        ]
+        MoleculeRecord.protect_atoms(mol, site_idxs + h_idxs)
 
     def _protect_context_atoms_in_molecule(
         self,

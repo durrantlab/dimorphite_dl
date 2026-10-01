@@ -8,9 +8,10 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from loguru import logger
 from rdkit import Chem, RDLogger
 
-from dimorphite_dl import protonate_smiles
+from dimorphite_dl import enable_logging, protonate_smiles
 from dimorphite_dl.io import SMILESStreamError
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -32,7 +33,9 @@ def canonical(smiles: str) -> str:
     return Chem.MolToSmiles(Chem.MolFromSmiles(smiles), isomericSmiles=True)
 
 
-def run_cli(args: list[str], cwd: Path) -> "subprocess.CompletedProcess[str]":
+def run_cli(
+    args: list[str], cwd: Path, env_overrides: dict[str, str] | None = None
+) -> "subprocess.CompletedProcess[str]":
     """Runs the command line in a fresh interpreter, because loguru binds its
     console sink when logging is configured, so this process cannot capture
     it reliably.
@@ -40,6 +43,8 @@ def run_cli(args: list[str], cwd: Path) -> "subprocess.CompletedProcess[str]":
     Args:
         args: Command-line arguments after the program name.
         cwd: Working directory for the child process.
+        env_overrides: Extra environment variables, such as HOME for tests
+            that pass a "~" path.
 
     Returns:
         The finished process, with stdout and stderr as text. A nonzero exit
@@ -50,6 +55,7 @@ def run_cli(args: list[str], cwd: Path) -> "subprocess.CompletedProcess[str]":
     env["PYTHONPATH"] = PROJECT_ROOT + os.pathsep + env.get("PYTHONPATH", "")
     # Logging enabled from the environment would mix into every run.
     env.pop("DIMORPHITE_DL_LOG", None)
+    env.update(env_overrides or {})
     return subprocess.run(
         [sys.executable, "-c", "from dimorphite_dl.cli import run_cli; run_cli()"]
         + args,
@@ -229,3 +235,56 @@ def test_env_flag_values_do_not_break_import() -> None:
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_output_file_same_as_tilde_input_is_rejected(tmp_path: Path) -> None:
+    """Checks that a quoted "~" input is still recognized as the output file.
+    The reader expanded "~" but the guard did not, so the guard was skipped
+    and the input was truncated while it was being read."""
+
+    path = tmp_path / "molecules.smi"
+    path.write_text("CCCN\nCCO\n", encoding="utf-8")
+    home = {"HOME": str(tmp_path), "USERPROFILE": str(tmp_path)}
+
+    result = run_cli(["--output_file", str(path), "~/molecules.smi"], tmp_path, home)
+
+    assert result.returncode != 0
+    assert "is the input file" in result.stderr, result.stderr
+    assert path.read_text(encoding="utf-8") == "CCCN\nCCO\n"
+
+
+def test_tilde_output_file_is_expanded(tmp_path: Path) -> None:
+    """Checks that a quoted "~" output path lands in the home directory. It
+    was opened literally, which failed because "./~/" does not exist."""
+
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    work_dir = tmp_path / "work"
+    work_dir.mkdir()
+    home = {"HOME": str(home_dir), "USERPROFILE": str(home_dir)}
+
+    result = run_cli(["--output_file", "~/out.smi", "CCCN"], work_dir, home)
+
+    assert result.returncode == 0, result.stderr
+    assert not (work_dir / "~").exists()
+    lines = (home_dir / "out.smi").read_text(encoding="utf-8").splitlines()
+    assert sorted(canonical(line) for line in lines) == sorted(
+        canonical(s) for s in CCCN_STATES
+    )
+
+
+def test_log_file_has_no_color_codes(tmp_path: Path) -> None:
+    """Checks that log files are plain text. colorize was passed to the file
+    sink too, so ANSI escape codes were written into the file."""
+
+    path = tmp_path / "run.log"
+    enable_logging(20, stdout_set=False, file_path=str(path))
+    try:
+        logger.info("probe message")
+    finally:
+        # Matches the session fixture in conftest.py; also closes the file.
+        enable_logging(0)
+
+    text = path.read_text(encoding="utf-8")
+    assert "probe message" in text
+    assert "\x1b[" not in text, text

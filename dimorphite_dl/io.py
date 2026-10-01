@@ -195,6 +195,10 @@ class SMILESProcessor:
             # otherwise glue onto the first SMILES and make it unparseable.
             with open_func(filepath, mode, encoding="utf-8-sig", errors="replace") as f:
                 yield from self._stream_from_file_object(f, path)
+        except (SMILESStreamError, SMILESValidationError):
+            # Already the documented type; rewrapping would make a bad record
+            # raise differently from a file than from a list.
+            raise
         except Exception as e:
             raise SMILESStreamError(f"Error reading file {filepath}: {e}") from e
 

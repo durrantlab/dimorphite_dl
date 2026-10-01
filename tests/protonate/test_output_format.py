@@ -111,3 +111,23 @@ def test_output_order_is_independent_of_hash_seed() -> None:
 
     assert len(outputs[0].splitlines()) > 1, outputs[0]
     assert all(output == outputs[0] for output in outputs), outputs
+
+
+def test_states_stay_in_their_column_without_identifier() -> None:
+    """Checks that the states column does not move when an input line has
+    no name. The empty identifier was dropped, so the states landed in the
+    identifier field."""
+
+    output = protonate_smiles(
+        ["CCC(=O)O", "CCC(=O)O acid"],
+        ph_min=VERY_BASIC_PH,
+        ph_max=VERY_BASIC_PH,
+        precision=0.5,
+        label_identifiers=True,
+        label_states=True,
+    )
+
+    assert [line.split(",")[1:] for line in output] == [
+        ["", "DEPROTONATED"],
+        ["acid", "DEPROTONATED"],
+    ], output

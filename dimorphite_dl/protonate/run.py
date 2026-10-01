@@ -67,9 +67,12 @@ class ProtonationResult:
         assert isinstance(separator, str)
 
         output = self.smiles
-        if include_identifier and self.identifier != "":
+        has_states = include_states and len(self.states) > 0
+        # An empty identifier still needs its column when states follow;
+        # otherwise the states shift into the identifier field.
+        if include_identifier and (self.identifier != "" or has_states):
             output += separator + self.identifier
-        if include_states and len(self.states) > 0:
+        if has_states:
             output += separator + self.states
         return output
 
@@ -330,22 +333,18 @@ class Protonate:
         """
         assert isinstance(mol_record, MoleculeRecord)
 
-        try:
-            mol_record, sites = self.site_detector.find_sites(mol_record)
-            site_count = len(sites)
+        # Errors propagate to _process_single_smiles_record, which falls back
+        # and counts it. Returning [] here would report a failed molecule as
+        # one with no sites and emit it unprotonated at any pH.
+        mol_record, sites = self.site_detector.find_sites(mol_record)
+        site_count = len(sites)
 
-            if site_count > 0:
-                self.stats.molecules_with_sites += 1
-            else:
-                logger.debug("No protonation sites found for '{}'", mol_record.smiles)
+        if site_count > 0:
+            self.stats.molecules_with_sites += 1
+        else:
+            logger.debug("No protonation sites found for '{}'", mol_record.smiles)
 
-            return mol_record, sites
-
-        except Exception as error:
-            logger.warning(
-                "Error detecting sites for '{}': {}", mol_record.smiles, str(error)
-            )
-            return mol_record, []
+        return mol_record, sites
 
     def _handle_molecule_without_sites(self, mol_record: MoleculeRecord) -> None:
         """

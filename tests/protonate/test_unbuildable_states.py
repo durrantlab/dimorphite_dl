@@ -1,8 +1,15 @@
 """Checks molecules where one site's state has no valid structure."""
 
+from typing import NoReturn
+
 import pytest
 from rdkit import Chem
 
+from dimorphite_dl.mol import MoleculeRecord
+from dimorphite_dl.protonate.detect import (
+    ProtonationSiteDetectionError,
+    ProtonationSiteDetector,
+)
 from dimorphite_dl.protonate.run import Protonate
 
 VERY_ACIDIC_PH = -10000000.0
@@ -54,3 +61,24 @@ def test_all_variants_rejected_falls_back_to_input(
     protonator = Protonate(["CCC(=O)O"])
     assert protonator.to_list() == ["CCC(=O)O"]
     assert protonator.get_stats()["protonation"]["fallback_used"] == 1
+
+
+def test_detection_error_is_reported_as_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checks that a crash in site detection is counted as a fallback, not as
+    a molecule without sites. The error was swallowed and the molecule was
+    reported as having no sites, which hid the failure."""
+
+    def failing_find_sites(
+        self: ProtonationSiteDetector, mol_record: MoleculeRecord
+    ) -> NoReturn:
+        raise ProtonationSiteDetectionError("Detection failed: forced")
+
+    monkeypatch.setattr(ProtonationSiteDetector, "find_sites", failing_find_sites)
+
+    protonator = Protonate(["CCC(=O)O"])
+    assert protonator.to_list() == ["CCC(=O)O"]
+    stats = protonator.get_stats()["protonation"]
+    assert stats["fallback_used"] == 1
+    assert stats["molecules_without_sites"] == 0

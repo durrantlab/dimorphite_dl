@@ -4,6 +4,7 @@ from rdkit import Chem
 
 from dimorphite_dl.mol import MoleculeRecord
 from dimorphite_dl.protonate.detect import ProtonationSiteDetector
+from dimorphite_dl.protonate.site import ProtonationSite
 
 
 @pytest.mark.parametrize(
@@ -45,3 +46,32 @@ def test_substructure_detect(
     compare_smarts(sub_match.smarts, expected_smarts)
     # atom indices should still be the same
     assert sub_match.idxs_match == expected_idxs_match
+
+
+def test_detector_stats_count_sites() -> None:
+    """Checks that get_stats reports the sites find_sites returned. The
+    found, validated, and rejected counters were never incremented."""
+
+    detector = ProtonationSiteDetector()
+    _, sites = detector.find_sites(MoleculeRecord("NCCC(=O)O"))
+    stats = detector.get_stats()
+
+    assert len(sites) > 0
+    assert stats["sites_found"] == len(sites)
+    assert stats["sites_validated"] == len(sites)
+    assert stats["sites_rejected"] == 0
+
+
+def test_detector_stats_count_rejected_sites(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Checks that sites failing validation are counted as rejected."""
+
+    monkeypatch.setattr(ProtonationSite, "is_valid", lambda self: False)
+
+    detector = ProtonationSiteDetector()
+    _, sites = detector.find_sites(MoleculeRecord("NCCC(=O)O"))
+    stats = detector.get_stats()
+
+    assert sites == []
+    assert stats["sites_found"] > 0
+    assert stats["sites_rejected"] == stats["sites_found"]
+    assert stats["sites_validated"] == 0

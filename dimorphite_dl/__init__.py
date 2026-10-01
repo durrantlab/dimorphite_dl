@@ -39,6 +39,7 @@ def enable_logging(
         stdout_set: Write logs to the console. They go to stderr, despite the
             name, so that stdout carries only protonated SMILES.
         file_path: Also write logs to files here.
+        colorize: Color the console output. File output is never colored.
     """
     config: dict[str, Any] = {"handlers": []}
     if stdout_set:
@@ -56,7 +57,8 @@ def enable_logging(
                 "sink": file_path,
                 "level": level_set,
                 "format": log_format,
-                "colorize": colorize,
+                # Color codes would be written into the file verbatim.
+                "colorize": False,
             }
         )
     # https://loguru.readthedocs.io/en/stable/api/logger.html#loguru._logger.Logger.configure

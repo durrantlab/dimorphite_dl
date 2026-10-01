@@ -718,3 +718,15 @@ c1ccccc1 benzene
 
         finally:
             os.unlink(temp_path)
+
+
+def test_file_validation_error_is_not_rewrapped(tmp_path):
+    """Checks that a bad record in a file raises SMILESValidationError, as it
+    does from a list. The file reader rewrapped it as SMILESStreamError."""
+
+    path = tmp_path / "mols.smi"
+    path.write_text("CCO\nCCCCCCCCCC\n")
+    processor = SMILESProcessor(validate_smiles=False, skip_invalid=False, max_length=3)
+
+    with pytest.raises(SMILESValidationError):
+        list(processor.stream(str(path)))
