@@ -1451,6 +1451,11 @@ def run_with_mol_list(mol_lst, **kwargs):
     with command-line parameters. If you want to use only the same parameters
     that you would use from the command line, import run() instead.
 
+    Each input yields a variable number of outputs (none if it is skipped),
+    so every returned Mol carries an int property, "dimorphite_input_index",
+    giving the position in mol_lst it came from. Its "_Name" property, if
+    any, is copied from that input as well.
+
     :param mol_lst: A list of rdkit.Chem.rdchem.Mol objects.
     :type mol_lst: list
     :raises Exception: If the **kwargs includes "smiles", "smiles_file", or
@@ -1480,30 +1485,48 @@ def run_with_mol_list(mol_lst, **kwargs):
     # that a list of Mol objects can be used directly. Intead, convert this
     # list of mols to smiles and pass that. Not memory efficient, but it will
     # work.
+    # Inputs are looked up by index below, so a generator must be
+    # materialized first.
+    mol_lst = list(mol_lst)
+
     input_smiles = []
-    for m in mol_lst:
+    for i, m in enumerate(mol_lst):
         # Chem.MolFromSmiles returns None for bad SMILES. Skip these with a
         # warning, as the command line does, rather than raising an opaque
         # Boost error from MolToSmiles.
         if m is None:
             UtilFuncs.eprint("WARNING: Skipping None entry in mol_lst.")
             continue
-        input_smiles.append(Chem.MolToSmiles(m, isomericSmiles=True))
+        # The index rides along as the line's tag, which main() copies onto
+        # every variant, so each output can be traced back to its input even
+        # when inputs are skipped or yield several variants.
+        input_smiles.append(Chem.MolToSmiles(m, isomericSmiles=True) + "\t" + str(i))
 
     # One main() call reads the molecules as lines of a single input, so the
     # SMARTS file is loaded and compiled once rather than once per molecule.
     kwargs["smiles"] = "\n".join(input_smiles)
-    protonated_smiles = [s.split("\t")[0] for s in main(kwargs)]
 
-    # Now convert the list of protonated smiles strings back to RDKit Mol
-    # objects.
-    mols = [Chem.MolFromSmiles(s) for s in protonated_smiles]
-    if any(m is None for m in mols):
+    # Now convert the protonated smiles strings back to RDKit Mol objects.
+    mols = []
+    dropped = False
+    for line in main(kwargs):
+        fields = line.split("\t")
+        mol = Chem.MolFromSmiles(fields[0])
+        if mol is None:
+            dropped = True
+            continue
+        idx = int(fields[1])
+        mol.SetIntProp("dimorphite_input_index", idx)
+        if mol_lst[idx].HasProp("_Name"):
+            mol.SetProp("_Name", mol_lst[idx].GetProp("_Name"))
+        mols.append(mol)
+
+    if dropped:
         UtilFuncs.eprint(
             "WARNING: Dropping protonated SMILES that RDKit could not parse."
         )
 
-    return [m for m in mols if m is not None]
+    return mols
 
 
 if __name__ == "__main__":

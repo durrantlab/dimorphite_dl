@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from collections import Counter
 from typing import Callable, Dict, List, Union
 
 import pytest
@@ -114,6 +115,50 @@ def test_run_with_mol_list_skips_none_entries(
     output = [Chem.MolToSmiles(m, isomericSmiles=True) for m in mols]
     assert output == [canonical_smiles("CCC[NH3+]")]
     assert "Skipping None entry" in capsys.readouterr().err
+
+
+def test_run_with_mol_list_maps_outputs_to_inputs() -> None:
+    """Checks that each returned Mol records which input it came from. Inputs
+    yield different numbers of variants and skipped inputs yield none, so
+    without the index a caller pairing outputs with inputs got them
+    silently misaligned."""
+
+    acid = Chem.MolFromSmiles("CCC(=O)O")
+    acid.SetProp("_Name", "acid")
+    gaba = Chem.MolFromSmiles("NCCCC(=O)O")
+    gaba.SetProp("_Name", "gaba")
+    inputs = [acid, None, Chem.MolFromSmiles("CCCC"), gaba]
+
+    # A huge precision makes every site BOTH, so the acid gives two variants
+    # and GABA four.
+    mols = dimorphite_dl.run_with_mol_list(
+        inputs, min_ph=7.0, max_ph=7.0, pka_precision=1e6
+    )
+
+    indices = [m.GetIntProp("dimorphite_input_index") for m in mols]
+    assert Counter(indices) == {0: 2, 2: 1, 3: 4}
+    for m, idx in zip(mols, indices):
+        assert m.GetNumHeavyAtoms() == inputs[idx].GetNumHeavyAtoms()
+    assert [m.GetProp("_Name") for m in mols if m.HasProp("_Name")] == (
+        ["acid"] * 2 + ["gaba"] * 4
+    )
+
+
+def test_run_with_mol_list_accepts_generator(
+    canonical_smiles: Callable[[str], str],
+) -> None:
+    """Checks that a generator still works now that inputs are looked up by
+    index after protonation."""
+
+    mols = dimorphite_dl.run_with_mol_list(
+        (Chem.MolFromSmiles(s) for s in ["CCCC", "CCCN"]),
+        min_ph=-1e7,
+        max_ph=-1e7,
+    )
+
+    output = [Chem.MolToSmiles(m, isomericSmiles=True) for m in mols]
+    assert output == [canonical_smiles("CCCC"), canonical_smiles("CCC[NH3+]")]
+    assert [m.GetIntProp("dimorphite_input_index") for m in mols] == [0, 1]
 
 
 def test_run_with_mol_list_loads_substructures_once(

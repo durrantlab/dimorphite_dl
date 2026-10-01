@@ -93,6 +93,10 @@ protonated_mols = dimorphite_dl.run_with_mol_list(
     max_ph=9.0,
 )
 print([Chem.MolToSmiles(m) for m in protonated_mols])
+
+# Each input can yield several protonated mols (or none, if it fails), so each
+# output records the position of the input it came from.
+print([m.GetIntProp("dimorphite_input_index") for m in protonated_mols])
 ```
 
 Testing
