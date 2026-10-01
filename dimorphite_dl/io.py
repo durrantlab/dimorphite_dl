@@ -14,7 +14,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 
 from loguru import logger
-from rdkit.Chem.MolStandardize import rdMolStandardize
+from rdkit import Chem
 
 
 @dataclass
@@ -281,15 +281,18 @@ class SMILESProcessor:
             return None
 
     def _validate_smiles_syntax(self, smiles: str) -> bool:
-        """SMILES syntax validation using RDKit."""
+        """Check that RDKit can parse and sanitize the SMILES."""
         logger.info("Processing {}", smiles)
-        try:
-            rdMolStandardize.ValidateSmiles(smiles)
-            logger.debug("SMILES is valid")
-            return True
-        except Exception:
+        # Same sanitizing parse MoleculeNeutralizer uses, so anything accepted
+        # here can actually be protonated. rdMolStandardize.ValidateSmiles is
+        # not enough: it skips sanitization (passing c1ccnc1 or CN(=O)=O), and
+        # the messages it returns flag charges, salts, and isotopes, which are
+        # all valid input.
+        if Chem.MolFromSmiles(smiles) is None:
             logger.info("SMILES is NOT valid")
             return False
+        logger.debug("SMILES is valid")
+        return True
 
     def _is_file_path(self, s: str) -> bool:
         """Check if string is likely a file path."""

@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
+from dimorphite_dl import protonate_smiles
 from dimorphite_dl.io import (
     SMILESProcessor,
     SMILESRecord,
@@ -157,23 +158,16 @@ class TestSMILESProcessor:
         assert len(records) == 1
         assert records[0].smiles == very_long_smiles
 
-    @patch("dimorphite_dl.io.rdMolStandardize.ValidateSmiles")
-    def test_smiles_validation_valid(self, mock_validate):
+    def test_smiles_validation_valid(self):
         """Test SMILES validation with valid molecules."""
-        mock_validate.return_value = None  # No exception = valid
-
         processor = SMILESProcessor(validate_smiles=True)
         records = list(processor.stream(["CCO"]))
 
         assert len(records) == 1
         assert records[0].smiles == "CCO"
-        mock_validate.assert_called_once_with("CCO")
 
-    @patch("dimorphite_dl.io.rdMolStandardize.ValidateSmiles")
-    def test_smiles_validation_invalid_skip(self, mock_validate):
+    def test_smiles_validation_invalid_skip(self):
         """Test SMILES validation with invalid molecules (skip mode)."""
-        mock_validate.side_effect = Exception("Invalid SMILES")
-
         processor = SMILESProcessor(validate_smiles=True, skip_invalid=True)
         records = list(processor.stream(["invalid_smiles"]))
 
@@ -182,15 +176,51 @@ class TestSMILESProcessor:
         assert stats["skipped"] == 1
         assert stats["errors"] == 1
 
-    @patch("dimorphite_dl.io.rdMolStandardize.ValidateSmiles")
-    def test_smiles_validation_invalid_fail(self, mock_validate):
+    def test_smiles_validation_invalid_fail(self):
         """Test SMILES validation with invalid molecules (fail mode)."""
-        mock_validate.side_effect = Exception("Invalid SMILES")
-
         processor = SMILESProcessor(validate_smiles=True, skip_invalid=False)
 
         with pytest.raises(SMILESValidationError):
             list(processor.stream(["invalid_smiles"]))
+
+    @pytest.mark.parametrize(
+        "smiles",
+        [
+            "c1ccnc1",  # pyrrole missing [nH]; cannot be kekulized
+            "CN(=O)=O",  # legacy pentavalent nitro
+        ],
+    )
+    def test_unsanitizable_smiles_rejected(self, smiles):
+        """Checks that SMILES which parse but fail sanitization are rejected.
+        An unsanitized parse accepted them, and protonation then echoed them
+        back unchanged as if they were results."""
+        processor = SMILESProcessor(validate_smiles=True, skip_invalid=True)
+        records = list(processor.stream([smiles, "CCO"]))
+
+        assert [r.smiles for r in records] == ["CCO"]
+        assert processor.get_stats()["skipped"] == 1
+
+        strict = SMILESProcessor(validate_smiles=True, skip_invalid=False)
+        with pytest.raises(SMILESValidationError):
+            list(strict.stream([smiles]))
+
+    @pytest.mark.parametrize(
+        "smiles",
+        [
+            "CC(=O)[O-]",  # net charge
+            "CC[NH2+]c1ccccc1",  # net charge
+            "CC(=O)[O-].[Na+]",  # salt / multiple fragments
+            "[2H]OC",  # isotope
+        ],
+    )
+    def test_charged_salt_and_isotope_smiles_accepted(self, smiles):
+        """Checks that validation does not reject valid input that MolVS
+        validation reports on. Treating those reports as errors would drop
+        every charged molecule, salt, and labeled compound."""
+        processor = SMILESProcessor(validate_smiles=True, skip_invalid=False)
+        records = list(processor.stream([smiles]))
+
+        assert [r.smiles for r in records] == [smiles]
 
     def test_non_string_items_in_iterable(self):
         """Test handling of non-string items in iterable."""
@@ -650,25 +680,23 @@ class TestIntegration:
 
     def test_mixed_valid_invalid_with_validation(self):
         """Test processing mixed valid/invalid SMILES with validation enabled."""
-        # Note: This test would need actual RDKit validation,
-        # so we'll mock it for testing purposes
+        processor = SMILESProcessor(validate_smiles=True, skip_invalid=True)
+        smiles_list = ["CCO", "CCC", "invalid"]
 
-        with patch("dimorphite_dl.io.rdMolStandardize.ValidateSmiles") as mock_validate:
-            # First two are valid, third is invalid
-            mock_validate.side_effect = [None, None, Exception("Invalid")]
+        records = list(processor.stream(smiles_list))
 
-            processor = SMILESProcessor(validate_smiles=True, skip_invalid=True)
-            smiles_list = ["CCO", "CCC", "invalid"]
+        assert len(records) == 2
+        assert records[0].smiles == "CCO"
+        assert records[1].smiles == "CCC"
 
-            records = list(processor.stream(smiles_list))
+        stats = processor.get_stats()
+        assert stats["processed"] == 2
+        assert stats["skipped"] == 1
 
-            assert len(records) == 2
-            assert records[0].smiles == "CCO"
-            assert records[1].smiles == "CCC"
-
-            stats = processor.get_stats()
-            assert stats["processed"] == 2
-            assert stats["skipped"] == 1
+    def test_unsanitizable_smiles_not_echoed_by_protonation(self):
+        """Checks that unusable input produces no output line rather than
+        the raw input passed through as an unprotonated fallback."""
+        assert protonate_smiles(["c1ccnc1", "CN(=O)=O"]) == []
 
     def test_end_to_end_file_processing(self):
         """Test complete end-to-end file processing workflow."""
