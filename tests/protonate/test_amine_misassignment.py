@@ -50,9 +50,7 @@ def test_nitrogen_stays_neutral_at_physiological_ph(smiles: str) -> None:
     ("smiles", "protonated"),
     [
         pytest.param("CCNc1ccccc1", "CC[NH2+]c1ccccc1", id="N-ethylaniline"),
-        pytest.param(
-            "CC(C)Nc1ccccc1", "CC(C)[NH2+]c1ccccc1", id="N-isopropylaniline"
-        ),
+        pytest.param("CC(C)Nc1ccccc1", "CC(C)[NH2+]c1ccccc1", id="N-isopropylaniline"),
         pytest.param(
             "CC(C)N(C)c1ccccc1",
             "CC(C)[NH+](C)c1ccccc1",
