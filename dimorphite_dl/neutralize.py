@@ -3,19 +3,57 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 
 RXN_DATA = (
-    # To handle O- bonded to only one atom (add hydrogen).
-    ("[Ov1-1:1]", "[Ov2+0:1]-[H]"),
+    # Charge-separated sulfones and sulfonates (e.g., C[S+2](C)([O-])[O-]).
+    # Must run before the O- rule, which would otherwise protonate these
+    # oxygens. The resulting S+-O- is collapsed by the next rule.
+    ("[#16+2:1]-[Ov1-1:2]", "[#16+1:1]=[O+0:2]"),
+    # Charge-separated sulfoxides (e.g., C[S+](C)[O-]).
+    ("[#16+1:1]-[Ov1-1:2]", "[#16+0:1]=[O+0:2]"),
+    # Charge-separated phosphine oxides and phosphates (e.g.,
+    # C[P+](C)(C)[O-]). The phosphate sites expect P=O.
+    ("[#15+1:1]-[Ov1-1:2]", "[#15+0:1]=[O+0:2]"),
+    # O- bonded to only one atom (add hydrogen). The O- of an N-oxide or
+    # nitrone is left alone: no site pattern restores it from N+-OH, whereas a
+    # nitro O-H is deprotonated again by Nitro. Nitrate gets only one H,
+    # giving nitric acid (O[N+](=O)[O-]); a second OH would match Nitro as a
+    # second site and survive as neutral HNO3.
+    (
+        "[Ov1-1;!$([O-]-[#7+;!$([#7+]=O)]);!$([O-]-[#7+](=O)-[#8]-[H]):1]",
+        "[Ov2+0:1]-[H]",
+    ),
+    # S- bonded to only one atom (add hydrogen). The thiol site patterns all
+    # require S-H.
+    ("[Sv1-1:1]", "[Sv2+0:1]-[H]"),
     # To handle N+ bonded to a hydrogen (remove hydrogen).
     ("[#7v4+1:1]-[H]", "[#7v3+0:1]"),
     # To handle O- bonded to two atoms. Should not be Negative.
     ("[Ov2-:1]", "[Ov2+0:1]"),
     # To handle N+ bonded to three atoms. Should not be positive.
     ("[#7v3+1:1]", "[#7v3+0:1]"),
-    # To handle N- Bonded to two atoms. Add hydrogen.
-    ("[#7v2-1:1]", "[#7+0:1]-[H]"),
+    # N- bonded to two atoms (add hydrogen). The terminal N- of a diazo group
+    # (C=[N+]=[N-]) is excluded: no site pattern removes that proton, so it
+    # would stay a +1 cation at every pH. Azides still match, since their far
+    # atom is nitrogen.
+    ("[#7v2-1;!$([#7-]=[#7+]=[#6]):1]", "[#7+0:1]-[H]"),
     # To handle bad azide. R-N-N#N should be R-N=[N+]=N.
     ("[H]-[N:1]-[N:2]#[N:3]", "[N:1]=[N+1:2]=[N:3]-[H]"),
+    # Amidinium/guanidinium drawn with the charge on a substituted N. Moving
+    # the charge onto the N-H lets the N+-H rule remove the proton on the next
+    # pass.
+    (
+        "[#7+1;H0;!$([#7+]~[O-]):1]=[#6:2]-[#7+0;!H0:3]",
+        "[#7+0:1]-[#6:2]=[#7+1:3]",
+    ),
+    # Same, for imidazolium-type rings (e.g., C[n+]1cc[nH]c1).
+    ("[n+1;H0;!$([n+]~[O-]):1]:[c:2]:[n+0;!H0:3]", "[n+0:1]:[c:2]:[n+1:3]"),
+    # Same, for pyrazolium-type rings (e.g., C[n+]1ccc[nH]1).
+    ("[n+1;H0;!$([n+]~[O-]):1]:[n+0;!H0:2]", "[n+0:1]:[n+1:2]"),
 )
+
+# Each pass fixes one charged atom, so a sane molecule needs at most a few
+# passes per atom. More than this means a rule keeps recreating its own
+# reactant, which would otherwise loop forever.
+NEUTRALIZE_PASSES_PER_ATOM = 10
 
 
 class NeutralizationReaction:
@@ -51,7 +89,9 @@ class NeutralizationReaction:
         Apply the neutralization reaction to the molecule. Returns the first product.
         If multiple products are generated, only the first is returned.
         """
-        products = self._rxn.RunReactants((mol,))
+        # Only the first product is used, so enumerating RDKit's default of up
+        # to 1000 is wasted work on symmetric molecules.
+        products = self._rxn.RunReactants((mol,), 1)
         if products:
             # products is a tuple of tuples; take the first product set, first product
             return products[0][0]
@@ -76,12 +116,22 @@ class ReactionRegistry:
         have already been added.
         """
         mol.UpdatePropertyCache(strict=False)
+        input_smiles = Chem.MolToSmiles(mol)
+        max_passes = NEUTRALIZE_PASSES_PER_ATOM * mol.GetNumAtoms()
+        passes = 0
         changed = True
         while changed:
             changed = False
             for reaction in self.reactions:
                 if reaction.matches(mol):
                     logger.debug("Found reaction match: {}", str(reaction))
+                    passes += 1
+                    if passes > max_passes:
+                        raise RuntimeError(
+                            f"Neutralization did not converge after {max_passes} "
+                            f"passes on {input_smiles}; rule {reaction} keeps "
+                            "matching its own product."
+                        )
                     mol = reaction.apply(mol)
                     mol.UpdatePropertyCache(strict=False)
                     changed = True
