@@ -327,7 +327,10 @@ def test_neutralize_mol_raises_when_a_rule_never_converges(
     with pytest.raises(RuntimeError, match="did not converge") as info:
         dimorphite_dl.UtilFuncs.neutralize_mol(Chem.MolFromSmiles("CC[S-]"))
     assert "CC[S-]" in str(info.value)
-    assert "[Sv1-1:1]>>[S-1:1]" in str(info.value)
+    # The message names the rule as written in neutralize_mol's table, since
+    # that is the line someone would have to fix. The monkeypatched SMARTS
+    # exists only inside this test.
+    assert "[Sv1-1:1]>>[Sv2+0:1]-[H]" in str(info.value)
 
 
 def test_neutralize_mol_enumerates_one_product(
