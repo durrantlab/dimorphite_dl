@@ -1,3 +1,18 @@
+# Hydrazoic_acid was added on 10/1/2026. Like Internal_phosphate_polyphos_chain
+# and Initial_phosphate_like_in_ATP_ADP, it was not determined from the
+# training data. The neutralizer adds a proton to the terminal N- of HN3,
+# giving H-N=[N+]=N-H, which Azide also matches. Azide removes only one proton
+# and claims the other nitrogen as context, so the azide anion was never
+# produced. This entry claims both protons first. The first (match index 1)
+# exists in water only as an artifact of neutralization, so it uses the same
+# always-deprotonated convention as Nitro. The second (match index 3) is the
+# HN3 N-H, for which the Azide mean and standard deviation are reused; they
+# match the aqueous value:
+#   hydrazoic acid 4.65 (25 C, I=0): quoted in Betterton EA, Robinson JL
+#     (1997) J Air Waste Manage Assoc, doi:10.1080/10473289.1997.10464060
+#     (compiled value; primary source not yet verified)
+*Hydrazoic_acid	[H]-[N+0:1]=[N+:2]=[N+0:3]-[H]	1	-1000.0	0	3	4.65	0.07071067811865513
+
 *Azide	[N+0:1]=[N+:2]=[N+0:3]-[H]	2	4.65	0.07071067811865513
 Nitro	[C,c,N,n,O,o:1]-[NX3:2](=[O:3])-[O:4]-[H]	3	-1000.0	0
 AmidineGuanidine1	[N:1]-[C:2](-[N:3])=[NX2:4]-[H:5]	3	12.025333333333334	1.5941046150769165
@@ -51,6 +66,23 @@ N-hydroxyamide	[C:1](=[O:2])-[N:3]-[O:4]-[H]	3	9.301904761904762	1.2181897185891
 *Imide	[F,Cl,Br,S,s,P,p:1][#6:2][CX3:3](=[O,S:4])-[NX3+0:5]([CX3:6]=[O,S:7])-[H]	4	2.466666666666667	1.4843629385474877
 *Imide2	[O,S:1]=[CX3:2]-[NX3+0:3]([CX3:4]=[O,S:5])-[H]	2	10.23	1.1198214143335534
 *Amide_electronegative	[C:1](=[O:2])-[N:3](-[Br,Cl,I,F,S,O,N,P:4])-[H]	2	3.4896	2.688124315081677
+
+# Carboxamide was added on 10/1/2026 and was not determined from the training
+# data. Amide was fit to a set that mixes activated amides (pKa as low as 3.4)
+# with ordinary ones (13 to 19), so its window reached physiological pH, and
+# simple amides, anilides, lactams, and peptide backbone N-H were
+# deprotonated. This entry covers only amides whose carbonyl carbon and
+# nitrogen bear no substituent other than carbon or hydrogen. Ureas,
+# carbamates, and hydrazides still fall through to Amide. The mean is the only
+# aqueous N-H pKa of a simple carboxamide in the IUPAC Digitized pKa Dataset
+# (doi:10.5281/zenodo.7236452):
+#   acetamide 15.1 (25 C): Branch GEK, Clayton JO (1928) J Am Chem Soc
+#     50:1680, doi:10.1021/ja01393a023
+# A single value has no spread, so the standard deviation of 1.0 follows
+# Internal_phosphate_polyphos_chain. At the default precision the window
+# starts at pH 14.1.
+*Carboxamide	[CX3;!$(C(=O)(-[#7])-[!#6;!#1]):1](=[O:2])-[NX3+0;!$(N(-C=O)-[!#6;!#1]):3]-[H]	2	15.1	1.0
+
 *Amide	[C:1](=[O:2])-[N:3]-[H]	2	12.00611111111111	4.512491341218857
 *Sulfonamide	[SX4:1](=[O:2])(=[O:3])-[NX3+0:4]-[H]	3	7.9160326086956525	1.9842121316708763
 Anilines_primary	[c:1]-[NX3+0:2]([H:3])[H:4]	1	3.899298673194805	2.068768503987161
@@ -61,6 +93,31 @@ Anilines_primary	[c:1]-[NX3+0:2]([H:3])[H:4]	1	3.899298673194805	2.0687685039871
 # (below).
 Anilines_secondary	[c:1]-[NX3+0;!$(N-C=[O,S,N]);!$(N-S(=O)=O);!$(N-N=[O,C]);!$(N-C#N):2]([H:3])[!#1:4]	1	4.335408163265306	2.1768842022330843
 Anilines_tertiary	[c:1]-[NX3+0;!$(N-C=[O,S,N]);!$(N-S(=O)=O);!$(N-N=[O,C]);!$(N-C#N):2]([!#1:3])[!#1:4]	1	4.16690685045614	2.005865735782679
+
+# Diazine was added on 10/1/2026 and was not determined from the training
+# data. It covers pyridine-type nitrogens that share a six-membered aromatic
+# ring with a second such nitrogen (pyrimidines, pyrazines, pyridazines, and
+# their benzo-fused analogs). These are two to five pKa units weaker bases
+# than pyridine, but the Aromatic_nitrogen_unprotonated window reaches 6.43.
+# Because each ring nitrogen is a separate site, that rule also produced
+# dications, whose second pKa is near -6. Rings bearing any exocyclic
+# substituent other than carbon, hydrogen, or halogen (e.g., amino, oxo,
+# alkoxy) are excluded and keep the generic rule, because donors raise the
+# pKa sharply (trimethoprim is ~7). As with Azole_NH, one aqueous pKaH per
+# parent heterocycle was taken from the IUPAC Digitized pKa Dataset
+# (doi:10.5281/zenodo.7236452):
+#   pyrimidine 1.23 and pyridazine 2.24 (20 C): Albert A, Goldacre R,
+#     Phillips J (1948) J Chem Soc 2240
+#   pyrazine 0.65 (27 C): Chia AS, Trimble RF (1961) J Phys Chem 65:863
+#   cinnoline 2.27 (20 C): Osborn AR, Schofield K, Short LN (1956) J Chem
+#     Soc 4191
+#   phthalazine 3.47 (20 C): Albert A, Armarego WLF, Spinner E (1961) J Chem
+#     Soc 2689
+#   quinazoline 1.95 (20 C): Bunting JW, Perrin DD (1967) J Chem Soc B 950.
+#     This is the pK of the anhydrous cation. The equilibrium value (3.4)
+#     includes covalent hydration of the cation, which is not modeled here.
+#   quinoxaline 0.56 (20 C): Albert A, Phillips JN (1956) J Chem Soc 1294
+Diazine	[n+0;X2;$(n1:[nX2]:a:a:a:a1),$(n1:a:[nX2]:a:a:a1),$(n1:a:a:[nX2]:a:a1);!$(n1:a(!@[!#6;!#1;!F;!Cl;!Br;!I]):a:a:a:a1);!$(n1:a:a(!@[!#6;!#1;!F;!Cl;!Br;!I]):a:a:a1);!$(n1:a:a:a(!@[!#6;!#1;!F;!Cl;!Br;!I]):a:a1):1]	0	1.7671428571428571	1.0330652494028678
 
 # Tetrazole ring nitrogens are excluded. They are roughly nine pKa units less
 # basic than the pyridine-type nitrogens this group was fit to, so matching

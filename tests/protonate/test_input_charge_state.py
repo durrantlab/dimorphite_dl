@@ -13,7 +13,8 @@ WIDE_PRECISION = 10.0
 # forms are the expected states from test_pka_average in test_run.py.
 GROUPS = [
     ["C#CCO", "C#CCO", "C#CC[O-]", "Alcohol"],
-    ["C(=O)N", "NC=O", "[NH-]C=O", "Amide"],
+    ["C(=O)N", "NC=O", "[NH-]C=O", "Carboxamide"],
+    ["CCOC(N)=O", "CCOC(N)=O", "CCOC([NH-])=O", "Amide"],
     ["CC(=O)NOC(C)=O", "CC(=O)NOC(C)=O", "CC(=O)[N-]OC(C)=O", "Amide_electronegative"],
     ["COC(=N)N", "COC(N)=[NH2+]", "COC(=N)N", "AmidineGuanidine2"],
     [
@@ -38,6 +39,7 @@ GROUPS = [
     ],
     ["O=c1cc[nH]cc1", "O=c1cc[nH]cc1", "O=c1cc[n-]cc1", "Aromatic_nitrogen_protonated"],
     ["C-N=[N+]=[N@H]", "CN=[N+]=N", "CN=[N+]=[N-]", "Azide"],
+    ["[N-]=[N+]=N", "N=[N+]=N", "[N-]=[N+]=[N-]", "Hydrazoic_acid"],
     ["BrC(C(O)=O)CBr", "O=C(O)C(Br)CBr", "O=C([O-])C(Br)CBr", "Carboxyl"],
     ["NC(NN=O)=N", "NC(=[NH2+])NN=O", "N=C(N)NN=O", "AmidineGuanidine1"],
     [
@@ -97,6 +99,7 @@ GROUPS = [
         "Brc1ccncc1",
         "Aromatic_nitrogen_unprotonated",
     ],
+    ["c1cncnc1", "c1cnc[nH+]c1", "c1cncnc1", "Diazine"],
     [
         "C=C(O)c1c(C)cc(C)cc1C",
         "C=C(O)c1c(C)cc(C)cc1C",

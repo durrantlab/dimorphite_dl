@@ -9,7 +9,8 @@ from dimorphite_dl import protonate_smiles
     ("smiles_input", "smiles_correct"),
     [
         ("C#CCO", "C#CCO"),  # alcohol
-        ("C(=O)N", "NC=O"),  # Amide,
+        ("C(=O)N", "NC=O"),  # Carboxamide,
+        ("CCOC(N)=O", "CCOC(N)=O"),  # Amide,
         ("CC(=O)NOC(C)=O", "CC(=O)NOC(C)=O"),  # Amide_electronegative,
         ("COC(=N)N", "COC(N)=[NH2+]"),  # AmidineGuanidine2,
         (
@@ -22,6 +23,7 @@ from dimorphite_dl import protonate_smiles
         ("BrC1=CC2=C(C=C1)NC=C2", "Brc1ccc2[nH]ccc2c1"),  # Indole_pyrrole,
         ("O=c1cc[nH]cc1", "O=c1cc[nH]cc1"),  # Aromatic_nitrogen_protonated,
         ("C-N=[N+]=[N@H]", "CN=[N+]=N"),  # Azide,
+        ("[N-]=[N+]=N", "N=[N+]=N"),  # Hydrazoic_acid,
         ("BrC(C(O)=O)CBr", "O=C(O)C(Br)CBr"),  # Carboxyl,
         ("NC(NN=O)=N", "NC(=[NH2+])NN=O"),  # AmidineGuanidine1,
         ("C(F)(F)(F)C(=O)NC(=O)C", "CC(=O)NC(=O)C(F)(F)F"),  # Imide,
@@ -46,6 +48,7 @@ from dimorphite_dl import protonate_smiles
         ("CC(=O)S", "CC(=O)S"),  # Thioic_acid,
         ("C(C)(C)(C)(S)", "CC(C)(C)S"),  # Thiol,
         ("Brc1cc[nH+]cc1", "Brc1cc[nH+]cc1"),  # Aromatic_nitrogen_unprotonated,
+        ("c1cncnc1", "c1c[nH+]c[nH+]c1"),  # Diazine,
         ("C=C(O)c1c(C)cc(C)cc1C", "C=C(O)c1c(C)cc(C)cc1C"),  # Vinyl_alcohol,
         ("CC(=O)ON", "CC(=O)O[NH3+]"),  # Primary_hydroxyl_amine,
         ("O=P(O)(O)OCCCC", "CCCCOP(=O)(O)O"),  # Phosphate
@@ -68,7 +71,8 @@ def test_very_acidic_single(smiles_input, smiles_correct):
     ("smiles_input", "smiles_correct"),
     [
         ("C#CCO", "C#CC[O-]"),  # Alcohol
-        ("C(=O)N", "[NH-]C=O"),  # Amide
+        ("C(=O)N", "[NH-]C=O"),  # Carboxamide
+        ("CCOC(N)=O", "CCOC([NH-])=O"),  # Amide
         ("CC(=O)NOC(C)=O", "CC(=O)[N-]OC(C)=O"),  # Amide_electronegative
         ("COC(=N)N", "COC(=N)N"),  # AmidineGuanidine2
         (
@@ -81,6 +85,7 @@ def test_very_acidic_single(smiles_input, smiles_correct):
         ("BrC1=CC2=C(C=C1)NC=C2", "Brc1ccc2[n-]ccc2c1"),  # Indole_pyrrole
         ("O=c1cc[nH]cc1", "O=c1cc[n-]cc1"),  # Aromatic_nitrogen_protonated
         ("C-N=[N+]=[N@H]", "CN=[N+]=[N-]"),  # Azide
+        ("[N-]=[N+]=N", "[N-]=[N+]=[N-]"),  # Hydrazoic_acid
         ("BrC(C(O)=O)CBr", "O=C([O-])C(Br)CBr"),  # Carboxyl
         ("NC(NN=O)=N", "N=C(N)NN=O"),  # AmidineGuanidine1
         ("C(F)(F)(F)C(=O)NC(=O)C", "CC(=O)[N-]C(=O)C(F)(F)F"),  # Imide
@@ -105,6 +110,7 @@ def test_very_acidic_single(smiles_input, smiles_correct):
         ("CC(=O)S", "CC(=O)[S-]"),  # Thioic_acid
         ("C(C)(C)(C)(S)", "CC(C)(C)[S-]"),  # Thiol
         ("Brc1cc[nH+]cc1", "Brc1ccncc1"),  # Aromatic_nitrogen_unprotonated
+        ("c1cncnc1", "c1cncnc1"),  # Diazine
         ("C=C(O)c1c(C)cc(C)cc1C", "C=C([O-])c1c(C)cc(C)cc1C"),  # Vinyl_alcohol
         ("CC(=O)ON", "CC(=O)ON"),  # Primary_hydroxyl_amine
         ("O=P(O)(O)OCCCC", "CCCCOP(=O)([O-])[O-]"),  # Phosphate
@@ -128,7 +134,8 @@ def test_very_basic(smiles_input, smiles_correct):
     ("smiles_input", "smiles_protonated", "smiles_deprotonated", "pka_avg"),
     [
         ["C#CCO", "C#CCO", "C#CC[O-]", 14.780384615384616],  # alcohol
-        ["C(=O)N", "NC=O", "[NH-]C=O", 12.00611111111111],  # amide
+        ["C(=O)N", "NC=O", "[NH-]C=O", 15.1],  # carboxamide
+        ["CCOC(N)=O", "CCOC(N)=O", "CCOC([NH-])=O", 12.00611111111111],  # amide
         [
             "CC(=O)NOC(C)=O",
             "CC(=O)NOC(C)=O",
@@ -178,6 +185,7 @@ def test_very_basic(smiles_input, smiles_correct):
             7.17,
         ],  # Aromatic_nitrogen_protonated
         ["C-N=[N+]=[N@H]", "CN=[N+]=N", "CN=[N+]=[N-]", 4.65],  # Azide
+        ["[N-]=[N+]=N", "[N-]=[N+]=N", "[N-]=[N+]=[N-]", 4.65],  # Hydrazoic_acid
         [
             "BrC(C(O)=O)CBr",
             "O=C(O)C(Br)CBr",
@@ -322,7 +330,9 @@ def test_no_carbanion():
 def test_max_variants():
     # Make sure max number of variants is limited (old bug).
     smi = "CCCC[C@@H](C(=O)N)NC(=O)[C@@H](NC(=O)[C@@H](NC(=O)[C@@H](NC(=O)[C@H](C(C)C)NC(=O)[C@@H](NC(=O)[C@H](Cc1c[nH]c2c1cccc2)NC(=O)[C@@H](NC(=O)[C@@H](Cc1ccc(cc1)O)N)CCC(=O)N)C)C)Cc1nc[nH]c1)Cc1ccccc1"
-    output = list(protonate_smiles(smi))
+    # Amide N-H is neutral below about pH 14, so the range reaches that high
+    # to keep enough variable sites for the default cap to apply.
+    output = list(protonate_smiles(smi, ph_min=6.4, ph_max=14.5))
 
     assert len(output) == 128, f"Should produce 128 mol, but produced {len(output)}"
 
