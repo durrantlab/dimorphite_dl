@@ -1,4 +1,5 @@
 import copy
+import math
 
 from loguru import logger
 from rdkit import Chem
@@ -76,6 +77,86 @@ def protonate_site(
                     return []
             current_mols = branched
     return current_mols
+
+
+def log10_one_plus_pow10(x: float) -> float:
+    """Computes log10(1 + 10**x) without evaluating 10**x, which overflows
+    for the extreme pKa values in the SMARTS file (e.g., Nitro's -1000).
+
+    Args:
+        x: The exponent.
+
+    Returns:
+        log10(1 + 10**x).
+    """
+    return max(x, 0.0) + math.log10(1.0 + 10.0 ** -abs(x))
+
+
+def charge_log_probabilities(
+    state: ProtonationState, pka: float, ph: float
+) -> list[float]:
+    """Scores each charge a pKa site is enumerated with, so that truncation
+    can keep the likeliest states rather than the first ones generated.
+
+    Uses the Henderson-Hasselbalch fraction at the site's mean pKa. A state
+    with only one charge shifts every variant's score equally, so it scores
+    0 rather than a large constant that would cost precision.
+
+    Args:
+        state: The site's target state at the pH range.
+        pka: The site's mean pKa.
+        ph: The pH to score at.
+
+    Returns:
+        log10 of the fraction in each charge state, in the order of
+        state.get_charges().
+    """
+    charges = state.get_charges()
+    if len(charges) == 1:
+        return [0.0]
+
+    # Protonated fraction: 1 / (1 + 10**(pH - pKa)). Deprotonated fraction:
+    # 1 / (1 + 10**(pKa - pH)).
+    return [
+        (
+            -log10_one_plus_pow10(ph - pka)
+            if charge == 0
+            else -log10_one_plus_pow10(pka - ph)
+        )
+        for charge in charges
+    ]
+
+
+def site_log_probabilities(
+    site: ProtonationSite, ph_min: float, ph_max: float, precision: float, ph: float
+) -> list[float]:
+    """Scores every variant protonate_site makes from one parent molecule,
+    in the same order, so callers can rank the variants it returns.
+
+    Args:
+        site: The protonation site.
+        ph_min: Minimum pH of the range, which sets each pKa's state.
+        ph_max: Maximum pH of the range.
+        precision: pKa standard deviation prefactor.
+        ph: The pH to score at.
+
+    Returns:
+        log10 probability of each variant, relative to its parent.
+    """
+    # Mirrors get_unique_states: one entry per distinct (atom, state), in
+    # pKa order, keeping the first pKa that produced it.
+    pka_by_state: dict[tuple[int, ProtonationState], float] = {}
+    for pka in site.pkas:
+        key = (site.idxs_match[pka.idx_site], pka.get_state(ph_min, ph_max, precision))
+        pka_by_state.setdefault(key, pka.mean)
+
+    # protonate_site branches parent-major: each existing variant is followed
+    # by its copies for each charge in turn.
+    scores = [0.0]
+    for (_, state), mean in pka_by_state.items():
+        charge_scores = charge_log_probabilities(state, mean, ph)
+        scores = [parent + charge for parent in scores for charge in charge_scores]
+    return scores
 
 
 def set_protonation_charge(

@@ -14,7 +14,11 @@ from rdkit import Chem
 
 from dimorphite_dl.io import SMILESProcessor, SMILESRecord
 from dimorphite_dl.mol import MoleculeRecord
-from dimorphite_dl.protonate.change import protonate_site
+from dimorphite_dl.protonate.change import (
+    log10_one_plus_pow10,
+    protonate_site,
+    site_log_probabilities,
+)
 from dimorphite_dl.protonate.data import PKaData
 from dimorphite_dl.protonate.detect import ProtonationSiteDetector
 from dimorphite_dl.protonate.site import ProtonationSite
@@ -400,45 +404,60 @@ class Protonate:
         self, mol_record: MoleculeRecord, sites: list[ProtonationSite]
     ) -> list[Chem.Mol]:
         """
-        Generate protonated variants, rolling back an entire “site.name” group if any one site in that group fails.
+        Generate protonated variants, keeping the most probable ones when there
+        are more than max_variants.
+
+        Duplicates are merged and the list is capped after every site, not
+        just at the end, so memory stays bounded when many sites are BOTH and
+        every site is still applied after the cap is reached.
 
         Args:
             mol_record: MoleculeRecord with detected sites (mol_record.mol != None)
             sites: List of ProtonationSite instances, in detection order
 
         Returns:
-            A list of RDKit Mol objects. If an entire group (same site.name) fails, we fall back
-            to the molecules that existed before that group began.
+            A list of RDKit Mol objects. If a site fails, the variants from
+            before that site are returned.
         """
         assert isinstance(mol_record, MoleculeRecord)
         assert isinstance(sites, list) and len(sites) > 0
         assert mol_record.mol is not None
 
-        # Start with the original molecule
-        mols_validated: list[Chem.Mol] = [mol_record.mol]
-        max_variants = self.max_variants
+        # States kept under max_variants are ranked at the middle of the range.
+        ph_mid = (self.ph_min + self.ph_max) / 2.0
+        variants: list[tuple[Chem.Mol, float]] = [(mol_record.mol, 0.0)]
+        truncated = False
 
         for i, site in enumerate(sites):
-            # Try protonating *all* currently validated molecules at this one site
-            # (no need to wrap in list(...); mols_validated is already a list)
-            mols_tmp = self._protonate_single_site(
-                mols_validated, site, mol_record.smiles_original, i
+            site_scores = site_log_probabilities(
+                site, self.ph_min, self.ph_max, self.precision, ph_mid
+            )
+            new_variants: list[tuple[Chem.Mol, float]] = []
+            for parent, parent_score in variants:
+                children = self._protonate_single_site(
+                    [parent], site, mol_record.smiles_original, i
+                )
+                # Something failed; keep the variants from before this site.
+                if len(children) == 0 or len(children) != len(site_scores):
+                    return [mol for mol, _ in variants]
+                new_variants.extend(
+                    (child, parent_score + score)
+                    for child, score in zip(children, site_scores)
+                )
+
+            variants = _merge_duplicate_variants(new_variants)
+            if len(variants) > self.max_variants:
+                variants = _keep_most_probable_variants(variants, self.max_variants)
+                truncated = True
+
+        if truncated:
+            logger.warning(
+                "Limited number of variants to {} (see max_variants): {}",
+                self.max_variants,
+                mol_record.smiles_original,
             )
 
-            # Something failed and we want to exit and return previously validated
-            # molecules.
-            if len(mols_tmp) == 0:
-                break
-
-            # Site succeeded → keep its output
-            mols_validated = mols_tmp
-
-            # Cap at max_variants once we exceed it
-            if len(mols_validated) > max_variants:
-                mols_validated = mols_validated[:max_variants]
-                break
-
-        return mols_validated
+        return [mol for mol, _ in variants]
 
     def _protonate_single_site(
         self, molecules: list[Chem.Mol], site, original_smiles: str, site_index: int
@@ -767,6 +786,58 @@ class Protonate:
         """Reset all processing statistics to zero."""
         self.stats = ProtonationStats()
         logger.debug("Reset protonation statistics")
+
+
+def _merge_duplicate_variants(
+    variants: list[tuple[Chem.Mol, float]],
+) -> list[tuple[Chem.Mol, float]]:
+    """Drops repeated variants before capping, so duplicates cannot take the
+    place of distinct states. Phosphonates, for example, give two identical
+    states when both OH groups are BOTH.
+
+    Args:
+        variants: (Mol, log10 probability) pairs in enumeration order.
+
+    Returns:
+        One pair per distinct canonical SMILES, in first-seen order. Both
+        routes lead to the same molecule, so their probabilities add.
+    """
+    position: dict[str, int] = {}
+    merged: list[tuple[Chem.Mol, float]] = []
+    for mol, score in variants:
+        smiles = Chem.MolToSmiles(mol, isomericSmiles=True)
+        if smiles in position:
+            i = position[smiles]
+            kept_mol, kept_score = merged[i]
+            kept_score += log10_one_plus_pow10(score - kept_score)
+            merged[i] = (kept_mol, kept_score)
+        else:
+            position[smiles] = len(merged)
+            merged.append((mol, score))
+    return merged
+
+
+def _keep_most_probable_variants(
+    variants: list[tuple[Chem.Mol, float]], max_variants: int
+) -> list[tuple[Chem.Mol, float]]:
+    """Caps the variant list by probability rather than by position, since
+    positional truncation pinned every later site to its first charge.
+
+    Scores add across sites, so every one of the best max_variants complete
+    states descends from one of the best max_variants partial states, and
+    pruning at each site loses none of them (merged duplicates aside).
+
+    Args:
+        variants: (Mol, log10 probability) pairs in enumeration order.
+        max_variants: How many to keep.
+
+    Returns:
+        The most probable pairs, in their original order. Ties keep the
+        earlier variant, since sorted is stable.
+    """
+    ranked = sorted(range(len(variants)), key=lambda i: -variants[i][1])
+    keep = sorted(ranked[:max_variants])
+    return [variants[i] for i in keep]
 
 
 def protonate_smiles(
