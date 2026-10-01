@@ -2,6 +2,7 @@ import argparse
 import contextlib
 import itertools
 import os
+import sys
 
 from loguru import logger
 
@@ -10,6 +11,31 @@ from dimorphite_dl.io import SMILESStreamError
 from dimorphite_dl.protonate.run import Protonate
 
 LOG_LEVEL_TO_INT = {"debug": 10, "info": 20, "warning": 30, "error": 40, "critical": 50}
+
+
+def _warn_about_lost_molecules(prog: str, protonator: Protonate) -> None:
+    """Report inputs that did not come out as protonated states.
+
+    Skipped lines and unprotonated fallbacks are otherwise only logged, and
+    logging is off by default, so the output would silently have fewer or
+    unchanged molecules.
+
+    Args:
+        prog: Program name to prefix each message with.
+        protonator: The finished run whose statistics are reported.
+    """
+    hint = "rerun with --log_level warning for details"
+    skipped = protonator.smiles_processor.get_stats()["skipped"]
+    if skipped > 0:
+        sys.stderr.write(
+            f"{prog}: warning: skipped {skipped} unreadable input line(s); {hint}\n"
+        )
+    fallbacks = protonator.stats.fallback_used
+    if fallbacks > 0:
+        sys.stderr.write(
+            f"{prog}: warning: {fallbacks} molecule(s) could not be protonated "
+            f"and were written as given; {hint}\n"
+        )
 
 
 def run_cli() -> None:
@@ -98,15 +124,18 @@ def run_cli() -> None:
     # Identifiers are always kept: each input yields a variable number of
     # variants and invalid inputs are skipped, so without them the output
     # cannot be matched back to the input.
-    protonator = Protonate(
-        smiles_input=args.smiles,
-        ph_min=args.ph_min,
-        ph_max=args.ph_max,
-        precision=args.precision,
-        label_identifiers=True,
-        label_states=args.label_states,
-        max_variants=args.max_variants,
-    )
+    try:
+        protonator = Protonate(
+            smiles_input=args.smiles,
+            ph_min=args.ph_min,
+            ph_max=args.ph_max,
+            precision=args.precision,
+            label_identifiers=True,
+            label_states=args.label_states,
+            max_variants=args.max_variants,
+        )
+    except ValueError as error:
+        parser.error(str(error))
 
     try:
         # Results are streamed so large libraries need not fit in memory. The
@@ -114,6 +143,13 @@ def run_cli() -> None:
         # unreadable input fails without truncating an existing file.
         # Invalid arguments already failed in the constructor above.
         first = next(protonator, None)
+        # Otherwise a mistyped path, which is read as a SMILES string, or a
+        # file in the wrong encoding exits 0 with empty output.
+        if first is None and protonator.smiles_processor.get_stats()["skipped"] > 0:
+            parser.exit(
+                1,
+                f"{parser.prog}: error: no readable molecules in {args.smiles!r}\n",
+            )
         results = itertools.chain([] if first is None else [first], protonator)
 
         if output_file is not None:
@@ -126,3 +162,5 @@ def run_cli() -> None:
                 print(smiles_protonated)
     except SMILESStreamError as error:
         parser.exit(1, f"{parser.prog}: error: {error}\n")
+
+    _warn_about_lost_molecules(parser.prog, protonator)

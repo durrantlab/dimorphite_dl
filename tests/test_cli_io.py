@@ -330,3 +330,92 @@ def test_cli_logs_each_line_once(
     assert lines, result.stderr
     default_format = [line for line in lines if re.match(r"\d{4}-\d{2}-\d{2} ", line)]
     assert default_format == [], result.stderr
+
+
+def test_unreadable_input_is_an_error(tmp_path: Path) -> None:
+    """Checks that input with no readable molecules fails with a message and
+    leaves an existing output file alone. A mistyped path such as "input" is
+    read as a SMILES string, rejected, and the run exited 0 with no output."""
+
+    out = tmp_path / "existing.smi"
+    out.write_text("keep me\n", encoding="utf-8")
+
+    result = run_cli(["--output_file", str(out), "input"], tmp_path)
+
+    assert result.returncode == 1, result.stderr
+    assert "no readable molecules" in result.stderr, result.stderr
+    assert out.read_text(encoding="utf-8") == "keep me\n"
+
+
+def test_skipped_lines_are_reported(tmp_path: Path) -> None:
+    """Checks that an unreadable line is reported on stderr while the rest
+    of the file is still processed. It was dropped without a word, so the
+    output silently had fewer molecules than the input."""
+
+    path = tmp_path / "molecules.smi"
+    path.write_text("CCO\nnot_a_smiles\n", encoding="utf-8")
+
+    result = run_cli([str(path)], tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    assert [canonical(line) for line in lines] == [canonical("CCO")], result.stdout
+    assert "skipped 1 unreadable input line(s)" in result.stderr, result.stderr
+
+
+def test_clean_run_writes_nothing_to_stderr(tmp_path: Path) -> None:
+    """Checks that the new warnings stay quiet when every input is
+    protonated, so stderr remains usable as a failure signal."""
+
+    result = run_cli(["CCCN"], tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+
+
+def test_unprotonated_fallback_is_reported(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Checks that a molecule written out unchanged after a protonation error
+    is reported. The fallback line looks exactly like a real result and was
+    only logged, which is off by default."""
+
+    from dimorphite_dl import cli
+    from dimorphite_dl.protonate.run import Protonate
+
+    def failing_variants(*args: object, **kwargs: object) -> list[Chem.Mol]:
+        raise RuntimeError("simulated failure")
+
+    monkeypatch.setattr(Protonate, "_generate_protonated_variants", failing_variants)
+    monkeypatch.setattr(sys, "argv", ["dimorphite_dl", "CCCN"])
+
+    cli.run_cli()
+
+    captured = capsys.readouterr()
+    assert [canonical(line) for line in captured.out.splitlines()] == [
+        canonical("CCCN")
+    ], captured.out
+    assert "1 molecule(s) could not be protonated" in captured.err, captured.err
+
+
+def test_out_of_range_arguments_raise_value_error() -> None:
+    """Checks that bad ranges raise ValueError. They were checked with
+    assert, which python -O strips, so an inverted pH range ran anyway."""
+
+    with pytest.raises(ValueError, match="ph_min"):
+        protonate_smiles("CCCN", ph_min=9.0, ph_max=5.0)
+    with pytest.raises(ValueError, match="precision"):
+        protonate_smiles("CCCN", precision=-1.0)
+    with pytest.raises(ValueError, match="max_variants"):
+        protonate_smiles("CCCN", max_variants=0)
+
+
+def test_invalid_arguments_are_a_usage_error(tmp_path: Path) -> None:
+    """Checks that an inverted pH range on the command line gives a usage
+    message rather than a traceback."""
+
+    result = run_cli(["--ph_min", "9", "--ph_max", "5", "CCCN"], tmp_path)
+
+    assert result.returncode == 2, result.stderr
+    assert "must be less than or equal to ph_max" in result.stderr, result.stderr
+    assert "Traceback" not in result.stderr, result.stderr

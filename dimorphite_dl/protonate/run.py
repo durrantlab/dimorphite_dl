@@ -139,17 +139,21 @@ class Protonate:
             max_variants: Maximum number of variants per input compound (bounded)
             validate_output: Whether to validate generated SMILES (explicit)
             **smiles_processor_kwargs: Additional arguments for SMILESProcessor
+
+        Raises:
+            ValueError: If ph_min, ph_max, precision, or max_variants is out of
+                range.
         """
-        # Validate all input parameters with clear bounds
-        assert (
-            ph_min <= ph_max
-        ), f"ph_min ({ph_min}) must be less than or equal to ph_max ({ph_max})"
-        assert (
-            precision >= 0.0 and precision <= 10.0
-        ), f"precision must be 0-10, got: {precision}"
-        assert (
-            max_variants > 0 and max_variants <= 10000
-        ), f"max_variants must be 1-10000, got: {max_variants}"
+        # These are user-supplied values, so they are checked with ValueError
+        # rather than assert, which python -O strips.
+        if not ph_min <= ph_max:
+            raise ValueError(
+                f"ph_min ({ph_min}) must be less than or equal to ph_max ({ph_max})"
+            )
+        if not 0.0 <= precision <= 10.0:
+            raise ValueError(f"precision must be 0-10, got: {precision}")
+        if not 0 < max_variants <= 10000:
+            raise ValueError(f"max_variants must be 1-10000, got: {max_variants}")
         assert isinstance(label_identifiers, bool)
         assert isinstance(label_states, bool)
         assert isinstance(validate_output, bool)
