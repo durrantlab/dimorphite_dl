@@ -187,7 +187,7 @@ class TestSMILESProcessor:
         "smiles",
         [
             "c1ccnc1",  # pyrrole missing [nH]; cannot be kekulized
-            "CN(=O)=O",  # legacy pentavalent nitro
+            "CC(C)(C)(C)C",  # pentavalent carbon
         ],
     )
     def test_unsanitizable_smiles_rejected(self, smiles):
@@ -211,6 +211,7 @@ class TestSMILESProcessor:
             "CC[NH2+]c1ccccc1",  # net charge
             "CC(=O)[O-].[Na+]",  # salt / multiple fragments
             "[2H]OC",  # isotope
+            "CN(=O)=O",  # legacy nitro; sanitization rewrites it as [N+](=O)[O-]
         ],
     )
     def test_charged_salt_and_isotope_smiles_accepted(self, smiles):
@@ -696,7 +697,12 @@ class TestIntegration:
     def test_unsanitizable_smiles_not_echoed_by_protonation(self):
         """Checks that unusable input produces no output line rather than
         the raw input passed through as an unprotonated fallback."""
-        assert protonate_smiles(["c1ccnc1", "CN(=O)=O"]) == []
+        assert protonate_smiles(["c1ccnc1", "CC(C)(C)(C)C"]) == []
+
+    def test_legacy_nitro_is_normalized_not_dropped(self):
+        """Checks that pentavalent nitro, which sanitization repairs rather
+        than rejects, still comes out as a charge-separated nitro group."""
+        assert protonate_smiles("CN(=O)=O") == ["C[N+](=O)[O-]"]
 
     def test_end_to_end_file_processing(self):
         """Test complete end-to-end file processing workflow."""
