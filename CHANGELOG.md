@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The CLI now appends each input's identifier to every variant it produces, as `SMILES,identifier`.
   Names in the input file were dropped, so variants could not be matched back to the molecule they came from.
   Scripts that parse CLI output should expect the comma-separated field; from Python, pass `label_identifiers=True` to `protonate_smiles` for the same output.
+- RDKit 2026 releases are now supported; the dependency bound is raised from `<2026` to `<2027`.
 - An identifier may now contain whitespace.
   Only the second whitespace-separated field was kept, so `methyl phosphate` was truncated to `methyl`, and a list item with more than two fields was rejected rather than read.
 

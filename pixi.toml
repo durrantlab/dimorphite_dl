@@ -20,7 +20,7 @@ docs = ["docs"]
 
 [dependencies]
 python = "==3.13"
-rdkit = ">=2020.3.3,<2026"
+rdkit = ">=2020.3.3,<2027"
 
 [feature.dev.dependencies]
 isort = ">=5.12.0"

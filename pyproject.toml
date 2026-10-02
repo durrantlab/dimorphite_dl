@@ -28,7 +28,7 @@ classifiers = [
 # TODO: Keep this here until pixi releases building capabilities
 dependencies = [
     "loguru>=0.7.2,<0.8",
-    "rdkit>=2020.3.3,<2026",
+    "rdkit>=2020.3.3,<2027",
 ]
 
 [project.urls]
@@ -54,4 +54,3 @@ dimorphite_dl = ["smarts/*.smarts"]
 write_to = "dimorphite_dl/_version.py"
 version_scheme = "guess-next-dev"
 local_scheme = "node-and-timestamp"
-
