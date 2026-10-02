@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Console logging from `enable_logging` and `--log_level` now goes to stderr, so stdout carries only SMILES.
   The `stdout_set` argument keeps its name.
 - Output order no longer depends on `PYTHONHASHSEED`; variants come out in enumeration order.
-- `site_substructures.smarts` now carries narrow entries for simple aliphatic amines, unactivated phenols, alkanethiols, primary sulfonamides, C-substituted amidines, N-alkyl anilines, simple carboxamides, and tetrazoles, each placed ahead of the broader entry it is drawn from.
+- `site_substructures.smarts` now carries narrow entries for simple aliphatic amines, unactivated phenols, alkanethiols, primary sulfonamides, C-substituted amidines, N-alkyl anilines, simple carboxamides, tetrazoles, and the nucleobases, each placed ahead of the broader entry it is drawn from.
   Compounds whose pKa lies well outside the pH range now resolve to a single state rather than both: phenol, ethanethiol, benzenesulfonamide, methanesulfonamide, methylamine, benzylamine, ethanolamine, piperidine, triethylamine, quinuclidine, propranolol, 2,2,2-trifluoroethylamine, acetamidine, benzamidine, N-methylaniline, benzamide, acetanilide, peptide backbone N-H, and 5-methyltetrazole, among others.
   Amides and anilides are no longer deprotonated at physiological pH, so with `max_variants=1` a molecule bearing both an amide and a genuinely acidic group (e.g., a tetrazole) is ionized at the acidic group.
   This changes the output for existing inputs, so pipelines that depend on the previous enumeration should be checked.
