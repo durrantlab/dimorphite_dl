@@ -80,15 +80,35 @@ def test_no_labels_without_label_states() -> None:
     assert "," not in output[0] and "\t" not in output[0]
 
 
-def test_output_order_is_independent_of_hash_seed() -> None:
+@pytest.mark.parametrize(
+    "call_args",
+    [
+        pytest.param(
+            "'OC(=O)CCC(N)C(=O)O', ph_min=3.5, ph_max=3.5, precision=1.0, "
+            "label_states=True",
+            id="glutamic_acid",
+        ),
+        # The case from GitHub issue #11, where two runs gave the same
+        # variants in different orders.
+        pytest.param(
+            "'CN(Cc1cnc2[nH+]c(N)nc(N)c2n1)c1ccc(C(=O)N[C@@H](CCC(=O)[O-])"
+            "C(=O)[O-])cc1', ph_min=6.0, ph_max=9.0, max_variants=512",
+            id="methotrexate",
+        ),
+    ],
+)
+def test_output_order_is_independent_of_hash_seed(call_args: str) -> None:
     """Checks that variant order does not change between runs. Variants were
     deduplicated through a set, so their order followed string hashing,
-    which Python randomizes per process."""
+    which Python randomizes per process.
+
+    Args:
+        call_args: The protonate_smiles arguments, as Python source.
+    """
 
     script = (
         "from dimorphite_dl import protonate_smiles\n"
-        "for line in protonate_smiles('OC(=O)CCC(N)C(=O)O', ph_min=3.5, "
-        "ph_max=3.5, precision=1.0, label_states=True):\n"
+        f"for line in protonate_smiles({call_args}):\n"
         "    print(line)\n"
     )
 
