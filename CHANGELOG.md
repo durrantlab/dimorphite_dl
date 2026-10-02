@@ -13,6 +13,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Console logging from `enable_logging` and `--log_level` now goes to stderr, so stdout carries only SMILES.
   The `stdout_set` argument keeps its name.
 - Output order no longer depends on `PYTHONHASHSEED`; variants come out in enumeration order.
+- `site_substructures.smarts` now carries narrow entries for simple aliphatic amines, unactivated phenols, alkanethiols, primary sulfonamides, C-substituted amidines, and N-alkyl anilines, each placed ahead of the broader entry it is drawn from.
+  Compounds whose pKa lies well outside the pH range now resolve to a single state rather than both: phenol, ethanethiol, benzenesulfonamide, methanesulfonamide, methylamine, benzylamine, ethanolamine, piperidine, triethylamine, quinuclidine, propranolol, 2,2,2-trifluoroethylamine, acetamidine, benzamidine, and N-methylaniline, among others.
+  This changes the output for existing inputs, so pipelines that depend on the previous enumeration should be checked.
+  The means and standard deviations fitted from the training data are unchanged; each added entry takes its values from published measurements, cited in the substructure file.
+- An identifier may now contain whitespace.
+  Only the second whitespace-separated field was kept, so `methyl phosphate` was truncated to `methyl`, and a list item with more than two fields was rejected rather than read.
 
 ### Fixed
 
@@ -31,6 +37,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       A primary amide nitrogen was listed and charged twice, and phosphoric acid lost all three protons.
     - A carbon used by one group as its attachment point no longer hides another group's site.
       The amine of `NCP(=O)(O)O` was never protonated.
+    - A nitro group no longer hides the site on the atom it is attached to.
+      The N-H of N-nitrourethane (pKa 3.28) was never deprotonated, because the nitro pattern matched that nitrogen as context and protected it.
+      The pattern now requires the substituent without matching it, so both sites are found on the one molecule.
+- Nitroguanidines were returned as cations.
+  A nitro group all but removes guanidine basicity (nitroguanidine has a pKaH of -0.98, against 13.6 for guanidine), but the general guanidine entry assigned them 12.03.
+  Nitroarginine and related compounds are affected.
 - A protonation state that cannot be kekulized (e.g., a +1 charge on a bridgehead aromatic nitrogen) now keeps the site's previous state.
   Such variants were dropped as invalid SMILES, and when that was the site's only state the molecule vanished from the output.
   A molecule whose every variant is rejected now falls back to its input.

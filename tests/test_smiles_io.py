@@ -265,23 +265,26 @@ class TestSMILESProcessor:
         with pytest.raises(SMILESStreamError, match="Unsupported input type"):
             list(processor.stream(123))  # type: ignore
 
-    def test_item_with_extra_fields_skips_only_that_item(self):
-        """Checks that an item with more than two fields is skipped. It raised
-        a ValueError that ended the stream and dropped every later item."""
+    def test_identifier_may_contain_spaces(self):
+        """Checks that an identifier of several words is kept whole. Splitting
+        on every field dropped all but the first word, so a name such as
+        "methyl phosphate" came back as "methyl"."""
         processor = SMILESProcessor(validate_smiles=False)
 
         records = list(processor.stream(["CCO", "CCC a b", "CCN x"]))
 
-        assert [r.smiles for r in records] == ["CCO", "CCN"]
-        assert records[1].identifier == "x"
-        assert processor.get_stats()["skipped"] == 1
+        assert [r.smiles for r in records] == ["CCO", "CCC", "CCN"]
+        assert [r.identifier for r in records] == ["", "a b", "x"]
+        assert processor.get_stats()["skipped"] == 0
 
-    def test_item_with_extra_fields_raises_without_skip(self):
-        """Checks that skip_invalid=False still reports the bad item."""
-        processor = SMILESProcessor(validate_smiles=False, skip_invalid=False)
+    def test_identifier_may_contain_tabs(self):
+        """Checks that a tab-separated file with extra columns keeps them in
+        the identifier rather than losing everything past the second."""
+        processor = SMILESProcessor(validate_smiles=False)
 
-        with pytest.raises(SMILESValidationError):
-            list(processor.stream(["CCO", "CCC a b"]))
+        records = list(processor.stream(["COP(=O)(O)O\tmethyl phosphate\t1.54"]))
+
+        assert records[0].identifier == "methyl phosphate\t1.54"
 
     def test_stats_reset_between_calls(self):
         """Test that stats are reset between stream calls."""

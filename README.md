@@ -135,6 +135,12 @@ The following are known limitations that users should be aware of when working w
 
 - **Tertiary Amides**: Tertiary amides (e.g., N-acetylpiperidine `CC(=O)N1CCCCC1`) are incorrectly treated as basic amines (pKa ~8) instead of neutral species because current amide SMARTS patterns require an N-H bond.
 - **Indoles and Pyrroles**: These heterocycles are correctly deprotonated around pH 14.5 but are not protonated at very low pH (~-3.5) where they would be expected to protonate under extremely acidic conditions.
+- **Weakly Basic Aromatic Nitrogens**: Pyridine (pKaH 5.17), quinoline (4.85), and 2-aminothiazole (5.39) are returned in both states at the default pH range, because the fitted window for aromatic nitrogens extends to 6.43 and so overlaps `ph_min` by a few hundredths of a unit. The cation is a minor species for these compounds at physiological pH.
+- **Some Weak N-H Acids**: Acetohydroxamic acid (9.40) and 1-methyluracil (9.95) are likewise returned in both states, since each sits inside a fitted window whose spread legitimately covers the default range. The anion is minor in both cases.
+- **Acylguanidines**: Acylation lowers guanidine basicity sharply (acetylguanidine has a pKaH of 8.33, against 13.6 for guanidine itself), but acylguanidines are matched by the general guanidine pattern and so are returned as cations only. Both states would be correct at physiological pH.
+- **Substituted Amines**: Several substructures assign narrow pKa ranges to simple aliphatic amines, phenols, thiols, sulfonamides, and amidines, which lets those compounds resolve to a single state. The patterns examine only the atoms near the ionizable group, so a molecule whose basicity is set by more distant substituents falls back to the broader fitted range and is returned in both states. The 4-anilidopiperidines are a common example: fentanyl has a pKa of 8.44 against 11.2 for piperidine, and is handled by the general aliphatic amine rule.
+
+Enumerating an extra minor state is usually preferable to omitting a major one, so where these limitations cannot be resolved from measured data the broader range is used deliberately. Narrowing `--ph_min` and `--ph_max`, or lowering `--precision`, will suppress minor states if a single dominant species is wanted.
 
 ## Development
 

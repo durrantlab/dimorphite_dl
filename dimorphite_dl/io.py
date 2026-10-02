@@ -157,20 +157,15 @@ class SMILESProcessor:
         for line_num, line in enumerate(iterable, 1):
             if isinstance(line, str):
                 line = line.strip()
-                line_split = line.split()
-                if len(line_split) > 2:
-                    self._handle_error(
-                        f"Item {line_num} has more than two fields "
-                        f"(SMILES and identifier): {line}"
-                    )
-                    continue
+                # Everything past the first whitespace is the identifier, as in
+                # a SMILES file, so names containing spaces survive. Splitting
+                # on every field instead kept only the first word, turning
+                # "methyl phosphate" into "methyl".
+                line_split = line.split(maxsplit=1)
                 if len(line_split) == 0:
                     continue
                 smiles = line_split[0]
-                if len(line_split) == 2:
-                    identifier = line_split[1]
-                else:
-                    identifier = ""
+                identifier = line_split[1].strip() if len(line_split) == 2 else ""
                 record = self._create_record(smiles, identifier, source_line=line_num)
                 if record:
                     yield record
@@ -231,10 +226,12 @@ class SMILESProcessor:
         for line_num, line in enumerate(file_obj, 1):
             line = line.strip()
             if line and not line.startswith("#"):
-                # Handle multi-column format (SMILES ID)
-                parts = line.split()
+                # Handle multi-column format (SMILES ID), where the identifier
+                # is everything past the first whitespace and so may contain
+                # spaces or further tab-separated columns.
+                parts = line.split(maxsplit=1)
                 smiles = parts[0]
-                identifier = parts[1] if len(parts) > 1 else ""
+                identifier = parts[1].strip() if len(parts) > 1 else ""
 
                 record = self._create_record(
                     smiles, identifier=identifier, source_line=line_num
