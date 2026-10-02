@@ -30,3 +30,5 @@ report.xml
 .coverage
 
 tools/
+old/
+*.pyc

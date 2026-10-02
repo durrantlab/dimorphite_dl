@@ -237,6 +237,132 @@ N-hydroxyamide	[C:1](=[O:2])-[N:3]-[O:4]-[H]	3	9.301904761904762	1.2181897185891
 *Primary_sulfonamide	[SX4:1](=[O:2])(=[O:3])(-[$([CX4;!$([CX4]~[!#6;!#1;!#16])]),$(c1[cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])])][cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])])][cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])])][cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])])][cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])])]1):4])-[NX3+0:5]([H:6])[H:7]	4	10.164444444444444	0.552110429104474
 
 *Sulfonamide	[SX4:1](=[O:2])(=[O:3])-[NX3+0:4]-[H]	3	7.9160326086956525	1.9842121316708763
+
+# Adenine_N9_substituted was added on 10/2/2026 and was not determined from
+# the training data. Adenine nucleosides and nucleotides (adenosine, AMP, ATP,
+# NAD, CoA, SAM) never reached a purine-specific rule. Diazine excludes rings
+# with an amino substituent, so N1 and N3 fell to
+# Aromatic_nitrogen_unprotonated along with N7 and the substituted N9. That
+# window reaches 6.43, so each ring nitrogen came out in both states and ATP
+# gave 16 variants at the default pH where it should give 2. At low pH the
+# same rule protonated all three ring nitrogens at once, and Anilines_primary
+# added a fourth charge on the exocyclic amine, which conjugates into the ring
+# and is not a basic site at all.
+#
+# Only N1 is a site here. N3, N7, N9, and the exocyclic nitrogen are matched
+# as context, so they are claimed and no later rule reaches them. N7 and N3
+# do protonate on their own (micro pKa 2.15 and 1.5 when N1 is free), but
+# those tautomers make up 3.2% and 0.7% of the monocation, and the second
+# macro acidity constant of adenosine is -1.53, so above pH 0 adenine carries
+# one ring proton at most. Because sites are treated independently, giving
+# N3 or N7 a site would bring back the di- and trications.
+#
+# N9 must carry a substituent. Free adenine has an N9-H acid (or the N7-H
+# tautomer), and claiming that nitrogen as context would remove its site.
+# C2 and C8 may carry only hydrogen, carbon, or halogen, and the exocyclic
+# nitrogen only hydrogen or carbon, with no acyl or sulfonyl group, following
+# the Diazine exclusions: donors such as a 2-amino group raise the pKa, and
+# N6-acyl adenines are amides with their own sites. Those compounds keep the
+# generic rules.
+#
+# The mean and standard deviation come from the N1 acidity constants of
+# 9-substituted adenines (25 C; I = 0.1 M unless noted). Where a value was
+# read in a later paper that quotes it, both are given.
+#   adenosine 3.64 (I = 0.5 M): Kapinos LE, Operschall BP, Larsen E, Sigel H
+#     (2011) Chem Eur J 17:8156-8164, doi:10.1002/chem.201003544. The same
+#     paper gives the N7 and N3 micro constants, the -1.53 macro constant,
+#     and the tautomer fractions above.
+#   9-methyladenine 4.10: Kampf G, Kapinos LE, Griesser R, Lippert B, Sigel H
+#     (2002) J Chem Soc Perkin Trans 2, 1320-1327; as quoted in Blindauer
+#     CA et al. (2022) New J Chem 46:6484, doi:10.1039/d2nj00543c
+#   dAMP 3.97 and dADP 4.00: Mucha A, Knobloch B, Jezowska-Bojczuk M,
+#     Kozlowski H, Sigel RKO (2008) Dalton Trans 5368-5377,
+#     doi:10.1039/b805911j
+#   ADP 3.92: Bianchi EM, Sajadi SAA, Song B, Sigel H (2003) Chem Eur J
+#     9:881-892, doi:10.1002/chem.200390109; as quoted in Mucha et al. (2008)
+#   ATP 4.00: Tribolet R, Sigel H (1988) Eur J Biochem 170:617-626; as quoted
+#     in Sigel A, Sigel H, Sigel RKO (2022) Molecules 27:2625,
+#     doi:10.3390/molecules27092625
+#   PMEA 4.16: as quoted in Sigel A, Sigel H, Sigel RKO (2022), above
+#   HPMPA 4.14 (potentiometric): Song B, Holy A, Sigel H (1994) Gazz Chim
+#     Ital 124:387-392; as quoted in Blindauer CA et al. (2022), above
+Adenine_N9_substituted	[NX3+0;!$(N-C=[O,S,N]);!$(N-S(=O)=O);!$(N-[!#6;!#1]):1]-[c:2]1:[n+0;X2:3]:[c;!$(c-[!#6;!#1;!F;!Cl;!Br;!I]):4]:[n+0;X2:5]:[c:6]2:[c:7]:1:[n+0;X2:8]:[c;!$(c-[!#6;!#1;!F;!Cl;!Br;!I]):9]:[n+0;X3;H0:10]:2	2	3.99125	0.1653945499188444
+
+# The four entries below were added on 10/2/2026 and were not determined from
+# the training data. They do for the other nucleobases what
+# Adenine_N9_substituted does for adenine. RDKit treats the oxo-substituted
+# rings as aromatic, so none of their nitrogens reached an amide or imide
+# entry (those require aliphatic carbon). Each ring nitrogen fell to
+# Aromatic_nitrogen_unprotonated (window up to 6.43) and each ring N-H to
+# Aromatic_nitrogen_protonated (window 4.22 to 10.12), so at the default pH
+# GMP and GTP gave 16 variants and CMP, UMP, and dTMP gave 4, where each
+# should give 2. Exocyclic amines also fell to Anilines_primary, and the
+# substituted ring nitrogen (N9 or N1) was given an unbuildable site.
+#
+# Each entry claims the base's other heteroatoms as context so that no later
+# rule reaches them. Guanine needs two entries because the N7 site is basic
+# and the N1-H site is acidic, and the * prefix applies to a whole entry. Each
+# of the two names the other's ring in a recursive constraint rather than
+# matching it; ring carbons are never locked, so the shared C4 and C5 can be
+# matched by both. The substituted ring nitrogen must carry a carbon, as for
+# adenine. Ring carbons may carry only hydrogen or carbon (sp3 carbon for
+# uracil), so 5-halo and other activated pyrimidines, whose pKa values differ
+# by one to two units, keep the generic rules. The exocyclic amines follow the
+# Adenine_N9_substituted exclusions. Fused rings (pteridines, xanthines) are
+# excluded by the single-ring tests. Hypoxanthine (inosine) lacks the 2-amino
+# group and is not covered.
+#
+# Values are aqueous, 20 to 25 C, taken from the IUPAC Digitized pKa Dataset
+# (doi:10.5281/zenodo.7236452; iupac_high-confidence_v2_4.csv) unless noted.
+# Entries the compilers assessed as "Uncertain" were left out. Each compound
+# contributes one value, the mean of its listed values, so that well-studied
+# nucleosides do not dominate.
+#
+# Guanine_N9_substituted_N7 (N7-H+ acidity; mean of 3 compounds):
+#   guanosine 1.6 (25 C, I = 0.1): Sukhorukov BI, Poltev VI, Blumenfeld LA
+#     (1963) Dokl Akad Nauk SSSR 149:1380 [perrin_supp7806]; and 2.11 (25 C,
+#     I = 0.1): Sigel H, Massoud SS, Corfu NA (1994) J Am Chem Soc
+#     116:2958-2971, as quoted in Song B et al. (1996) Met Based Drugs
+#     3:131-141, doi:10.1155/MBD.1996.131
+#   dGMP 2.69 (25 C, I = 0.1): Song B et al. (1996), above
+#   9-ethylguanine 3.27 (25 C, I = 0.1): Schroder G et al. (1995) J Chem Soc
+#     Dalton Trans 3767-3775, as quoted in Song B et al. (1996), above
+# *Guanine_N9_substituted_N1H (N1-H acidity; mean of 3 compounds):
+#   guanosine 9.21 (25 C): Levene PA, Simms HS (1925) J Biol Chem 65:519
+#     [perrin3369]; 9.24 (25 C, I = 0.1): Sukhorukov BI et al. (1963), above
+#     [perrin_supp7806]; and 9.25 (25 C): Christensen JJ, Rytting JH, Izatt
+#     RM (1970) Biochemistry 9:4907 [serjeant5208]
+#   dGMP 9.56 and 9-ethylguanine 9.57 (25 C, I = 0.1): Song B et al. (1996)
+# Cytosine_N1_substituted (N3-H+ acidity; mean of 5 compounds):
+#   cytidine 4.08 (25 C): Christensen JJ, Rytting JH, Izatt RM (1967) J Phys
+#     Chem 71:2700; 4.22 (25 C, I = 0.1): Lewin S, Humphreys DA (1966) J Chem
+#     Soc B 210; and 4.22 (25 C, I = 0.1): Sukhorukov BI et al. (1963), above
+#     [all perrin_supp7801]
+#   cytidine 2'-phosphate 4.32 (25 C, I = 0.2): Anderson DG, Hammes GG, Walz
+#     FG (1968) Biochemistry 7:1637 [serjeant4926]
+#   cytidine 3'-phosphate 4.21 (25 C, I = 0.1): Bahr JT, Cathou RE, Hammes GG
+#     (1965) J Biol Chem 240:3372 [serjeant4927]
+#   cytidine 5'-phosphate 4.48 (20 C): Wrobel A, Rabczenko A, Shugar D
+#     (1970) Acta Biochim Pol 17:339 [serjeant4928]
+#   dCMP 4.46 (25 C, I = 0.1): Song B et al. (1995) Inorg Chim Acta
+#     235:99-109, as quoted in Song B et al. (1996), above
+# *Uracil_N1_substituted (N3-H acidity; mean of 4 compounds):
+#   uridine 9.51 (25 C, I = 0.1): Sukhorukov BI et al. (1963), above
+#     [perrin_supp7812]; and 9.25 (25 C): Jonas J, Gut J (1962) Collect Czech
+#     Chem Commun 27:716 [serjeant4810]
+#   1-methyluracil 9.72 (25 C): Gut J, Prystas M, Jonas J, Sorm F (1961)
+#     Collect Czech Chem Commun 26:974; 9.77 (25 C): Nakanishi K, Suzuki N,
+#     Yamazaki F (1961) Bull Chem Soc Jpn 34:53; and 9.43 (25 C): Jonas J,
+#     Gut J (1962), above [all serjeant2631]
+#   thymidine 9.65 (20 C, I = 1.0): Fiskin AM, Beer M (1965) Biochemistry
+#     4:1289 [serjeant5218]
+#   uridine 5'-phosphate 9.71 (20 C, I = 0.015): Aylward NN (1967) J Chem Soc
+#     B 401 [serjeant4914]
+Guanine_N9_substituted_N7	[n+0;X2:1]1:[c;!$(c-[!#6;!#1;!F;!Cl;!Br;!I]):2]:[nX3+0;H0:3](-[#6:4]):[c;$(c1:[n+0;X2]:c(-[NX3+0;!$(N-C=[O,S,N]);!$(N-S(=O)=O);!$(N-[!#6;!#1])]):[nX3+0;H1]:c(=[OX1]):c:1):5]:[c:6]:1	0	2.605	0.7113191969854321
+*Guanine_N9_substituted_N1H	[nX3+0;H1:1]1:[c:2](-[NX3+0;!$(N-C=[O,S,N]);!$(N-S(=O)=O);!$(N-[!#6;!#1]):3]):[n+0;X2:4]:[c;$(c1:[nX3+0;H0](-[#6]):[c;!$(c-[!#6;!#1;!F;!Cl;!Br;!I])]:[n+0;X2]:c:1):5]:[c:6]:[c:7]:1=[OX1:8]	0	9.454444444444444	0.19155310645508328
+Cytosine_N1_substituted	[NX3+0;!$(N-C=[O,S,N]);!$(N-S(=O)=O);!$(N-[!#6;!#1]):1]-[c;R1:2]1:[n+0;X2:3]:[c;R1:4](=[OX1:5]):[nX3+0;H0;R1:6](-[#6:7]):[c;R1;$([cH]),$(c-[#6]):8]:[c;R1;$([cH]),$(c-[#6]):9]:1	2	4.328666666666667	0.14003174243323888
+*Uracil_N1_substituted	[nX3+0;H1;R1:1]1:[c;R1:2](=[OX1:3]):[nX3+0;H0;R1:4](-[#6:5]):[c;R1;$([cH]),$(c-[CX4]):6]:[c;R1;$([cH]),$(c-[CX4]):7]:[c;R1:8]:1=[OX1:9]	0	9.595	0.14662878298615262
+
 Anilines_primary	[c:1]-[NX3+0:2]([H:3])[H:4]	1	3.899298673194805	2.068768503987161
 
 # [!#1] tests for a non-hydrogen atom. The earlier [!H] tested for an H count

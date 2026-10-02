@@ -4,7 +4,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
-## [2.1.0] - 2026-10-01
+## [2.1.0] - 2026-10-02
 
 ### Changed
 
@@ -48,6 +48,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - N-nitroimines were returned in both states.
   The neonicotinoid insecticides carry the nitro group on the imine nitrogen, where it costs about twelve units of basicity (imidacloprid's conjugate acid is 1.56), but the general amidine entry assigned them 10.04.
   Thiamethoxam, imidacloprid, clothianidin, nitenpyram, and dinotefuran are affected.
+- Nucleobases were returned in many protonation states at physiological pH.
+  No entry covered their ring nitrogens, so each fell to the generic aromatic-nitrogen rules, whose windows reach the default pH range: ATP, GMP, and GTP gave 16 variants, and CMP, UMP, and dTMP gave 4, where each should give 2.
+  At low pH the same rules protonated every ring nitrogen and the exocyclic amine together, returning adenine as a tetracation where only N1 is protonated.
+  New entries for 9-substituted adenine and guanine and 1-substituted cytosine and uracil (including thymine) now assign one site per measured pKa: adenine N1 (pKaH 3.99), guanine N7 (pKaH 2.61) and N1-H (pKa 9.45), cytosine N3 (pKaH 4.33), and uracil N3-H (pKa 9.60).
+  The remaining ring nitrogens and the exocyclic amines are claimed so that no generic rule reaches them.
+  Nucleosides, nucleotides, and cofactors such as NAD, CoA, and SAM are affected, so pipelines that depend on the previous enumeration should be checked.
+  The values come from published measurements and the IUPAC Digitized pKa Dataset, cited in the substructure file.
+  Free bases (N9-H or N1-H), 5-halo pyrimidines, fused analogs, and hypoxanthine keep the generic rules.
 - A protonation state that cannot be kekulized (e.g., a +1 charge on a bridgehead aromatic nitrogen) now keeps the site's previous state.
   Such variants were dropped as invalid SMILES, and when that was the site's only state the molecule vanished from the output.
   A molecule whose every variant is rejected now falls back to its input.

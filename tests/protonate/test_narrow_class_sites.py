@@ -1,7 +1,8 @@
 """Checks the narrow site entries added alongside the broad trained ones:
 the alkyl, benzylic, beta-hydroxy and fluoroalkyl amines, N-alkyl anilines,
 unactivated phenols, alkanethiols, primary sulfonamides, C-substituted
-amidines, and N-nitro amides.
+amidines, N-nitro amides, and the nucleobases (9-substituted adenine and
+guanine, 1-substituted cytosine and uracil).
 
 Each of those entries exists to give one state where its parent rule gave two,
 so one half of this file checks that the collapse happens. The other half is
@@ -209,6 +210,10 @@ def test_nitro_group_survives_as_the_anion(smiles: str) -> None:
         pytest.param("C#CCN", id="propargylamine_7.05"),
         pytest.param("Oc1ccc(cc1)C(F)(F)F", id="4-trifluoromethylphenol_8.68"),
         pytest.param("CC(=O)c1ccc(O)cc1", id="4-hydroxyacetophenone_8.0"),
+        pytest.param(
+            "O=c1[nH]c(=O)n([C@@H]2O[C@H](CO)[C@@H](O)[C@H]2O)cc1F",
+            id="5-fluorouridine_7.75",
+        ),
         pytest.param("Oc1ccc2ccccc2c1", id="2-naphthol_9.51"),
         pytest.param(
             "NC(=N)NC(C)=O",
@@ -291,3 +296,137 @@ def test_answer_does_not_depend_on_input_charge(neutral: str, charged: str) -> N
     assert canonical_set(protonate_default(neutral)) == canonical_set(
         protonate_default(charged)
     )
+
+
+ADENOSINE = "Nc1ncnc2c1ncn2[C@@H]1O[C@H](CO)[C@@H](O)[C@H]1O"
+# Each template takes the 5'-substituent, written from the CH2 carbon onward.
+NUCLEOSIDE_TEMPLATES = {
+    "A": "Nc1ncnc2c1ncn2[C@@H]1O[C@H](C{})[C@@H](O)[C@H]1O",
+    "G": "Nc1nc2c(ncn2[C@@H]2O[C@H](C{})[C@@H](O)[C@H]2O)c(=O)[nH]1",
+    "C": "Nc1ccn([C@@H]2O[C@H](C{})[C@@H](O)[C@H]2O)c(=O)n1",
+    "U": "O=c1ccn([C@@H]2O[C@H](C{})[C@@H](O)[C@H]2O)c(=O)[nH]1",
+    "dT": "Cc1cn([C@H]2C[C@H](O)[C@@H](C{})O2)c(=O)[nH]c1=O",
+}
+MONOPHOSPHATE = ("OP(=O)(O)O", ["OP(=O)([O-])[O-]", "OP(=O)([O-])O"])
+DIPHOSPHATE = (
+    "OP(=O)(O)OP(=O)(O)O",
+    ["OP(=O)([O-])OP(=O)([O-])[O-]", "OP(=O)([O-])OP(=O)([O-])O"],
+)
+TRIPHOSPHATE = (
+    "OP(=O)(O)OP(=O)(O)OP(=O)(O)O",
+    [
+        "OP(=O)([O-])OP(=O)([O-])OP(=O)([O-])[O-]",
+        "OP(=O)([O-])OP(=O)([O-])OP(=O)([O-])O",
+    ],
+)
+
+
+@pytest.mark.parametrize(
+    ("base", "chain"),
+    [
+        pytest.param("A", MONOPHOSPHATE, id="AMP"),
+        pytest.param("A", DIPHOSPHATE, id="ADP"),
+        pytest.param("A", TRIPHOSPHATE, id="ATP"),
+        pytest.param("G", MONOPHOSPHATE, id="GMP"),
+        pytest.param("G", TRIPHOSPHATE, id="GTP"),
+        pytest.param("C", MONOPHOSPHATE, id="CMP"),
+        pytest.param("C", TRIPHOSPHATE, id="CTP"),
+        pytest.param("U", MONOPHOSPHATE, id="UMP"),
+        pytest.param("U", TRIPHOSPHATE, id="UTP"),
+        pytest.param("dT", MONOPHOSPHATE, id="dTMP"),
+    ],
+)
+def test_nucleotide_gives_only_the_terminal_phosphate_pair(
+    base: str, chain: tuple[str, list[str]]
+) -> None:
+    """Each nucleotide should come back in two states that differ only at the
+    terminal phosphate, the one site inside the default window. Before the
+    nucleobase entries, the ring nitrogens each took both states: ATP, GMP,
+    and GTP gave 16 variants, and CMP, UMP, and dTMP gave 4.
+
+    Args:
+        base: Key into NUCLEOSIDE_TEMPLATES.
+        chain: The neutral 5'-phosphate chain and its expected ionized pair.
+    """
+    template = NUCLEOSIDE_TEMPLATES[base]
+    neutral, expected = chain
+    output = protonate_default(template.format(neutral))
+    assert canonical_set(output) == canonical_set(
+        [template.format(ionized) for ionized in expected]
+    ), output
+
+
+def test_adenosine_is_neutral_only() -> None:
+    """Adenosine N1 has a pKa of 3.64, so the neutral nucleoside is the only
+    state at physiological pH."""
+    output = protonate_default(ADENOSINE)
+    assert canonical_set(output) == canonical_set([ADENOSINE]), output
+
+
+def test_adenosine_takes_one_ring_proton_at_low_ph() -> None:
+    """At pH 0.5 only N1 should be protonated. The generic rules protonated
+    N1, N3, and N7 together and added an ammonium on the exocyclic amine,
+    giving a tetracation where the measured species is a monocation."""
+    output = protonate_smiles(ADENOSINE, ph_min=0.5, ph_max=0.5)
+    assert canonical_set(output) == canonical_set(
+        ["Nc1[nH+]cnc2c1ncn2[C@@H]1O[C@H](CO)[C@@H](O)[C@H]1O"]
+    ), output
+
+
+def test_free_adenine_keeps_its_n9_h_site() -> None:
+    """Adenine_N9_substituted requires a substituent on N9. Free adenine has
+    an N9-H acid, and if the entry claimed that nitrogen as context the anion
+    could never form."""
+    output = protonate_smiles("Nc1ncnc2[nH]cnc12", ph_min=13.0, ph_max=13.0)
+    anion = Chem.MolFromSmarts("[n-]")
+    assert anion is not None
+    assert any(
+        Chem.MolFromSmiles(out).HasSubstructMatch(anion) for out in output
+    ), output
+
+
+@pytest.mark.parametrize(
+    ("base", "ph", "expected"),
+    [
+        pytest.param(
+            "G",
+            0.5,
+            "Nc1nc2c([nH+]cn2[C@@H]2O[C@H](CO)[C@@H](O)[C@H]2O)c(=O)[nH]1",
+            id="guanosine_N7_cation",
+        ),
+        pytest.param(
+            "G",
+            11.0,
+            "Nc1nc2c(ncn2[C@@H]2O[C@H](CO)[C@@H](O)[C@H]2O)c(=O)[n-]1",
+            id="guanosine_N1_anion",
+        ),
+        pytest.param(
+            "C",
+            0.5,
+            "Nc1ccn([C@@H]2O[C@H](CO)[C@@H](O)[C@H]2O)c(=O)[nH+]1",
+            id="cytidine_N3_cation",
+        ),
+        pytest.param(
+            "U",
+            11.0,
+            "O=c1ccn([C@@H]2O[C@H](CO)[C@@H](O)[C@H]2O)c(=O)[n-]1",
+            id="uridine_N3_anion",
+        ),
+    ],
+)
+def test_nucleoside_ionizes_at_one_ring_site(
+    base: str, ph: float, expected: str
+) -> None:
+    """Outside the default window each nucleoside should ionize at its one
+    measured site and nowhere else. The generic rules also protonated N3 of
+    guanine, the substituted ring nitrogen, and the exocyclic amines, which
+    are not basic.
+
+    Args:
+        base: Key into NUCLEOSIDE_TEMPLATES.
+        ph: The single pH to test.
+        expected: The only state that should come back.
+    """
+    nucleoside = NUCLEOSIDE_TEMPLATES[base].format("O")
+    output = protonate_smiles(nucleoside, ph_min=ph, ph_max=ph)
+    assert canonical_set(output) == canonical_set([expected]), output
