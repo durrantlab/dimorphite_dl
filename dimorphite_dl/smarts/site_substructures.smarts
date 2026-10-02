@@ -562,8 +562,24 @@ Primary_hydroxyl_amine	[C,c:1]-[O:2]-[NH2:3]	2	4.035714285714286	0.8463816543155
 #   1,2,4-triazole 10.26 (20 C): Kroger CF, Freiberg W (1965) Z Chem 5:381
 #   1,2,3-triazole 9.4: Albert A (1963) Physical Methods in Heterocyclic
 #     Chemistry, Vol. 1, p. 98 (compiled value; primary source not yet verified)
-# Tetrazoles (N-H pKa ~4.9) are deliberately excluded and still match
-# Aromatic_nitrogen_protonated. Rings bearing an exocyclic C=O or C=S (e.g.,
+# Tetrazoles (N-H pKa ~4.9) are excluded here and handled by Tetrazole_NH
+# below. Rings bearing an exocyclic C=O or C=S (e.g.,
 # 1,2,4-oxadiazol-5-ones) are also excluded, because they are far more acidic.
 *Azole_NH	[n;$(n1naaa1),$(n1anaa1);!$(n1nnnc1);!$(n1nncn1);!$(n1c(=[O,S])aaa1);!$(n1ac(=[O,S])aa1):1]-[H]	0	12.234	2.3106665704943237
+# Tetrazole_NH was added on 10/2/2026 and was not determined from the
+# training data. Tetrazole N-H, the usual carboxylic acid isostere, fell to
+# Aromatic_nitrogen_protonated (7.17 +/- 2.95), whose window spans the whole
+# physiological range, so tetrazoles came back in both states and the dominant
+# anion won a max_variants=1 ranking only when the range midpoint happened to
+# sit above 7.17. This entry covers 1H- and 2H-tetrazoles whose C5 carries
+# hydrogen or carbon. 5-Amino, 5-nitro, 5-halo, and 5-thio tetrazoles, whose
+# pKa values range from below 0 to about 6, keep the generic rule. The mean
+# and standard deviation come from potentiometric constants (25 C):
+#   tetrazole 4.86 and 5-methyltetrazole 5.50: Ostrovskii VA, Koldobskii GI,
+#     Shirokova NP, Poplavskii VS (1981) Chem Heterocycl Compd 17:412-416
+#     (transl. of Khim Geterotsikl Soedin 1981, No. 4, 559-562)
+# The same paper reports that 5-aryl substituents move the pKa little
+# (reaction constant 1.27 for substituted 5-phenyltetrazoles), so aryl
+# tetrazoles are included.
+*Tetrazole_NH	[nX3+0;H1;$(n1nnn[c;$([cH]),$(c-[#6])]1),$(n1nn[c;$([cH]),$(c-[#6])]n1):1]-[H]	0	5.18	0.4525483399593902
 *Aromatic_nitrogen_protonated	[n:1]-[H]	0	7.17	2.94602395490212

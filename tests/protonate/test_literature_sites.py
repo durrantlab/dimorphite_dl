@@ -1,5 +1,5 @@
 """Checks the site entries whose pKas come from the literature rather than the
-training data: Hydrazoic_acid, Carboxamide, and Diazine."""
+training data: Hydrazoic_acid, Carboxamide, Diazine, and Tetrazole_NH."""
 
 import pytest
 from rdkit import Chem
@@ -122,3 +122,45 @@ def test_donor_substituted_diazine_keeps_generic_rule(smiles: str) -> None:
     """
     output = protonate_at(smiles, DIAZINE_CONTROL_PH)
     assert any("+" in out for out in output), output
+
+
+@pytest.mark.parametrize(
+    ("smiles", "anion"),
+    [
+        pytest.param("c1nn[nH]n1", "c1nn[n-]n1", id="tetrazole_4.86"),
+        pytest.param("Cc1nn[nH]n1", "Cc1nn[n-]n1", id="5-methyltetrazole_5.50"),
+        pytest.param("c1ccc(-c2nn[nH]n2)cc1", "c1ccc(-c2nn[n-]n2)cc1", id="5-phenyl"),
+    ],
+)
+def test_tetrazole_is_anion_at_physiological_ph(smiles: str, anion: str) -> None:
+    """Tetrazole N-H has a pKa near 5, so the anion is the only state at pH
+    7.4. The generic aromatic N-H rule returned both.
+
+    Args:
+        smiles: A neutral 5-substituted tetrazole.
+        anion: Its N-deprotonated form.
+    """
+    output = protonate_at(smiles, PHYSIOLOGICAL_PH)
+    assert canonical_set(output) == canonical_set([anion]), output
+
+
+def test_tetrazole_not_amide_is_deprotonated() -> None:
+    """The case from a GitHub issue: with max_variants=1 an amide anion was
+    returned and the tetrazole left neutral. The amide should stay neutral and the
+    tetrazole should be the only site that ionizes, in every variant."""
+    output = protonate_smiles(
+        "O=C(NCc1cccc(-c2nnn[nH]2)c1)c1ccccc1",
+        ph_min=6.9,
+        ph_max=7.5,
+        precision=1.0,
+    )
+    assert canonical_set(output) == canonical_set(
+        ["O=C(NCc1cccc(-c2nnn[n-]2)c1)c1ccccc1"]
+    ), output
+
+
+def test_aminotetrazole_keeps_generic_rule() -> None:
+    """5-Aminotetrazole (pKa about 6.1) is excluded from Tetrazole_NH, so it
+    still gets the generic window and comes back in both states."""
+    output = protonate_at("Nc1nn[nH]n1", PHYSIOLOGICAL_PH)
+    assert len(output) > 1, output
