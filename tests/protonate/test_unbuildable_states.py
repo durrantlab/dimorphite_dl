@@ -82,3 +82,28 @@ def test_detection_error_is_reported_as_fallback(
     stats = protonator.get_stats()["protonation"]
     assert stats["fallback_used"] == 1
     assert stats["molecules_without_sites"] == 0
+
+
+@pytest.mark.parametrize(
+    ("smiles", "expected"),
+    [
+        pytest.param("c1nn[nH]n1", "c1nn[n-]n1", id="plain"),
+        pytest.param("c1nn[nH:1]n1", "c1nn[n-:1]n1", id="atom_map"),
+        pytest.param("c1nn[15nH]n1", "c1nn[15n-]n1", id="isotope"),
+    ],
+)
+def test_labeled_aromatic_nh_can_be_deprotonated(smiles: str, expected: str) -> None:
+    """Checks that an aromatic N-H carrying an atom map or isotope label is
+    deprotonated like an unlabeled one. The H was removed only when the SMILES
+    contained the literal text "[nH-]", so "[nH-:1]" kept its H, could not be
+    sanitized, and fell back to the neutral parent at every pH.
+
+    Args:
+        smiles: Tetrazole (pKa about 4.9) with or without a label on the N-H.
+        expected: The anion, with the label kept.
+    """
+
+    output = Protonate([smiles], ph_min=7.4, ph_max=7.4, precision=1.0).to_list()
+    assert [Chem.MolToSmiles(Chem.MolFromSmiles(line)) for line in output] == [
+        Chem.MolToSmiles(Chem.MolFromSmiles(expected))
+    ], output

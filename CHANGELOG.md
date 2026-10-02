@@ -18,8 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Amides and anilides are no longer deprotonated at physiological pH, so with `max_variants=1` a molecule bearing both an amide and a genuinely acidic group (e.g., a tetrazole) is ionized at the acidic group.
   This changes the output for existing inputs, so pipelines that depend on the previous enumeration should be checked.
   The means and standard deviations fitted from the training data are unchanged; each added entry takes its values from published measurements, cited in the substructure file.
-- Measured against the external test sets of Baltruschat M, Czodrowski P (2020) F1000Research 9:113, scoring the annotated ionization site of 399 of their 403 compounds, the share returning only the dominant species at pH 7.4 rose from 48% to 63%.
-  The compounds whose output omits the dominant species are the same fifteen before and after, as are the fifteen whose site is never enumerated at any pH.
+- Measured against the external test sets of Baltruschat M, Czodrowski P (2020) F1000Research 9:113, scoring the annotated ionization site of 399 of their 403 compounds, the share returning only the dominant species at pH 7.4 rose from 48% to 65%.
+  Fifteen compounds omit the dominant species in both versions.
+  One more does so in 2.1.0: a fused pyrazole N-H with a measured pKa of 7.35, which the new azole entry places well above the pH range, although its anion is only about half the population at pH 7.4.
+  One compound, whose basic site no pattern covers, is never ionized in either version.
 - The CLI now appends each input's identifier to every variant it produces, as `SMILES,identifier`.
   Names in the input file were dropped, so variants could not be matched back to the molecule they came from.
   Scripts that parse CLI output should expect the comma-separated field; from Python, pass `label_identifiers=True` to `protonate_smiles` for the same output.
@@ -64,6 +66,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - A protonation state that cannot be kekulized (e.g., a +1 charge on a bridgehead aromatic nitrogen) now keeps the site's previous state.
   Such variants were dropped as invalid SMILES, and when that was the site's only state the molecule vanished from the output.
   A molecule whose every variant is rejected now falls back to its input.
+- An aromatic N-H written with an atom map number or isotope label (e.g., `[nH:1]`, `[15nH]`) could not be deprotonated.
+  The extra hydrogen was removed only when the SMILES contained the literal text `[nH-]`, so a labeled site kept it, failed sanitization, and stayed neutral at every pH.
 - Deuterium and tritium on O, N, or S are treated as ordinary hydrogen, so deuterated acids can be deprotonated.
   Labels on carbon are kept.
 - A UTF-8 byte order mark at the start of an input file is ignored instead of corrupting the first SMILES.

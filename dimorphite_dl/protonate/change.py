@@ -268,10 +268,18 @@ def _apply_charge_to_molecule(
                 atom, charge, element, explicit_bond_order_total
             )
 
-        # Special case for aromatic nitrogen deprotonation
-        mol_smiles = Chem.MolToSmiles(mol_copy)
-        if "[nH-]" in mol_smiles:
-            logger.debug("Detected [nH-]; setting number of Hs to zero for this atom")
+        # A deprotonated aromatic N-H keeps its H here, because the bond-order
+        # table has no entry for two aromatic bonds. This was detected by
+        # searching the SMILES for "[nH-]", which misses atoms written with a
+        # map number or isotope ("[nH-:1]", "[15nH-]"), so those sites could
+        # never be deprotonated.
+        if (
+            element == 7
+            and atom.GetIsAromatic()
+            and atom.GetFormalCharge() == -1
+            and atom.GetNumExplicitHs() > 0
+        ):
+            logger.debug("Aromatic N- still carries an H; setting its H count to 0")
             atom.SetNumExplicitHs(0)
 
         # Update property cache
