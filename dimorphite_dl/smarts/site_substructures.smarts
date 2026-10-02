@@ -126,6 +126,14 @@ Phenyl_Thiol	[c,n:1]-[SX2:2]-[H]	1	4.978235294117647	2.6137000480499806
 #   1-propanethiol 10.65, 1-butanethiol 10.66, 2-methyl-2-butanethiol 11.21,
 #     and 2-methyl-2-propanethiol 11.05: Kreevoy MM et al. (1960) J Am Chem
 #     Soc 82:4899
+# Two groups reach further than those five compounds support. Sulfur is
+# permitted as a neighbor of the alpha and beta carbons, since the thiol's own
+# sulfur would otherwise exclude it, so a beta sulfonate also passes:
+# 2-mercaptoethanesulfonate (coenzyme M, about 9.1) is claimed. And the
+# carbonyl screen stops at the beta carbon, so captopril and its analogues,
+# whose carbonyl is three bonds from the sulfur, are claimed as well. Both are
+# still protonated below the default ph_max, so the state is right, but the
+# mean assigned to them is extrapolated rather than measured.
 Alkyl_thiol	[CX4;!$([CX4]~[!#6;!#1;!#16]);!$([CX4]-[#6]~[!#6;!#1;!#16]);!$([CX4]-[#6]=[#6]);!$([CX4]-[#6]#[#6]);!$([CX4]-c):1]-[SX2:2]-[H]	1	10.814	0.3007158126869956
 
 Thiol	[C,N:1]-[SX2:2]-[H]	1	9.12448275862069	1.3317968158171463
@@ -333,7 +341,12 @@ Aromatic_nitrogen_unprotonated	[n+0&H0;!$(n1nnnc1);!$(n1nncn1):1]	0	4.3535441240
 # beta fluorines cost roughly 1.7 units each, which is why this entry is
 # restricted to a trifluoromethyl on the alpha carbon rather than to
 # fluoroalkyl generally; see also Morgenthaler M et al. (2007) ChemMedChem
-# 2:1100-1115, doi:10.1002/cmdc.200700059.
+# 2:1100-1115, doi:10.1002/cmdc.200700059. All three are otherwise plain
+# alkylamines, so the mean describes a trifluoromethyl and nothing else.
+# Drug-like matches often carry further deactivating groups on the same
+# nitrogen, an alpha aryl or a neighboring amide, and those are lower still;
+# the state stays neutral either way, but for them this mean is an upper
+# bound rather than an estimate.
 Fluoroalkylamine	[CX4;$([CX4]-[CX4](F)(F)F):1]-[NX3+0;!$(N-[!$([CX4]);!#1]);!$([N;r3]):2]	1	5.5	0.6726812023536854
 
 # From benzylamine 9.34, N-methylbenzylamine 9.58, N-ethylbenzylamine 9.68,
