@@ -352,8 +352,17 @@ Fluoroalkylamine	[CX4;$([CX4]-[CX4](F)(F)F):1]-[NX3+0;!$(N-[!$([CX4]);!#1]);!$([
 # From benzylamine 9.34, N-methylbenzylamine 9.58, N-ethylbenzylamine 9.68,
 # N,N-dimethylbenzylamine 8.93, and N,N-diethylbenzylamine 9.48. The aryl
 # group costs about one unit, so benzylic amines are treated apart from the
-# alkyl entries below rather than with them.
-Benzylic_amine	[CX4;$([CX4]-c):1]-[NX3+0;!$(N-[!$([CX4]);!#1]);!$(N-[CX4]-[#6]~[!#6;!#1]);!$([N;r3]):2]	1	9.402	0.29226700121635363
+# alkyl entries below rather than with them. All five carry nothing but the
+# benzyl group and plain alkyls, so like the alkyl entries this one screens
+# heteroatoms out to two bonds past the alpha carbon. The screen was extended
+# that far after benchmarking against measured values: N-benzyl pyrrolidines
+# bearing a ring trifluoromethyl and ester are 5.40, four units below the
+# class mean, and were being returned as cations alone. They now keep the
+# generic rule.
+#   N-benzyl-3-(trifluoromethyl)pyrrolidine-4-carboxylate, both
+#     stereoisomers, 5.40: Novartis test set of Baltruschat M, Czodrowski P
+#     (2020) F1000Research 9:113
+Benzylic_amine	[CX4;$([CX4]-c):1]-[NX3+0;!$(N-[!$([CX4]);!#1]);!$(N-[CX4]-[#6]~[!#6;!#1]);!$(N-[CX4]-[#6]-[#6]~[!#6;!#1]);!$([N;r3]):2]	1	9.402	0.29226700121635363
 
 # From ethanolamine 9.50, N-methylethanolamine 9.87, and propranolol 9.48.
 # The latter two are the means of the aqueous determinations in Reaxys:

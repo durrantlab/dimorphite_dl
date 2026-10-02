@@ -199,6 +199,10 @@ def test_nitro_group_survives_as_the_anion(smiles: str) -> None:
         pytest.param(
             "CCC(=O)N(c1ccccc1)C1(COC)CCN(CCc2cccs2)CC1", id="sufentanil_8.01"
         ),
+        pytest.param(
+            "CCOC(=O)C1CN(Cc2ccccc2)CC1C(F)(F)F",
+            id="cf3_benzylpyrrolidine_ester_5.40",
+        ),
         pytest.param("NCCN", id="ethylenediamine_9.98"),
         pytest.param("C1CN2CCN1CC2", id="dabco_8.19"),
         pytest.param("C=CCN(CC=C)CC=C", id="triallylamine_8.31"),
