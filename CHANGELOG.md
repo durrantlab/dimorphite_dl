@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Compounds whose pKa lies well outside the pH range now resolve to a single state rather than both: phenol, ethanethiol, benzenesulfonamide, methanesulfonamide, methylamine, benzylamine, ethanolamine, piperidine, triethylamine, quinuclidine, propranolol, 2,2,2-trifluoroethylamine, acetamidine, benzamidine, and N-methylaniline, among others.
   This changes the output for existing inputs, so pipelines that depend on the previous enumeration should be checked.
   The means and standard deviations fitted from the training data are unchanged; each added entry takes its values from published measurements, cited in the substructure file.
+- Measured against the external monoprotic test sets of Baltruschat M, Czodrowski P (2020) F1000Research 9:113, restricted to the 129 compounds for which exactly one site is enumerated, the share returning only the dominant species at pH 7.4 rose from 43% to 63%.
+  The compounds that do not contain the dominant species are the same four before and after.
 - An identifier may now contain whitespace.
   Only the second whitespace-separated field was kept, so `methyl phosphate` was truncated to `methyl`, and a list item with more than two fields was rejected rather than read.
 
