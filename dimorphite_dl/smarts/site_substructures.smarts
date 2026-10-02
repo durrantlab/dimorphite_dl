@@ -295,10 +295,12 @@ Aromatic_nitrogen_unprotonated	[n+0&H0;!$(n1nnnc1);!$(n1nncn1):1]	0	4.3535441240
 # compiled in UNODC, Recommended Methods for the Identification and Analysis
 # of Fentanyl and its Analogues in Biological Specimens, 2017). All four need
 # both states at physiological pH, so that whole class keeps the generic rule.
-# The cost is that an amine with a remote heteroatom whose effect is in fact
-# small, such as 4-aminobutyric acid at 10.43, also falls back to the broad
-# window. The benzylic and beta-hydroxy entries below screen one bond less
-# far, since no comparable series was consulted for them. Unless noted, means and standard
+# The cost is that an amine whose remote heteroatom has little effect also
+# falls back to the broad window. The screen reaches three bonds from the
+# nitrogen, so a heteroatom further out than that is still ignored:
+# 4-aminobutyric acid, whose carboxyl is four bonds away, is claimed, which
+# its pKaH of 10.43 makes correct. The benzylic and beta-hydroxy entries
+# screen one bond less far, since no comparable series was consulted for them. Unless noted, means and standard
 # deviations are computed from the aliphatic amine tables in the pKa
 # compilation of R. Williams (ACS Division of Organic Chemistry, updated
 # 4/7/2022,
