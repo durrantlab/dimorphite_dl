@@ -20,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   The means and standard deviations fitted from the training data are unchanged; each added entry takes its values from published measurements, cited in the substructure file.
 - Measured against the external test sets of Baltruschat M, Czodrowski P (2020) F1000Research 9:113, scoring the annotated ionization site of 399 of their 403 compounds, the share returning only the dominant species at pH 7.4 rose from 48% to 63%.
   The compounds whose output omits the dominant species are the same fifteen before and after, as are the fifteen whose site is never enumerated at any pH.
+- The CLI now appends each input's identifier to every variant it produces, as `SMILES,identifier`.
+  Names in the input file were dropped, so variants could not be matched back to the molecule they came from.
+  Scripts that parse CLI output should expect the comma-separated field; from Python, pass `label_identifiers=True` to `protonate_smiles` for the same output.
 - An identifier may now contain whitespace.
   Only the second whitespace-separated field was kept, so `methyl phosphate` was truncated to `methyl`, and a list item with more than two fields was rejected rather than read.
 
