@@ -43,6 +43,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Nitroguanidines were returned as cations.
   A nitro group all but removes guanidine basicity (nitroguanidine has a pKaH of -0.98, against 13.6 for guanidine), but the general guanidine entry assigned them 12.03.
   Nitroarginine and related compounds are affected.
+- N-nitroimines were returned in both states.
+  The neonicotinoid insecticides carry the nitro group on the imine nitrogen, where it costs about twelve units of basicity (imidacloprid's conjugate acid is 1.56), but the general amidine entry assigned them 10.04.
+  Thiamethoxam, imidacloprid, clothianidin, nitenpyram, and dinotefuran are affected.
 - A protonation state that cannot be kekulized (e.g., a +1 charge on a bridgehead aromatic nitrogen) now keeps the site's previous state.
   Such variants were dropped as invalid SMILES, and when that was the site's only state the molecule vanished from the output.
   A molecule whose every variant is rejected now falls back to its input.

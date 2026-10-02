@@ -119,6 +119,37 @@ def test_nitroguanidine_is_not_basic() -> None:
     assert canonical_set(output) == canonical_set(["CCCNC(=N)N[N+](=O)[O-]"]), output
 
 
+@pytest.mark.parametrize(
+    "smiles",
+    [
+        pytest.param(r"O=[N+]([O-])/N=C1\NCOCN1Cc1cnc(Cl)s1", id="thiamethoxam"),
+        pytest.param("O=[N+]([O-])N=C1NCCN1Cc1ccc(Cl)nc1", id="imidacloprid"),
+    ],
+)
+def test_nitroimine_guanidine_is_not_basic(smiles: str) -> None:
+    """The neonicotinoids carry the nitro group on the imine nitrogen, where
+    it costs about twelve units of basicity (imidacloprid's conjugate acid is
+    1.56). They fell through to AmidineGuanidine2 and were returned in both
+    states, which only became visible once the nitro entry stopped protecting
+    the atoms around it.
+
+    The total number of states is not checked, because both compounds also
+    carry a chloro-heteroaryl ring whose nitrogen is a site in its own right;
+    only the nitroimine nitrogen is.
+
+    Args:
+        smiles: The neutral input.
+    """
+    neutral = Chem.MolFromSmarts(
+        "[NX2+0;H0;$(N-[N+](=[OX1])[OX1-]),$(N-[NX3](=[OX1])=[OX1])]=[#6]"
+    )
+    assert neutral is not None
+    for out in protonate_default(smiles):
+        mol = Chem.MolFromSmiles(out)
+        assert mol is not None, out
+        assert mol.HasSubstructMatch(neutral), out
+
+
 def test_plain_guanidine_is_still_a_cation() -> None:
     """Nitroguanidine sits ahead of AmidineGuanidine1, so it must not poach
     guanidines that carry no nitro group."""

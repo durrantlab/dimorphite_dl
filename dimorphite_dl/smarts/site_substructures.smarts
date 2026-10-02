@@ -56,6 +56,25 @@ Nitro	[NX3;$([NX3]-[#6,#7,#8]):1](=[O:2])-[O:3]-[H]	2	-1000.0	0
 # asks for a strongly acidic pH, which is what the measurement describes.
 Nitroguanidine	[N:1]-[C;$(C-[NX3]-[NX3](=[OX1])-[OX2]),$(C-[NX3]-[N+](=[OX1])-[OX1-]):2](-[N:3])=[NX2:4]-[H:5]	3	-0.98	1.0
 
+# Nitroimine_guanidine was added on 10/1/2026 and was not determined from the
+# training data. It is the other place a nitro group can sit on a guanidine:
+# on the imine nitrogen rather than on an amino nitrogen, which is the form
+# the neonicotinoid insecticides take. Nitroguanidine above requires a
+# hydrogen there and so does not reach them, and they fell through to
+# AmidineGuanidine2, whose window starts at 7.90, producing a cation at
+# physiological pH. As with that entry, the nitro group is named in a
+# recursive constraint rather than matched, so Nitro can still claim it.
+# Thiamethoxam is the compound that surfaced this; imidacloprid, clothianidin,
+# nitenpyram, and dinotefuran share the motif. The mean is the measured basic
+# constant of the class archetype:
+#   imidacloprid 1.56 (25 C, a1): Chamberlain K, Evans AA, Bromilow RH (1996)
+#     Pestic Sci 47:265-272
+# The same source reports 11.12 as its a2, which is the N-H acidity of the
+# imidazolidine rather than a basicity and is not used here. A single value
+# has no spread, so the standard deviation of 1.0 follows
+# Internal_phosphate_polyphos_chain and Carboxamide.
+Nitroimine_guanidine	[N:1]-[C:2](-[N:3])=[NX2;$(N-[NX3](=[OX1])-[OX2]),$(N-[N+](=[OX1])-[OX1-]):4]	3	1.56	1.0
+
 AmidineGuanidine1	[N:1]-[C:2](-[N:3])=[NX2:4]-[H:5]	3	12.025333333333334	1.5941046150769165
 
 # Imine nitrogens bearing a cyano, sulfonyl, or oxygen substituent are
