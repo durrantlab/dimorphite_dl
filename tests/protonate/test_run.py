@@ -161,9 +161,9 @@ def test_very_basic(smiles_input, smiles_correct):
             3.899298673194805,
         ],  # Anilines_primary
         [
-            "CCNc1ccccc1",
-            "CC[NH2+]c1ccccc1",
-            "CCNc1ccccc1",
+            "CC(C)Nc1ccccc1",
+            "CC(C)[NH2+]c1ccccc1",
+            "CC(C)Nc1ccccc1",
             4.335408163265306,
         ],  # Anilines_secondary
         [
@@ -265,9 +265,9 @@ def test_very_basic(smiles_input, smiles_correct):
             1.7933333333333332,
         ],  # Sulfinic_acid
         [
-            "CS(N)(=O)=O",
-            "CS(N)(=O)=O",
-            "CS([NH-])(=O)=O",
+            "CS(=O)(=O)NC",
+            "CS(=O)(=O)NC",
+            "CS(=O)(=O)[N-]C",
             7.9160326086956525,
         ],  # Sulfonamide
         [
@@ -277,7 +277,7 @@ def test_very_basic(smiles_input, smiles_correct):
             -1.8184615384615386,
         ],  # Sulfonate
         ["CC(=O)S", "CC(=O)S", "CC(=O)[S-]", 0.678267],  # Thioic_acid
-        ["C(C)(C)(C)(S)", "CC(C)(C)S", "CC(C)(C)[S-]", 9.12448275862069],  # Thiol
+        ["SCc1ccccc1", "SCc1ccccc1", "[S-]Cc1ccccc1", 9.12448275862069],  # Thiol
         [
             "Brc1cc[nH+]cc1",
             "Brc1cc[nH+]cc1",

@@ -96,9 +96,9 @@ def test_single_state_site_does_not_affect_ranking(state: ProtonationState) -> N
 @pytest.mark.parametrize(
     ("max_variants", "expected"),
     [
-        (1, ["[NH3+]CCCC(=O)[O-]"]),
-        (2, ["[NH3+]CCCC(=O)[O-]", "NCCCC(=O)[O-]"]),
-        (3, ["[NH3+]CCCC(=O)[O-]", "NCCCC(=O)[O-]", "[NH3+]CCCC(=O)O"]),
+        (1, ["[NH3+]CC(=O)[O-]"]),
+        (2, ["[NH3+]CC(=O)[O-]", "NCC(=O)[O-]"]),
+        (3, ["[NH3+]CC(=O)[O-]", "NCC(=O)[O-]", "[NH3+]CC(=O)O"]),
     ],
     ids=["one", "two", "three"],
 )
@@ -108,9 +108,16 @@ def test_max_variants_keeps_most_probable_states(
     """Checks that truncation keeps the likeliest states at the pH. At pH 7
     the amine (pKa about 8.2) is mostly protonated and the carboxyl (about
     3.5) mostly deprotonated. Taking the first states generated instead kept
-    whatever the enumeration happened to produce first."""
+    whatever the enumeration happened to produce first.
 
-    output = protonate_at_7("NCCCC(=O)O", max_variants)
+    Glycine rather than a longer amino acid, because its amine sits next to
+    the carboxyl and so falls to Amines_primary_secondary_tertiary, whose mean
+    of 8.16 is what the ranking above assumes. An amine with a plain alkyl
+    chain is claimed by Alkylamine_primary instead, and its mean of 10.55
+    leaves the two sites' states nearly equally likely, which would make the
+    expected order here a coin flip."""
+
+    output = protonate_at_7("NCC(=O)O", max_variants)
 
     assert sorted(canonical(s) for s in output) == sorted(
         canonical(s) for s in expected

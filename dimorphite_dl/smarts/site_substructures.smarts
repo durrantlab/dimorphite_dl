@@ -14,12 +14,73 @@
 *Hydrazoic_acid	[H]-[N+0:1]=[N+:2]=[N+0:3]-[H]	1	-1000.0	0	3	4.65	0.07071067811865513
 
 *Azide	[N+0:1]=[N+:2]=[N+0:3]-[H]	2	4.65	0.07071067811865513
-Nitro	[C,c,N,n,O,o:1]-[NX3:2](=[O:3])-[O:4]-[H]	3	-1000.0	0
+# N_nitro_amide was added on 10/1/2026 and was not determined from the
+# training data. An N-H flanked by a nitro group is a strong acid, but no
+# entry reached it: Nitro matched first and, because it claimed the atom its
+# nitro group hangs from, protected the very nitrogen in question, so
+# Amide_electronegative was rejected and the neutral molecule was returned.
+# This entry claims only the nitrogen and its hydrogen, naming the nitro group
+# and the carbonyl in recursive constraints rather than matching them, and
+# Nitro below does the same for its substituent. The two matches are then
+# disjoint, so both sites fire and the nitro group is still deprotonated. The
+# first clause accepts the nitro group as the neutralizer leaves it or in its
+# charge-separated form, in case neutralization is skipped. Requiring a
+# carbonyl as well as the nitro keeps this to the amides, ureas, and
+# carbamates the two measurements come from; plain nitramines are a separate
+# class and keep whatever entry they reach now. The mean and standard
+# deviation come from:
+#   N-nitrourethane 3.28 and nitrourea 4.57: Bell RP, Higginson WCE (1949)
+#     Proc R Soc A 197:141, as compiled by R. Williams (ACS Division of
+#     Organic Chemistry, updated 4/7/2022)
+*N_nitro_amide	[NX3+0;H1;$([NX3]-[NX3](=[OX1])-[OX2]),$([NX3]-[N+](=[OX1])-[OX1-]);$([NX3]-[CX3]=[OX1]):1]-[H]	0	3.925	0.9121677477306467
+
+Nitro	[NX3;$([NX3]-[#6,#7,#8]):1](=[O:2])-[O:3]-[H]	2	-1000.0	0
+# Nitroguanidine was added on 10/1/2026 and was not determined from the
+# training data. AmidineGuanidine1 matches any carbon bearing three nitrogens
+# and assigns it 12.03, but a nitro group on one of those nitrogens removes
+# the basicity almost entirely: nitroguanidine forms salts only with strong
+# acids. The entry below therefore returned nitroarginine and its relatives as
+# cations. Before the Nitro entry stopped claiming the atom its nitro group
+# hangs from, these molecules had no guanidine site at all and came out
+# neutral, which was the right answer for the wrong reason; this entry makes
+# it the right answer for the right one. The nitro group is named in a
+# recursive constraint rather than matched, so that Nitro can still claim it
+# and both sites fire on the one molecule. Nitroamidines, which carry two
+# nitrogens rather than three, are not covered here and keep the generic rule.
+# The mean is the measured basic constant:
+#   nitroguanidine -0.98 (25 C, a1): Taylor PJ, Wait AR (1986) J Chem Soc
+#     Perkin Trans II, 1765-1770
+# A single value has no spread, so the standard deviation of 1.0 follows
+# Internal_phosphate_polyphos_chain and Carboxamide. Unlike the -1000
+# convention used by Nitro, this leaves the site able to protonate if someone
+# asks for a strongly acidic pH, which is what the measurement describes.
+Nitroguanidine	[N:1]-[C;$(C-[NX3]-[NX3](=[OX1])-[OX2]),$(C-[NX3]-[N+](=[OX1])-[OX1-]):2](-[N:3])=[NX2:4]-[H:5]	3	-0.98	1.0
+
 AmidineGuanidine1	[N:1]-[C:2](-[N:3])=[NX2:4]-[H:5]	3	12.025333333333334	1.5941046150769165
 
 # Imine nitrogens bearing a cyano, sulfonyl, or oxygen substituent are
 # excluded (e.g., N-cyanoguanidines, N-sulfonylguanidines, amidoximes). These
 # substituents remove most of the basicity this group was fit to.
+# Amidine_carbon_substituted was added on 10/1/2026 and was not determined
+# from the training data. AmidineGuanidine1 requires three nitrogens on the
+# central carbon, so it reaches guanidines but not amidines; amidines fell
+# through to AmidineGuanidine2, whose window starts at 7.90 and so produced a
+# neutral amidine at physiological pH. This entry covers amidines whose carbon
+# bears one amino nitrogen, one imine nitrogen, and a carbon or hydrogen, with
+# both nitrogens carrying only carbon or hydrogen. N-aryl, N-acyl,
+# N-sulfonyl, N-cyano, and amidoxime variants are excluded, since conjugation
+# or an electronegative substituent removes several units of the basicity this
+# entry is fit to, and they keep the generic rule. Guanidines are excluded by
+# requiring carbon or hydrogen as the third substituent, so they still reach
+# AmidineGuanidine1. The mean and standard deviation come from the two aqueous
+# amidine pKaH values in the pKa compilation of R. Williams (ACS Division of
+# Organic Chemistry, updated 4/7/2022,
+# organicchemistrydata.org/hansreich/resources/pka/pka_data/pka-compilation-williams.pdf),
+# both attributed there to:
+#   acetamidine 12.52 and benzamidine 11.6: Albert A, Goldacre R, Phillips J
+#     (1948) J Chem Soc 2240
+Amidine_carbon_substituted	[#6,#1:1]-[CX3:2](-[NX3+0;!$(N-[!#6;!#1]);!$(N-c);!$(N-C=[O,S]);!$(N-C#N);!$(N-S(=O)=O):3])=[NX2+0;!$(N-[!#6;!#1]);!$(N-c);!$(N-C=[O,S,N]);!$(N-C#N);!$(N-S(=O)=O):4]	3	12.059999999999999	0.6505382386916236
+
 AmidineGuanidine2	[C:1](-[N:2])=[NX2+0;!$(N-C#N);!$(N-S(=O)=O);!$(N-[OX2]):3]	2	10.035538461538462	2.1312826469414716
 
 Sulfate	[SX4:1](=[O:2])(=[O:3])([O:4]-[C,c,N,n:5])-[OX2:6]-[H]	5	-2.36	1.3048043093561141
@@ -29,6 +90,25 @@ Phenyl_carboxyl	[c,n,o:1]-[C:2](=[O:3])-[O:4]-[H]	3	3.463441968255319	1.25180544
 Carboxyl	[C:1](=[O:2])-[O:3]-[H]	2	3.456652971502591	1.2871420886834017
 Thioic_acid	[C,c,N,n:1](=[O,S:2])-[SX2,OX2:3]-[H]	2	0.678267	1.497048763660801
 Phenyl_Thiol	[c,n:1]-[SX2:2]-[H]	1	4.978235294117647	2.6137000480499806
+# Alkyl_thiol was added on 10/1/2026 and was not determined from the training
+# data. Thiol was fit to a set that mixes plain alkanethiols with thiols
+# activated by a neighboring carbonyl, amine, or hydroxyl, so its window
+# reaches 10.46 and simple thiols such as ethanethiol were deprotonated at
+# physiological pH. This entry covers thiols on a saturated carbon that bears
+# only carbon or hydrogen, where no atom one bond further is anything but
+# carbon, hydrogen, or sulfur, and where the neighboring carbon is neither
+# aromatic nor unsaturated. Cysteine (8.3), mercaptoethanol (9.5),
+# thioglycolic acid, benzyl mercaptan (9.43), and allyl mercaptan (9.96) are
+# all excluded on those grounds and keep the generic rule. The mean and
+# standard deviation are computed from the saturated alkanethiols in the pKa
+# compilation of R. Williams (ACS Division of Organic Chemistry, updated
+# 4/7/2022):
+#   ethanethiol 10.50: Danehy JP, Noel CJ (1960) J Am Chem Soc 82:2511
+#   1-propanethiol 10.65, 1-butanethiol 10.66, 2-methyl-2-butanethiol 11.21,
+#     and 2-methyl-2-propanethiol 11.05: Kreevoy MM et al. (1960) J Am Chem
+#     Soc 82:4899
+Alkyl_thiol	[CX4;!$([CX4]~[!#6;!#1;!#16]);!$([CX4]-[#6]~[!#6;!#1;!#16]);!$([CX4]-[#6]=[#6]);!$([CX4]-[#6]#[#6]);!$([CX4]-c):1]-[SX2:2]-[H]	1	10.814	0.3007158126869956
+
 Thiol	[C,N:1]-[SX2:2]-[H]	1	9.12448275862069	1.3317968158171463
 
 # [*]OP(=O)(O[H])O[H]. Note that this matches terminal phosphate of ATP, ADP, AMP.
@@ -53,6 +133,22 @@ Initial_phosphate_like_in_ATP_ADP	[$([PX4:1]([OX2][C,c,N,n])(=O)([OX2][PX4](=O)(
 
 # [*]P(=O)(O[H])O[H]. Cannot match terminal phosphate of ATP because O not among [C,c,N,n]
 Phosphonate	[PX4:1](=[O:2])(-[OX2:3]-[H])(-[C,c,N,n:4])-[OX2:5]-[H]	2	1.8835714285714287	0.5925999820080644	5	7.247254901960784	0.8511476450801531
+
+# Phenol_unactivated was added on 10/1/2026 and was not determined from the
+# training data. Phenol was fit to a set spanning nitrophenols (7.1) to plain
+# phenol (10.0), so its standard deviation is 3.28 and every phenol, however
+# weakly acidic, was deprotonated at physiological pH. This entry covers a
+# hydroxyl on an isolated benzene ring whose other five positions carry either
+# hydrogen or a saturated carbon bearing nothing but carbon and hydrogen.
+# Every activated case therefore keeps the generic rule: nitro, cyano, acyl,
+# halo, and trifluoromethyl phenols, catechols and resorcinols, the
+# hydroxypyridines, and the naphthols, whose fused-ring carbons fail the
+# position test. The mean and standard deviation are computed from phenol and
+# its alkyl derivatives in the pKa compilation of R. Williams (ACS Division of
+# Organic Chemistry, updated 4/7/2022), which reports phenol 9.95,
+# o-, m-, and p-cresol 10.28, 10.08, and 10.19, and o-, m-, and p-ethylphenol
+# 10.2, 9.9, and 10.0; the phenol and cresol values are thermodynamic.
+Phenol_unactivated	[c:1]1(-[O:2]-[H])[cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])]):3][cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])]):4][cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])]):5][cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])]):6][cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])]):7]1	1	10.085714285714285	0.14257829929049987
 
 Phenol	[c,n,o:1]-[O:2]-[H]	1	7.065359866910526	3.277356122295936
 Peroxide1	[O:1]([$(C=O),$(C[Cl]),$(CF),$(C[Br]),$(CC#N):2])-[O:3]-[H]	2	8.738888888888889	0.7562592839596507
@@ -84,6 +180,35 @@ N-hydroxyamide	[C:1](=[O:2])-[N:3]-[O:4]-[H]	3	9.301904761904762	1.2181897185891
 *Carboxamide	[CX3;!$(C(=O)(-[#7])-[!#6;!#1]):1](=[O:2])-[NX3+0;!$(N(-C=O)-[!#6;!#1]):3]-[H]	2	15.1	1.0
 
 *Amide	[C:1](=[O:2])-[N:3]-[H]	2	12.00611111111111	4.512491341218857
+# Primary_sulfonamide was added on 10/1/2026 and was not determined from the
+# training data. Sulfonamide was fit to a set that mixes primary sulfonamides
+# (around 10) with sulfonylureas and N-heteroaryl sulfonamides (as low as 5),
+# so its window reaches 9.90 and unsubstituted sulfonamides such as
+# benzenesulfonamide were deprotonated at physiological pH. This entry covers
+# only an -S(=O)(=O)NH2 whose sulfur substituent is either a saturated carbon
+# bearing nothing but carbon and hydrogen, or a benzene ring whose other
+# positions carry hydrogen or such a carbon. The ring test is the one used by
+# Phenol_unactivated and excludes the activated aryl sulfonamides, so the
+# diuretics and sulfa drugs (hydrochlorothiazide 9.0, furosemide,
+# sulfadiazine 6.5, sulfathiazole 7.1) keep the generic rule, as do all
+# N-substituted sulfonamides. The mean and standard deviation are computed
+# from three compounds, each averaged over its aqueous determinations in
+# Reaxys. Only aqueous values were used: the same N-H gives 14 to 25 in
+# methanol, ethanol, dimethylsulfoxide, dimethylformamide, and acetonitrile,
+# and one reported figure for p-toluenesulfonamide is a hydrogen-bond acidity
+# in 1,1,1-trichloroethane rather than an ionization constant at all.
+#   benzenesulfonamide 9.80, from 10.0 (25 C, spectrophotometric;
+#     Mickeviciute A et al. (2018) Eur Biophys J 47:271-290), 9.41 (25 C,
+#     potentiometric; Ludwig M, Pytela O, Kalfus K, Vecera M (1984) Coll
+#     Czech Chem Commun 49:1182-1192), and 10.0 (20 C, potentiometric; Willi
+#     AV (1956) Helv Chim Acta 39:46)
+#   p-toluenesulfonamide 9.89, from 9.61 (25 C, potentiometric; Ludwig et al.
+#     1984, as above) and 10.17 (20 C, potentiometric; Willi 1956, as above)
+#   methanesulfonamide 10.80, from 10.8 (37 C, potentiometric; Blackburn GM,
+#     Tuerkmen H (2005) Org Biomol Chem 3:225-226) and 10.8 (25 C,
+#     potentiometric; Hinman RL, Hoogenboom BE (1961) J Org Chem 26:3461-3467)
+*Primary_sulfonamide	[SX4:1](=[O:2])(=[O:3])(-[$([CX4;!$([CX4]~[!#6;!#1;!#16])]),$(c1[cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])])][cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])])][cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])])][cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])])][cX3;$([cH]),$(c-[CX4;!$([CX4]~[!#6;!#1])])]1):4])-[NX3+0:5]([H:6])[H:7]	4	10.164444444444444	0.552110429104474
+
 *Sulfonamide	[SX4:1](=[O:2])(=[O:3])-[NX3+0:4]-[H]	3	7.9160326086956525	1.9842121316708763
 Anilines_primary	[c:1]-[NX3+0:2]([H:3])[H:4]	1	3.899298673194805	2.068768503987161
 
@@ -91,6 +216,23 @@ Anilines_primary	[c:1]-[NX3+0:2]([H:3])[H:4]	1	3.899298673194805	2.0687685039871
 # other than one, so N-CH(R)R' substituents fell through to the amine group.
 # Delocalized nitrogens are excluded for the same reason as in the amine group
 # (below).
+# Anilines_secondary_N_alkyl was added on 10/1/2026 and was not determined
+# from the training data. The Anilines_secondary window reaches 6.51, 0.11
+# units past the default ph_min, so every secondary aniline came out in both
+# states while the primary and tertiary entries, whose windows stop at 5.97
+# and 6.17, correctly gave one. N-methylaniline was therefore doubled while
+# aniline and N,N-dimethylaniline, which bracket it in basicity, were not.
+# This entry covers anilines whose single N-substituent is a methyl or an
+# unbranched alkyl carbon; N-cyclopentyl, N-cyclohexyl, and N-tert-butyl
+# anilines are two units more basic (5.30 to 6.95 in the same table) and keep
+# the generic rule. Ring substituents are not restricted, because they move
+# pKaH further from the default pH window in either direction. The mean and
+# standard deviation are computed from the N-alkylaniline column of the
+# thermodynamic table of N-substituted anilines in the pKa compilation of
+# R. Williams (ACS Division of Organic Chemistry, updated 4/7/2022):
+# N-methyl 4.85, N-ethyl 5.11, N-n-propyl 5.02, and N-n-butyl 4.95.
+Anilines_secondary_N_alkyl	[c:1]-[NX3+0;!$(N-C=[O,S,N]);!$(N-S(=O)=O);!$(N-N=[O,C]);!$(N-C#N);!$(N-[CX4]-[!#6;!#1]):2]([H:3])[CX4;H2,H3:4]	1	4.9825	0.10996211468804477
+
 Anilines_secondary	[c:1]-[NX3+0;!$(N-C=[O,S,N]);!$(N-S(=O)=O);!$(N-N=[O,C]);!$(N-C#N):2]([H:3])[!#1:4]	1	4.335408163265306	2.1768842022330843
 Anilines_tertiary	[c:1]-[NX3+0;!$(N-C=[O,S,N]);!$(N-S(=O)=O);!$(N-N=[O,C]);!$(N-C#N):2]([!#1:3])[!#1:4]	1	4.16690685045614	2.005865735782679
 
@@ -123,6 +265,98 @@ Diazine	[n+0;X2;$(n1:[nX2]:a:a:a:a1),$(n1:a:[nX2]:a:a:a1),$(n1:a:a:[nX2]:a:a1);!
 # basic than the pyridine-type nitrogens this group was fit to, so matching
 # them produced tetrazolium variants at physiological pH.
 Aromatic_nitrogen_unprotonated	[n+0&H0;!$(n1nnnc1);!$(n1nncn1):1]	0	4.3535441240733945	2.0714072661859584
+
+# The six entries below were added on 10/1/2026 and were not determined from
+# the training data. Amines_primary_secondary_tertiary was fit to a set that
+# mixes ordinary aliphatic amines (10.2 to 11.3) with amines deactivated by a
+# neighboring hydroxyl, ether, nitrile, amide, or second amine (5 to 8), so
+# its mean is 8.16 with a standard deviation of 2.52 and its window, 5.64 to
+# 10.68, covers the whole default pH range. Every aliphatic amine was
+# therefore returned in both states regardless of its substituents.
+#
+# These entries split that class by the substituents that actually set the
+# basicity. Each requires every non-hydrogen neighbor of the nitrogen to be a
+# saturated carbon, which also replaces the delocalization exclusions of the
+# generic rule below: an amide, sulfonamide, nitrosamine, or cyanamide
+# nitrogen has a neighbor that is not sp3 carbon. Each also excludes
+# deactivating atoms one bond beyond the alpha carbon, and the alkyl entries
+# exclude benzylic, allylic, and propargylic positions, so that the amines
+# the generic rule handles correctly keep it: morpholine (8.36), lidocaine,
+# the ethylenediamines, the cyanoamines, triallylamine (8.31), and the
+# propargylamines (7.05). Aziridines (7.98) are excluded from the secondary
+# and tertiary entries by ring size.
+#
+# The three alkyl entries screen two bonds past the alpha carbon rather than
+# one, because remote substituents accumulate: in a 4-substituted piperidine
+# the substituent sits at that distance, and the 4-anilidopiperidines run two
+# units below piperidine itself (fentanyl 8.44, determined by potentiometric
+# titration, sufentanil 8.01, remifentanil 7.1, alfentanil 6.5; the first two
+# from Paradis P et al. (2002) Ther Drug Monit 24:768-774, all four as
+# compiled in UNODC, Recommended Methods for the Identification and Analysis
+# of Fentanyl and its Analogues in Biological Specimens, 2017). All four need
+# both states at physiological pH, so that whole class keeps the generic rule.
+# The cost is that an amine with a remote heteroatom whose effect is in fact
+# small, such as 4-aminobutyric acid at 10.43, also falls back to the broad
+# window. The benzylic and beta-hydroxy entries below screen one bond less
+# far, since no comparable series was consulted for them. Unless noted, means and standard
+# deviations are computed from the aliphatic amine tables in the pKa
+# compilation of R. Williams (ACS Division of Organic Chemistry, updated
+# 4/7/2022,
+# organicchemistrydata.org/hansreich/resources/pka/pka_data/pka-compilation-williams.pdf),
+# whose aliphatic amine values are attributed there to:
+#   Hall HK Jr (1957) J Am Chem Soc 79:5441
+# and whose fluorinated amine values are attributed there to:
+#   Bissell ER, Finger M (1959) J Org Chem 24:1256
+
+# From CF3CH2NH2 5.7, CF3CH2NHCH3 6.05, and CF3CH2N(CH3)2 4.75. The three
+# beta fluorines cost roughly 1.7 units each, which is why this entry is
+# restricted to a trifluoromethyl on the alpha carbon rather than to
+# fluoroalkyl generally; see also Morgenthaler M et al. (2007) ChemMedChem
+# 2:1100-1115, doi:10.1002/cmdc.200700059.
+Fluoroalkylamine	[CX4;$([CX4]-[CX4](F)(F)F):1]-[NX3+0;!$(N-[!$([CX4]);!#1]);!$([N;r3]):2]	1	5.5	0.6726812023536854
+
+# From benzylamine 9.34, N-methylbenzylamine 9.58, N-ethylbenzylamine 9.68,
+# N,N-dimethylbenzylamine 8.93, and N,N-diethylbenzylamine 9.48. The aryl
+# group costs about one unit, so benzylic amines are treated apart from the
+# alkyl entries below rather than with them.
+Benzylic_amine	[CX4;$([CX4]-c):1]-[NX3+0;!$(N-[!$([CX4]);!#1]);!$(N-[CX4]-[#6]~[!#6;!#1]);!$([N;r3]):2]	1	9.402	0.29226700121635363
+
+# From ethanolamine 9.50, N-methylethanolamine 9.87, and propranolol 9.48.
+# The latter two are the means of the aqueous determinations in Reaxys:
+# N-methylethanolamine 9.82 (potentiometric; Ahmad M, Masohan A, Sawhney
+# (2014) Asian J Chem 26:975-980), 9.95 (Xiong D et al. (2013) Green Chem
+# 15:1941-1948), and 9.83 (potentiometric; Anelli PL et al. (1997) Gazz Chim
+# Ital 127:135-142); propranolol 9.53 (spectrophotometric; Dargo G et al.
+# (2020) J Med Chem 63:1763-1774), 9.45 (Gritti F, Guiochon G (2004) Anal
+# Chem 76:4779-4789), 9.45 (Siebert GA et al. (2004) J Pharmacol Exp Ther
+# 308:228-235), and 9.5 (Lennernas H, Nylander S, Ungell AL (1997) Pharm Res
+# 14:667-671). Mixed-solvent determinations were left out, as was a cluster
+# of values near -1 that cannot be an amine ionization constant. Amines
+# carrying more than one beta hydroxyl are
+# excluded, since each costs further basicity (diethanolamine 9.00,
+# triethanolamine 7.77) and they are handled acceptably by the generic rule.
+# The count is of hydroxyls, not of arms off the nitrogen: tris, whose three
+# hydroxymethyls share one alpha carbon, is 8.10 and is excluded on the same
+# grounds as diethanolamine.
+Beta_hydroxy_amine	[CX4:1]-[NX3+0;$(N-[CX4]-[CX4]-[OX2]-[H]);!$(N(-[CX4]-[CX4]-[OX2])-[CX4]-[CX4]-[OX2]);!$(N-[CX4](-[CX4]-[OX2])-[CX4]-[OX2]);!$(N-[!$([CX4]);!#1]);!$(N-[CX4]-[#6]~[!#6;!#1;!$([OX2]-[H])]);!$([N;r3]):2]	1	9.61638888888889	0.21692345893664236
+
+# From methylamine 10.62, ethylamine 10.63, n-propylamine 10.53,
+# n-butylamine 10.59, sec-butylamine 10.56, tert-butylamine 10.55,
+# isopropylamine 10.63, cyclohexylamine 10.64, cyclohexylmethylamine 10.49,
+# and neopentylamine 10.21.
+Alkylamine_primary	[CX4:1]-[NX3+0;H2;!$(N-[!$([CX4]);!#1]);!$(N-[CX4]-[#6]~[!#6;!#1]);!$(N-[CX4]-[#6]-[#6]~[!#6;!#1]);!$(N-[CX4]-[#6]=[#6]);!$(N-[CX4]-[#6]#[#6]);!$(N-[CX4]-c):2]	1	10.545	0.12773670837573134
+
+# From dimethylamine 10.64, diethylamine 10.98, di-n-propylamine 11.00,
+# diisopropylamine 11.05, di-n-butylamine 11.25, diisobutylamine 10.50,
+# pyrrolidine 11.27, piperidine 11.22, and azetidine 11.29.
+Alkylamine_secondary	[CX4:1]-[NX3+0;H1;!$(N-[!$([CX4]);!#1]);!$(N-[CX4]-[#6]~[!#6;!#1]);!$(N-[CX4]-[#6]-[#6]~[!#6;!#1]);!$(N-[CX4]-[#6]=[#6]);!$(N-[CX4]-[#6]#[#6]);!$(N-[CX4]-c);!$([N;r3]):2]	1	11.022222222222222	0.28415566938641984
+
+# From trimethylamine 9.76, triethylamine 10.65, tri-n-propylamine 10.65,
+# tri-n-butylamine 10.89, dimethylethylamine 9.99, dimethyl-n-propylamine
+# 9.99, dimethyl-n-butylamine 10.02, dimethylisopropylamine 10.30,
+# dimethylisobutylamine 9.91, dimethyl-sec-butylamine 10.40, and
+# dimethyl-tert-butylamine 10.52.
+Alkylamine_tertiary	[CX4:1]-[NX3+0;H0;!$(N-[!$([CX4]);!#1]);!$(N-[CX4]-[#6]~[!#6;!#1]);!$(N-[CX4]-[#6]-[#6]~[!#6;!#1]);!$(N-[CX4]-[#6]=[#6]);!$(N-[CX4]-[#6]#[#6]);!$(N-[CX4]-c);!$([N;r3]):2]	1	10.28	0.3689715436182039
 
 # Nitrogens whose lone pair is delocalized into an adjacent C=O, C=S, C=N,
 # S(=O)=O, N=O, N=C, or C#N are excluded. They are not basic in water, and

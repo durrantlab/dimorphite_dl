@@ -17,8 +17,9 @@ from dimorphite_dl.io import SMILESStreamError
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# At the default pH range, the amine of CCCN is BOTH.
-CCCN_STATES = ["CCCN", "CCC[NH3+]"]
+# At the default pH range, the amine of CCCN is PROTONATED: n-propylamine has
+# a pKaH of 10.57, well above ph_max.
+CCCN_STATES = ["CCC[NH3+]"]
 
 
 def canonical(smiles: str) -> str:
