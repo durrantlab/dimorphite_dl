@@ -8,6 +8,7 @@ file processing, and edge cases for robust production use.
 import gzip
 import os
 import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -350,6 +351,21 @@ class TestFileProcessing:
         # Very long strings should not be file paths
         long_string = "C" * 2000
         assert not processor._is_file_path(long_string)
+
+    def test_smiles_with_slash_is_not_a_path_under_a_matching_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Checks that a SMILES containing "/" is read as SMILES even when the
+        text before the slash names an existing directory. The parent-directory
+        test made it a missing file, so the CLI failed with "File not found"
+        depending only on the contents of the working directory."""
+        (tmp_path / "CC").mkdir()
+        monkeypatch.chdir(tmp_path)
+        processor = SMILESProcessor()
+
+        assert not processor._is_file_path("CC/C=C(C)C")
+        records = list(processor.stream("CC/C=C(C)C"))
+        assert [record.smiles for record in records] == ["CC/C=C(C)C"]
 
     def test_file_not_found(self):
         """Checks that a missing file raises even with skip_invalid. It was

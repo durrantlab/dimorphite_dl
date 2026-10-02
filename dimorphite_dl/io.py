@@ -315,9 +315,9 @@ class SMILESProcessor:
             # If the path exists, it's definitely a file
             if path.exists():
                 return True
-            # If the parent directory exists, it could be a valid file path
-            if path.parent.exists():
-                return True
+            # An existing parent directory is not evidence of a path. SMILES
+            # use "/" for bond geometry, so "CC/C=C(C)C" was read as a file
+            # whenever the working directory had a subdirectory named "CC".
             # If it has a valid file extension and reasonable structure, assume it's a path
             if path.suffix in {".smiles", ".smi", ".txt", ".csv", ".sdf", ".gz"}:
                 return True

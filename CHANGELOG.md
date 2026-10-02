@@ -64,6 +64,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - A UTF-8 byte order mark at the start of an input file is ignored instead of corrupting the first SMILES.
 - The CLI refuses an `--output_file` that is the input file, which it previously truncated before reading.
   Invalid arguments no longer truncate an existing output file, and the output file is closed properly.
+- A SMILES containing `/` was read as a file path, and failed with "File not found", whenever the text before the last slash named a directory in the working directory (e.g., `CC/C=C(C)C` next to a directory named `CC`).
+  A string is now read as a path only if it exists or ends in a recognized extension.
 
 ## [2.0.2] - 2025-08-11
 
