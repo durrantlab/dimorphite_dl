@@ -4,6 +4,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+### Fixed
+
+- Carboxylic acid hydrazides and N-acylhydrazones were deprotonated at physiological pH.
+  `Amide_electronegative` lists nitrogen among the substituents that acidify an amide N-H, and it sits ahead of both `Carboxamide` and `Amide`, so an amide nitrogen bonded to a nitrogen was assigned a pKa of 3.49.
+  That window closes at 6.18, below the default `ph_min`, so the anion was the only state these compounds could reach and the neutral form was never produced.
+  The measured N-H values are near 11.6 for both classes: isoniazid is 10.95, acetohydrazide 12.45, and five pyridoxal acylhydrazones span 11.01 to 12.00.
+  Isoniazid and other hydrazide drugs are affected, as are their hydrazone condensation products, the pyridoxal and salicylaldehyde isonicotinoyl hydrazone iron chelators, and the N-acylhydrazone scaffold generally.
+  New `Hydrazide` and `Acylhydrazone` entries, placed ahead of `Amide_electronegative`, now return the neutral form over the default pH range.
+  The two are mutually exclusive by the hybridization of the nitrogen next to the amide nitrogen, so a molecule reaches exactly one of them.
+  Perfluorinated hydrazides (7.92 to 9.66), semicarbazides, carbazates, 1,2-diacylhydrazines, N'-sulfonyl hydrazides, semicarbazones, thiosemicarbazones, and amidrazones are excluded and keep the generic rules.
+  The values come from published measurements, cited in the substructure file; the standard deviation on `Acylhydrazone` is deliberately wider than its five compounds scatter, since they share a single scaffold, and the substructure file gives the reasoning.
+  This changes the output for existing inputs, so pipelines that depend on the previous enumeration should be checked.
+- The comment on the `Carboxamide` entry said that hydrazides fall through to `Amide`.
+  They did not: `Amide_electronegative` claimed them first, and reaching `Amide` would have returned both states rather than the neutral form.
+  Ureas and carbamates do reach `Amide`, as stated.
+
 ## [2.1.0] - 2026-10-02
 
 ### Changed

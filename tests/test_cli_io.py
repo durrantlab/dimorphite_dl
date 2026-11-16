@@ -108,6 +108,40 @@ def test_log_lines_stay_out_of_stdout(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("smiles", "expected"),
+    [
+        pytest.param("CC(=O)NN", "CC(=O)NN", id="acetohydrazide_neutral"),
+        pytest.param(
+            "O=C(NN=Cc1ccccc1)c1ccccc1",
+            "O=C(NN=Cc1ccccc1)c1ccccc1",
+            id="benzoylhydrazone_neutral",
+        ),
+        pytest.param(
+            "NNC(=O)C(F)(F)F", "N[N-]C(=O)C(F)(F)F", id="trifluoroacetohydrazide_anion"
+        ),
+    ],
+)
+def test_hydrazide_states_through_the_command_line(
+    smiles: str, expected: str, tmp_path: Path
+) -> None:
+    """Checks the Hydrazide entry over the whole path a user takes, at the
+    default pH range rather than a single pH. tests/protonate covers the
+    chemistry; this covers the defaults the command line supplies.
+
+    Args:
+        smiles: The molecule to protonate.
+        expected: The one state it should produce.
+        tmp_path: Working directory for the child process.
+    """
+
+    result = run_cli([smiles], tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    assert [canonical(line) for line in lines] == [canonical(expected)], result.stdout
+
+
 def test_output_file_same_as_input_is_rejected(tmp_path: Path) -> None:
     """Checks that the command line refuses to write over its own input. The
     output file was opened for writing first, which truncated the input

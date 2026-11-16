@@ -188,6 +188,118 @@ N-hydroxyamide	[C:1](=[O:2])-[N:3]-[O:4]-[H]	3	9.301904761904762	1.2181897185891
 *Ringed_imide2	[O,S:1]=[C;R:2]-[N;R:3]([C;R:4]=[O,S:5])-[H]	2	8.681666666666667	1.8657779975741713
 *Imide	[F,Cl,Br,S,s,P,p:1][#6:2][CX3:3](=[O,S:4])-[NX3+0:5]([CX3:6]=[O,S:7])-[H]	4	2.466666666666667	1.4843629385474877
 *Imide2	[O,S:1]=[CX3:2]-[NX3+0:3]([CX3:4]=[O,S:5])-[H]	2	10.23	1.1198214143335534
+# Hydrazide was added on 11/16/2026 and was not determined from the training
+# data. Amide_electronegative below lists N among the substituents that
+# acidify an amide N-H, and it sits ahead of both Carboxamide and Amide, so
+# the N-H of a carboxylic acid hydrazide was assigned 3.49 +/- 2.69. That
+# window closes at 6.18, below the default ph_min, so the site was
+# deprotonated deterministically and the neutral hydrazide was never
+# produced: isoniazid came back as an anion at physiological pH. Reaching
+# Amide would not have fixed it either, since that window opens at 7.49 and
+# would return both states.
+#
+# This entry covers hydrazides whose acyl nitrogen carries a saturated
+# nitrogen, which is what the measurements below were made on.
+# Acylhydrazones are excluded by NX3 on that second nitrogen, since their
+# anion is delocalized through the C=N rather than stabilized inductively;
+# they are measured separately and have their own entry below.
+# Semicarbazides and carbazates are
+# excluded by requiring a carbon or hydrogen on the carbonyl carbon, and
+# 1,2-diacylhydrazines and N'-sulfonyl hydrazides by the exclusions on the
+# second nitrogen. Sulfonohydrazides, having no carbonyl at all, do not reach
+# this entry. An alpha carbon bearing two or more halogens is excluded too:
+# the perfluorinated hydrazides in the first source below run from 7.92 to
+# 9.66 and do ionize near physiological pH. All of those keep the generic
+# rule. Because sites are treated independently, a hydrazide carrying its own
+# acidic group elsewhere is still handled by whatever entry claims that
+# group.
+#
+# The mean and standard deviation are computed from four compounds spanning
+# alkyl and aryl acyl groups. As in the nucleobase entries below, each
+# compound contributes one value, the mean of its determinations, so that
+# acetohydrazide does not count twice:
+#   acetohydrazide 12.45, from 13.04: Titov EV, Korzhenevskaya NG, Rybachenko
+#     VI (1968) Ukr Khim Zh 34:1253, as reported in Kashik TV, Rassolova GV,
+#     Ponomareva SM, Medvedeva EN, Yushmanova TI, Lopyrev VA (1982) Izv Akad
+#     Nauk SSSR Ser Khim, No. 10, 2230-2234, translated in Bull Acad Sci USSR
+#     Div Chem Sci 31:1965-1968, doi:10.1007/BF00950632, Table 1 entry (IX);
+#     and 11.86 (25 C, potentiometric): Wozniczka M, Swiatek-Pietek E,
+#     Jezierska J, Pasternak B, Gabryszewska-Sobczynska J, Kufelnicki A
+#     (2017) Inorg Chim Acta 455:659-665. These two disagree by 1.18 units on
+#     the compound that anchors the high end of this entry; both are kept
+#     rather than choosing between a value traced through a translation and a
+#     value obtained as a by-product of a metal-complexation study.
+#   methoxyacetohydrazide 12.14 (25 C): Kashik TV et al. (1982), above,
+#     Table 1 entry (VIII)
+#   cyanoacetohydrazide 11.02, from 11.04 (Titov EV et al. (1968), above) and
+#     11.00: Kashik TV et al. (1982), above, Table 1 entry (VII)
+#   isoniazid 10.95 (25 C, I = 0.15 M NaCl, glass electrode potentiometry):
+#     Tolulope DK, Jackson GE, Caira MR, Hammouda AN (2022) S Afr J Chem
+#     76:65-71, doi:10.17159/0379-4350/2022/v76a10. The widely quoted value
+#     of 10.8 for isoniazid is a compilation (Becker C et al. (2007) J Pharm
+#     Sci 96:522-531, doi:10.1002/jps.20765, quoting a range of 9.8 to 11.2,
+#     itself from Brewer GA, Analytical Profiles of Drug Substances, Vol. 6,
+#     1977, pp 184-258) and is not used here.
+# Kashik TV et al. (1982) also fit their series to
+# pKa = 13.17 - 1.79 sigma* (r = 0.997) and report hydrazides to be 2 pKa
+# units more acidic than primary amides at matched inductive effect, which is
+# roughly the gap between this entry and Carboxamide below.
+*Hydrazide	[CX3;$([CX3]-[#6,#1]);!$([CX3]-[CX4](-[F,Cl,Br,I])-[F,Cl,Br,I]):1](=[OX1:2])-[NX3+0;H1;$(N-[NX3+0;!$(N-[CX3]=[O,S]);!$(N-S(=O)=O);!$(N-[!#6;!#1;!#7])]):3]-[H]	2	11.64	0.7673764830033997
+
+# Acylhydrazone was added on 11/16/2026 and was not determined from the
+# training data. It is the other half of the Amide_electronegative N-N
+# problem described above: an N-acylhydrazone, R-CO-NH-N=CR'R'', has an
+# amide nitrogen bonded to a nitrogen, so it was assigned 3.49 +/- 2.69 and
+# deprotonated deterministically. The measurements below put the N-H near
+# 11.6, so that assignment was wrong by about eight units and every variant
+# of this class reached the caller as the anion. The motif is common in
+# medicinal chemistry, both as a scaffold in its own right and as the
+# condensation product an acyl hydrazide forms with any aldehyde or ketone,
+# so hydrazide drugs stored or assayed in aldehyde-containing media turn
+# into it.
+#
+# This entry covers acylhydrazones whose carbonyl carbon and imine carbon
+# both carry only carbon or hydrogen. Semicarbazones, thiosemicarbazones,
+# and amidrazones are excluded by the test on the imine carbon, and the
+# halogen screen on the alpha carbon is the one Hydrazide uses, for the same
+# reason. All of those keep the generic rule.
+#
+# The mean comes from five acylhydrazones measured in aqueous solution at
+# 298.2 K, 0.1 MPa and I = 0.5 mol/L (NaCl), reported as log beta1:
+#   pyridoxal isonicotinoyl hydrazone 11.01, pyridoxal 2-furoyl hydrazone
+#     11.42, pyridoxal 3-furoyl hydrazone 11.97, pyridoxal
+#     2-thiophenecarbonyl hydrazone 11.83, and pyridoxal
+#     3-thiophenecarbonyl hydrazone 12.00: Kuranova NN, Petrova DV,
+#     Zavalishin MN, Kiselev AN, Gamov GA (2023) J Mol Liq 390:123049,
+#     doi:10.1016/j.molliq.2023.123049, as tabulated in Kuranova NN, Pimenov
+#     OA, Zavalishin MN, Gamov GA (2024) Int J Mol Sci 25:5046,
+#     doi:10.3390/ijms25095046
+# That log beta1 is the hydrazide N-H and not one of the other three
+# ionizable groups is established separately: the 2024 paper reports the
+# protonation order of fully ionized pyridoxal isonicotinoyl hydrazone as
+# hydrazide nitrogen (log K 10.25), pyridoxal ring nitrogen (7.86), phenolic
+# oxygen (4.41), and isoniazid ring nitrogen (2.95), assigned by 13C NMR.
+# The 10.25 figure is not folded into the mean, since its primary source was
+# not traced.
+#
+# The standard deviation of 1.0 is deliberately wider than the data. All
+# five compounds share the pyridoxal scaffold, so their scatter of 0.42
+# measures variation within one scaffold rather than across the class, and
+# that scaffold is the least representative one available: its phenol sits
+# ortho to the imine and hydrogen bonds to it, which stabilizes the neutral
+# form. Substituent effects on the acyl side should be at least as large as
+# in Hydrazide above, whose four compounds scatter by 0.77, and the Taft
+# slope of 1.79 that Kashik TV et al. (1982) report for hydrazides implies
+# close to two units across the acyl groups a drug-like molecule carries.
+# The value of 1.0 follows Internal_phosphate_polyphos_chain, Carboxamide,
+# and the two nitroguanidine entries, which use it wherever the spread of a
+# class is not what was measured. Acyl groups conjugated to a further
+# electron-withdrawing center, such as an alpha-imino or alpha-keto
+# carbonyl, sit at the edge of what that covers; the state stays neutral at
+# the default pH either way, but for them the mean is an upper bound rather
+# than an estimate.
+*Acylhydrazone	[CX3;$([CX3]-[#6,#1]);!$([CX3]-[CX4](-[F,Cl,Br,I])-[F,Cl,Br,I]):1](=[OX1:2])-[NX3+0;H1;$(N-[NX2+0]=[CX3;$([CX3](-[#6,#1])-[#6,#1])]):3]-[H]	2	11.646	1.0
+
 *Amide_electronegative	[C:1](=[O:2])-[N:3](-[Br,Cl,I,F,S,O,N,P:4])-[H]	2	3.4896	2.688124315081677
 
 # Carboxamide was added on 10/1/2026 and was not determined from the training
@@ -195,8 +307,11 @@ N-hydroxyamide	[C:1](=[O:2])-[N:3]-[O:4]-[H]	3	9.301904761904762	1.2181897185891
 # with ordinary ones (13 to 19), so its window reached physiological pH, and
 # simple amides, anilides, lactams, and peptide backbone N-H were
 # deprotonated. This entry covers only amides whose carbonyl carbon and
-# nitrogen bear no substituent other than carbon or hydrogen. Ureas,
-# carbamates, and hydrazides still fall through to Amide. The mean is the only
+# nitrogen bear no substituent other than carbon or hydrogen. Ureas and
+# carbamates still fall through to Amide; hydrazides and acylhydrazones are
+# claimed by Hydrazide and Acylhydrazone above, and the other N-aminoamides
+# those two exclude are claimed by Amide_electronegative above. The mean is
+# the only
 # aqueous N-H pKa of a simple carboxamide in the IUPAC Digitized pKa Dataset
 # (doi:10.5281/zenodo.7236452):
 #   acetamide 15.1 (25 C): Branch GEK, Clayton JO (1928) J Am Chem Soc
