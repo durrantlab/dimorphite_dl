@@ -1,11 +1,9 @@
-
 name: Publish to PyPI
 
 on:
   push:
     tags:
-      - "v*"   # e.g. v2.0.3; setuptools-scm strips the "v" automatically
-
+      - "v[0-9]+.[0-9]+.[0-9]+"   # only exact vX.Y.Z tags start a release
 jobs:
   tests:
     name: Run tests
