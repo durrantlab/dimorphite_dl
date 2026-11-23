@@ -42,6 +42,7 @@ dimorphite_dl = "dimorphite_dl.cli:run_cli"
 
 [build-system]
 requires = ["setuptools>=77", "setuptools-scm>=8", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]

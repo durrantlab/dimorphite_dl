@@ -55,7 +55,6 @@ coverage = { cmd = ["coverage", "report"] }
 cleanup-build = { cmd = ["rm", "-rf", "./build", "./dist"] }
 build = { cmd = ["python3", "-m", "build"], depends-on = ["cleanup-build"]}
 publish-test = { cmd = ["twine", "upload", "--repository", "testpypi", "dist/*"] }
-publish = { cmd = ["twine", "upload", "dist/*"] }
 
 [feature.dev.pypi-dependencies]
 build = ">=1.2.2.post1,<2"
